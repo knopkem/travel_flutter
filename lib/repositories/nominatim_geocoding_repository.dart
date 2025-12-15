@@ -71,7 +71,10 @@ class NominatimGeocodingRepository implements GeocodingRepository {
       final response = await _client.get(
         uri,
         headers: {
-          'User-Agent': 'TravelFlutterApp/1.0',
+          // Nominatim requires a descriptive User-Agent with contact info
+          // See: https://operations.osmfoundation.org/policies/nominatim/
+          'User-Agent':
+              'TravelFlutterApp/1.0 (Flutter Mobile App; Educational Project)',
           'Accept-Language': 'en',
         },
       ).timeout(const Duration(seconds: 10));
@@ -82,6 +85,11 @@ class NominatimGeocodingRepository implements GeocodingRepository {
             .map((item) =>
                 LocationSuggestion.fromJson(item as Map<String, dynamic>))
             .toList();
+      } else if (response.statusCode == 418) {
+        // HTTP 418 "I'm a teapot" - Nominatim blocks requests with improper User-Agent
+        debugPrint('Nominatim blocked request (HTTP 418) - User-Agent issue');
+        throw Exception(
+            'Service unavailable: Please check your internet connection and try again.');
       } else if (response.statusCode == 429) {
         debugPrint('Nominatim rate limit exceeded (HTTP 429)');
         throw Exception(
