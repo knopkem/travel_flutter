@@ -1,5 +1,8 @@
 import 'dart:convert';
+
+import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
+
 import '../models/models.dart';
 import 'wikipedia_repository.dart';
 
@@ -63,17 +66,22 @@ class RestWikipediaRepository implements WikipediaRepository {
         final data = json.decode(response.body) as Map<String, dynamic>;
         return WikipediaContent.fromJson(data);
       } else if (response.statusCode == 404) {
+        debugPrint('Wikipedia article not found: $title (HTTP 404)');
         throw Exception(
             'No Wikipedia article found for "$title". The article may not exist or the title may be misspelled.');
       } else {
+        debugPrint('Wikipedia API error: HTTP ${response.statusCode}');
         throw Exception('Wikipedia API error: ${response.statusCode}');
       }
-    } on http.ClientException {
+    } on http.ClientException catch (e) {
+      debugPrint('Wikipedia network error: $e');
       throw Exception('Network error: Unable to connect to Wikipedia');
     } catch (e) {
       if (e.toString().contains('TimeoutException')) {
+        debugPrint('Wikipedia request timeout after 10 seconds');
         throw Exception('Request timeout: Wikipedia took too long to respond');
       }
+      debugPrint('Wikipedia unexpected error: $e');
       rethrow;
     }
   }

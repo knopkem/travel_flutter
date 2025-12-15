@@ -102,6 +102,7 @@ class WikipediaProvider extends ChangeNotifier {
       _content[title] = wikiContent;
       _errorMessage = null;
     } catch (e) {
+      debugPrint('WikipediaProvider: Failed to fetch content for "$title": $e');
       _errorMessage = 'Failed to fetch Wikipedia content: $e';
     } finally {
       _isLoading = false;

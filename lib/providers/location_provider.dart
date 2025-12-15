@@ -111,6 +111,7 @@ class LocationProvider extends ChangeNotifier {
       _suggestions = await _repository.searchLocations(query);
       _errorMessage = null;
     } catch (e) {
+      debugPrint('LocationProvider: Search failed for query "$query": $e');
       _suggestions = [];
       _errorMessage = 'Failed to search locations: $e';
     } finally {

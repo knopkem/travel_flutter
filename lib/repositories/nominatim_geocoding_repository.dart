@@ -1,5 +1,8 @@
 import 'dart:convert';
+
+import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
+
 import '../models/models.dart';
 import 'geocoding_repository.dart';
 
@@ -80,18 +83,23 @@ class NominatimGeocodingRepository implements GeocodingRepository {
                 LocationSuggestion.fromJson(item as Map<String, dynamic>))
             .toList();
       } else if (response.statusCode == 429) {
+        debugPrint('Nominatim rate limit exceeded (HTTP 429)');
         throw Exception(
             'Rate limit exceeded. Please wait a moment and try again.');
       } else {
+        debugPrint('Nominatim API error: HTTP ${response.statusCode}');
         throw Exception('Geocoding API error: ${response.statusCode}');
       }
-    } on http.ClientException {
+    } on http.ClientException catch (e) {
+      debugPrint('Nominatim network error: $e');
       throw Exception('Network error: Unable to connect to geocoding service');
     } catch (e) {
       if (e.toString().contains('TimeoutException')) {
+        debugPrint('Nominatim request timeout after 10 seconds');
         throw Exception(
             'Request timeout: Geocoding service took too long to respond');
       }
+      debugPrint('Nominatim unexpected error: $e');
       rethrow;
     }
   }
