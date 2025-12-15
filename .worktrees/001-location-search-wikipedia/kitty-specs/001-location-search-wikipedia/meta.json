@@ -1,0 +1,7 @@
+{
+  "feature_number": "001",
+  "slug": "001-location-search-wikipedia",
+  "friendly_name": "Location Search & Wikipedia Browser",
+  "source_description": "Build a flutter mobile app that consist of a main view that allows the user to input location names (e.g. cities) which are fetched from a reliable source (webservice please fine one or many that suit this), while typing a list of matching locations is shown which the user can select one from. This location shall then be shown as a Button underneath. The user can click on this location button to get more information about this location. This should navigate to a new view and load wikipedia content (add a navigate back button).",
+  "created_at": "2025-12-12T15:36:53Z"
+}
