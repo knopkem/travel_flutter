@@ -60,11 +60,13 @@ class NominatimGeocodingRepository implements GeocodingRepository {
     _lastRequestTime = DateTime.now();
 
     // Build the search URL with query parameters
+    // Including email parameter helps with Nominatim's usage policy
     final uri = Uri.parse('$_baseUrl/search').replace(queryParameters: {
       'q': query,
       'format': 'json',
       'limit': '10',
       'addressdetails': '1',
+      'email': 'travel-flutter-app@example.com', // Contact for Nominatim
     });
 
     try {
@@ -73,8 +75,9 @@ class NominatimGeocodingRepository implements GeocodingRepository {
         headers: {
           // Nominatim requires a descriptive User-Agent with contact info
           // See: https://operations.osmfoundation.org/policies/nominatim/
+          // Format: AppName/Version (Platform; Contact)
           'User-Agent':
-              'TravelFlutterApp/1.0 (Flutter Mobile App; Educational Project)',
+              'TravelFlutterApp/1.0 (Flutter; +https://github.com/flutter/flutter)',
           'Accept-Language': 'en',
         },
       ).timeout(const Duration(seconds: 10));

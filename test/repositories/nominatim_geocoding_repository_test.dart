@@ -11,9 +11,12 @@ void main() {
     test('searchLocations returns list of suggestions on success', () async {
       // Mock HTTP client that returns successful response
       final mockClient = MockClient((request) async {
-        // Verify User-Agent header is set properly
+        // Verify User-Agent header and email parameter are set properly
         expect(request.headers['User-Agent'], contains('TravelFlutterApp/1.0'));
-        expect(request.headers['User-Agent'], contains('Flutter Mobile App'));
+        expect(request.headers['User-Agent'], contains('Flutter'));
+        expect(request.url.queryParameters['email'], isNotNull);
+        expect(request.url.queryParameters['email'],
+            contains('@')); // Email format
 
         // Return mock Nominatim response
         final mockResponse = [
