@@ -60,17 +60,30 @@ class SuggestionList extends StatelessWidget {
                 // Dismiss keyboard
                 FocusScope.of(context).unfocus();
 
-                // Select location and clear suggestions
-                provider.selectLocation(suggestion);
-                provider.clearSuggestions();
+                // Try to select location
+                final wasAdded = provider.selectLocation(suggestion);
 
-                // Show confirmation snackbar
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text('Added ${suggestion.name}'),
-                    duration: const Duration(seconds: 2),
-                  ),
-                );
+                if (wasAdded) {
+                  // Successfully added - clear suggestions and show confirmation
+                  provider.clearSuggestions();
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text('Added ${suggestion.name}'),
+                      duration: const Duration(seconds: 2),
+                      backgroundColor: Colors.green,
+                    ),
+                  );
+                } else {
+                  // Duplicate - show warning message
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content:
+                          Text('${suggestion.name} is already in your list'),
+                      duration: const Duration(seconds: 2),
+                      backgroundColor: Colors.orange,
+                    ),
+                  );
+                }
               },
             );
           },

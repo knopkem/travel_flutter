@@ -124,24 +124,33 @@ class LocationProvider extends ChangeNotifier {
   /// Converts the [LocationSuggestion] to a [Location] and adds it to
   /// [selectedLocations]. Prevents duplicates based on location ID.
   ///
+  /// Returns `true` if the location was added successfully, or `false`
+  /// if it was already in the list (duplicate).
+  ///
   /// This method does not make additional API calls; it uses the data
   /// already present in the suggestion (which includes coordinates).
   ///
   /// Example:
   /// ```dart
   /// final suggestion = suggestions.first;
-  /// provider.selectLocation(suggestion);
-  /// // suggestion is now converted to Location and added to selectedLocations
+  /// final wasAdded = provider.selectLocation(suggestion);
+  /// if (!wasAdded) {
+  ///   // Show "already selected" message
+  /// }
   /// ```
-  void selectLocation(LocationSuggestion suggestion) {
+  bool selectLocation(LocationSuggestion suggestion) {
     // Convert suggestion to Location using the built-in method
     final location = suggestion.toLocation();
 
-    // Prevent duplicates based on ID
-    if (!_selectedLocations.any((loc) => loc.id == location.id)) {
-      _selectedLocations.add(location);
-      notifyListeners();
+    // Check for duplicates based on ID
+    if (_selectedLocations.any((loc) => loc.id == location.id)) {
+      return false; // Duplicate, not added
     }
+
+    // Add location and notify listeners
+    _selectedLocations.add(location);
+    notifyListeners();
+    return true; // Successfully added
   }
 
   /// Removes a location from the selected list.
