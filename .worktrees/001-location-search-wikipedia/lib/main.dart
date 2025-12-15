@@ -1,7 +1,27 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import 'providers/providers.dart';
+import 'repositories/repositories.dart';
+import 'screens/home_screen.dart';
 
 void main() {
-  runApp(const MyApp());
+  runApp(
+    MultiProvider(
+      providers: [
+        ChangeNotifierProvider(
+          create: (_) => LocationProvider(
+            NominatimGeocodingRepository(),
+          ),
+        ),
+        ChangeNotifierProvider(
+          create: (_) => WikipediaProvider(
+            RestWikipediaRepository(),
+          ),
+        ),
+      ],
+      child: const MyApp(),
+    ),
+  );
 }
 
 class MyApp extends StatelessWidget {
@@ -15,14 +35,7 @@ class MyApp extends StatelessWidget {
         colorScheme: ColorScheme.fromSeed(seedColor: Colors.blue),
         useMaterial3: true,
       ),
-      home: Scaffold(
-        appBar: AppBar(
-          title: const Text('Location Search'),
-        ),
-        body: const Center(
-          child: Text('Setup complete - Ready for implementation'),
-        ),
-      ),
+      home: const HomeScreen(),
     );
   }
 }
