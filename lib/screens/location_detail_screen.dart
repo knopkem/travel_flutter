@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../models/models.dart';
 import '../providers/providers.dart';
+import '../widgets/wikipedia_content_widget.dart';
 
 /// Detail screen showing Wikipedia content for a selected location.
 ///
@@ -114,12 +115,12 @@ class _LocationDetailScreenState extends State<LocationDetailScreen> {
 
           // Display Wikipedia content
           return SingleChildScrollView(
-            padding: const EdgeInsets.all(16.0),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Location information
+                // Location information card
                 Card(
+                  margin: const EdgeInsets.all(16.0),
                   child: Padding(
                     padding: const EdgeInsets.all(16.0),
                     child: Column(
@@ -147,45 +148,9 @@ class _LocationDetailScreenState extends State<LocationDetailScreen> {
                     ),
                   ),
                 ),
-                const SizedBox(height: 16),
 
-                // Wikipedia content
-                Text(
-                  'Wikipedia',
-                  style: Theme.of(context).textTheme.headlineSmall,
-                ),
-                const SizedBox(height: 8),
-
-                // Thumbnail image if available
-                if (content.thumbnailUrl != null)
-                  ClipRRect(
-                    borderRadius: BorderRadius.circular(8),
-                    child: Image.network(
-                      content.thumbnailUrl!,
-                      width: double.infinity,
-                      height: 200,
-                      fit: BoxFit.cover,
-                      errorBuilder: (context, error, stackTrace) {
-                        return const SizedBox.shrink();
-                      },
-                    ),
-                  ),
-                if (content.thumbnailUrl != null) const SizedBox(height: 16),
-
-                // Article title
-                Text(
-                  content.title,
-                  style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                        fontWeight: FontWeight.bold,
-                      ),
-                ),
-                const SizedBox(height: 8),
-
-                // Article extract (summary)
-                Text(
-                  content.summary,
-                  style: Theme.of(context).textTheme.bodyLarge,
-                ),
+                // Wikipedia content widget
+                WikipediaContentWidget(content: content),
               ],
             ),
           );

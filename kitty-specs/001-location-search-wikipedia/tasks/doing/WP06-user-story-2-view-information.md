@@ -12,10 +12,10 @@ subtasks:
   - "T040"
 title: "User Story 2: View Location Information"
 phase: "Phase 2 - UI Implementation"
-lane: "planned"
-assignee: ""
-agent: ""
-shell_pid: ""
+lane: "doing"
+assignee: "claude"
+agent: "claude"
+shell_pid: "28247"
 review_status: ""
 reviewed_by: ""
 history:
@@ -24,6 +24,11 @@ history:
     agent: "system"
     shell_pid: ""
     action: "Prompt generated via /spec-kitty.tasks"
+  - timestamp: "2025-12-15T15:05:00Z"
+    lane: "doing"
+    agent: "claude"
+    shell_pid: "28247"
+    action: "Started implementation (LocationDetailScreen already created in WP05, will extract WikipediaContentWidget and add enhancements)"
 ---
 *Path: kitty-specs/001-location-search-wikipedia/tasks/planned/WP06-user-story-2-view-information.md*
 
