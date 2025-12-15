@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'providers/providers.dart';
 import 'repositories/repositories.dart';
+import 'screens/home_screen.dart';
 
 void main() {
   runApp(
@@ -34,14 +35,7 @@ class MyApp extends StatelessWidget {
         colorScheme: ColorScheme.fromSeed(seedColor: Colors.blue),
         useMaterial3: true,
       ),
-      home: Scaffold(
-        appBar: AppBar(
-          title: const Text('Location Search'),
-        ),
-        body: const Center(
-          child: Text('Providers configured - Ready for UI'),
-        ),
-      ),
+      home: const HomeScreen(),
     );
   }
 }

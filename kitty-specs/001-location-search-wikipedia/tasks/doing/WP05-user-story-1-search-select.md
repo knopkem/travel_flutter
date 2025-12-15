@@ -13,10 +13,10 @@ subtasks:
   - "T031"
 title: "User Story 1: Search & Select Locations"
 phase: "Phase 2 - UI Implementation"
-lane: "planned"
-assignee: ""
-agent: ""
-shell_pid: ""
+lane: "doing"
+assignee: "claude"
+agent: "claude"
+shell_pid: "28247"
 review_status: ""
 reviewed_by: ""
 history:
@@ -25,6 +25,11 @@ history:
     agent: "system"
     shell_pid: ""
     action: "Prompt generated via /spec-kitty.tasks"
+  - timestamp: "2025-12-15T14:45:00Z"
+    lane: "doing"
+    agent: "claude"
+    shell_pid: "28247"
+    action: "Started implementation"
 ---
 *Path: kitty-specs/001-location-search-wikipedia/tasks/planned/WP05-user-story-1-search-select.md*
 
