@@ -9,15 +9,19 @@ import '../widgets/wikipedia_content_widget.dart';
 /// This screen displays:
 /// - Location name and country in AppBar
 /// - Loading indicator while fetching Wikipedia content
-/// - Article title, extract (summary), and optional thumbnail
+/// - Article summary (quick preview) initially
+/// - Option to load full article with sections
+/// - Optional thumbnail, complete article sections
 /// - Error message if content fetch fails
 ///
-/// The screen automatically fetches Wikipedia content when opened
-/// using the location's name as the article title. Content is cached
-/// by [WikipediaProvider] to avoid redundant API calls.
+/// The screen uses a two-stage loading approach:
+/// 1. Initial load: Fetch summary for quick display
+/// 2. User-triggered: Load full article with all sections
 ///
-/// This implements User Story US-002: "As a user, I want to view
-/// Wikipedia information about a selected location."
+/// Content is cached by [WikipediaProvider] to avoid redundant API calls.
+///
+/// This implements User Story US-001 (FR-003): "Display full Wikipedia
+/// article content instead of just summaries."
 ///
 /// Example navigation:
 /// ```dart
@@ -32,10 +36,7 @@ class LocationDetailScreen extends StatefulWidget {
   /// The location to display details for
   final Location location;
 
-  const LocationDetailScreen({
-    super.key,
-    required this.location,
-  });
+  const LocationDetailScreen({super.key, required this.location});
 
   @override
   State<LocationDetailScreen> createState() => _LocationDetailScreenState();
@@ -47,8 +48,10 @@ class _LocationDetailScreenState extends State<LocationDetailScreen> {
     super.initState();
     // Fetch Wikipedia content when screen loads
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      Provider.of<WikipediaProvider>(context, listen: false)
-          .fetchContent(widget.location.name);
+      Provider.of<WikipediaProvider>(
+        context,
+        listen: false,
+      ).fetchContent(widget.location.name);
     });
   }
 
@@ -83,8 +86,11 @@ class _LocationDetailScreenState extends State<LocationDetailScreen> {
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    const Icon(Icons.error_outline,
-                        size: 64, color: Colors.red),
+                    const Icon(
+                      Icons.error_outline,
+                      size: 64,
+                      color: Colors.red,
+                    ),
                     const SizedBox(height: 16),
                     Text(
                       provider.errorMessage!,
@@ -108,9 +114,7 @@ class _LocationDetailScreenState extends State<LocationDetailScreen> {
           // Get content from cache
           final content = provider.getContent(widget.location.name);
           if (content == null) {
-            return const Center(
-              child: Text('No content available'),
-            );
+            return const Center(child: Text('No content available'));
           }
 
           // Display Wikipedia content
@@ -150,7 +154,15 @@ class _LocationDetailScreenState extends State<LocationDetailScreen> {
                 ),
 
                 // Wikipedia content widget
-                WikipediaContentWidget(content: content),
+                WikipediaContentWidget(
+                  content: content,
+                  onLoadFullArticle: () {
+                    Provider.of<WikipediaProvider>(
+                      context,
+                      listen: false,
+                    ).fetchFullArticle(widget.location.name);
+                  },
+                ),
               ],
             ),
           );
