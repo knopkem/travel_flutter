@@ -3,18 +3,23 @@ import '../models/models.dart';
 /// Repository interface for Wikipedia content operations.
 ///
 /// Implementations of this interface provide access to Wikipedia article
-/// summaries and content. Results are returned as [WikipediaContent] objects.
+/// summaries and full content. Results are returned as [WikipediaContent] objects.
+///
+/// Two fetch modes:
+/// - [fetchSummary]: Quick preview with first paragraph
+/// - [fetchFullArticle]: Complete article with all sections
 ///
 /// Example usage:
 /// ```dart
 /// final repository = RestWikipediaRepository();
 /// try {
-///   final content = await repository.fetchSummary('Paris');
-///   print('Title: ${content.title}');
-///   print('Summary: ${content.summary}');
-///   if (content.thumbnailUrl != null) {
-///     print('Image: ${content.thumbnailUrl}');
-///   }
+///   // Quick summary first
+///   final summary = await repository.fetchSummary('Paris');
+///   print('Summary: ${summary.summary}');
+///
+///   // Then fetch full article if needed
+///   final fullArticle = await repository.fetchFullArticle('Paris');
+///   print('Sections: ${fullArticle.sections?.length}');
 /// } catch (e) {
 ///   print('Failed to fetch content: $e');
 /// } finally {
@@ -43,6 +48,34 @@ abstract class WikipediaRepository {
   /// print('${content.summary.substring(0, 100)}...');
   /// ```
   Future<WikipediaContent> fetchSummary(String title);
+
+  /// Fetches the full article content for a Wikipedia article by [title].
+  ///
+  /// Returns a [WikipediaContent] object containing the complete article HTML
+  /// and parsed sections for navigation. Includes all the summary fields plus
+  /// full content and sections.
+  ///
+  /// The [title] parameter should be the location name (e.g., "Paris",
+  /// "London"). The title will be URL-encoded automatically.
+  ///
+  /// This method fetches significantly more data than [fetchSummary], so it
+  /// should be called only when the user explicitly wants the full article.
+  ///
+  /// Throws an [Exception] if:
+  /// - Network request fails
+  /// - Article not found (404)
+  /// - API returns an error status code
+  /// - Response cannot be parsed
+  ///
+  /// Example:
+  /// ```dart
+  /// final content = await repository.fetchFullArticle('Berlin');
+  /// print('Article has ${content.sections?.length} sections');
+  /// for (final section in content.sections ?? []) {
+  ///   print('${' ' * (section.level - 2)}${section.title}');
+  /// }
+  /// ```
+  Future<WikipediaContent> fetchFullArticle(String title);
 
   /// Releases resources used by this repository.
   ///

@@ -46,7 +46,7 @@ class RestWikipediaRepository implements WikipediaRepository {
   /// Optionally provide a custom [client] for testing purposes.
   /// If not provided, a default HTTP client will be created.
   RestWikipediaRepository({http.Client? client})
-      : _client = client ?? http.Client();
+    : _client = client ?? http.Client();
 
   @override
   Future<WikipediaContent> fetchSummary(String title) async {
@@ -55,12 +55,9 @@ class RestWikipediaRepository implements WikipediaRepository {
     final uri = Uri.parse('$_baseUrl/page/summary/$encodedTitle');
 
     try {
-      final response = await _client.get(
-        uri,
-        headers: {
-          'User-Agent': 'TravelFlutterApp/1.0',
-        },
-      ).timeout(const Duration(seconds: 10));
+      final response = await _client
+          .get(uri, headers: {'User-Agent': 'TravelFlutterApp/1.0'})
+          .timeout(const Duration(seconds: 10));
 
       if (response.statusCode == 200) {
         final data = json.decode(response.body) as Map<String, dynamic>;
@@ -68,7 +65,8 @@ class RestWikipediaRepository implements WikipediaRepository {
       } else if (response.statusCode == 404) {
         debugPrint('Wikipedia article not found: $title (HTTP 404)');
         throw Exception(
-            'No Wikipedia article found for "$title". The article may not exist or the title may be misspelled.');
+          'No Wikipedia article found for "$title". The article may not exist or the title may be misspelled.',
+        );
       } else {
         debugPrint('Wikipedia API error: HTTP ${response.statusCode}');
         throw Exception('Wikipedia API error: ${response.statusCode}');
@@ -84,6 +82,123 @@ class RestWikipediaRepository implements WikipediaRepository {
       debugPrint('Wikipedia unexpected error: $e');
       rethrow;
     }
+  }
+
+  @override
+  Future<WikipediaContent> fetchFullArticle(String title) async {
+    // First fetch summary for metadata (thumbnail, summary text)
+    final summary = await fetchSummary(title);
+
+    // Then fetch full HTML content
+    final encodedTitle = Uri.encodeComponent(title);
+    final uri = Uri.parse('$_baseUrl/page/mobile-html/$encodedTitle');
+
+    try {
+      final response = await _client
+          .get(uri, headers: {'User-Agent': 'TravelFlutterApp/1.0'})
+          .timeout(
+            const Duration(seconds: 15),
+          ); // Longer timeout for full content
+
+      if (response.statusCode == 200) {
+        final html = response.body;
+        final sections = _parseSections(html);
+
+        return summary.copyWith(
+          fullContent: html,
+          sections: sections,
+          fetchedAt: DateTime.now(),
+        );
+      } else if (response.statusCode == 404) {
+        debugPrint('Wikipedia full article not found: $title (HTTP 404)');
+        throw Exception(
+          'No Wikipedia article found for "$title". The article may not exist or the title may be misspelled.',
+        );
+      } else {
+        debugPrint('Wikipedia API error: HTTP ${response.statusCode}');
+        throw Exception('Wikipedia API error: ${response.statusCode}');
+      }
+    } on http.ClientException catch (e) {
+      debugPrint('Wikipedia network error: $e');
+      throw Exception('Network error: Unable to connect to Wikipedia');
+    } catch (e) {
+      if (e.toString().contains('TimeoutException')) {
+        debugPrint('Wikipedia request timeout after 15 seconds');
+        throw Exception('Request timeout: Wikipedia took too long to respond');
+      }
+      debugPrint('Wikipedia unexpected error: $e');
+      rethrow;
+    }
+  }
+
+  /// Parses HTML to extract article sections (h2, h3 tags)
+  ///
+  /// This is a simple parser that looks for heading tags and extracts
+  /// content between them. For more robust parsing, consider using
+  /// an HTML parser package like 'html' or 'beautiful_soup'.
+  List<ArticleSection> _parseSections(String html) {
+    final sections = <ArticleSection>[];
+
+    // Simple regex-based parsing for headings
+    // This captures h2 and h3 tags with their content
+    final headingPattern = RegExp(
+      r'<h([23])[^>]*>(.*?)</h\1>',
+      multiLine: true,
+      caseSensitive: false,
+    );
+
+    final matches = headingPattern.allMatches(html);
+    if (matches.isEmpty) {
+      return sections; // No sections found
+    }
+
+    final matchList = matches.toList();
+    for (int i = 0; i < matchList.length; i++) {
+      final match = matchList[i];
+      final level = int.parse(match.group(1)!);
+      final title = _stripHtmlTags(match.group(2)!);
+
+      // Extract content between this heading and the next one
+      final startIndex = match.end;
+      final endIndex =
+          i < matchList.length - 1 ? matchList[i + 1].start : html.length;
+
+      final content = html.substring(startIndex, endIndex).trim();
+
+      // Skip empty sections and navigation/metadata sections
+      if (content.isNotEmpty &&
+          !_isMetadataSection(title) &&
+          title.isNotEmpty) {
+        sections.add(
+          ArticleSection(title: title, content: content, level: level),
+        );
+      }
+    }
+
+    return sections;
+  }
+
+  /// Strips HTML tags from a string
+  String _stripHtmlTags(String html) {
+    return html
+        .replaceAll(RegExp(r'<[^>]*>'), '')
+        .replaceAll('&nbsp;', ' ')
+        .replaceAll('&amp;', '&')
+        .replaceAll('&lt;', '<')
+        .replaceAll('&gt;', '>')
+        .replaceAll('&quot;', '"')
+        .trim();
+  }
+
+  /// Checks if a section title is metadata (not article content)
+  bool _isMetadataSection(String title) {
+    final lowercaseTitle = title.toLowerCase();
+    return lowercaseTitle.contains('references') ||
+        lowercaseTitle.contains('external links') ||
+        lowercaseTitle.contains('see also') ||
+        lowercaseTitle.contains('notes') ||
+        lowercaseTitle.contains('bibliography') ||
+        lowercaseTitle.contains('further reading');
   }
 
   @override

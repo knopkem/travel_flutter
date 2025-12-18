@@ -5,38 +5,34 @@ import '../repositories/repositories.dart';
 /// Manages Wikipedia content loading state and caching.
 ///
 /// This provider handles:
-/// - Fetching Wikipedia article summaries
-/// - Caching content by title to avoid redundant API calls
+/// - Fetching Wikipedia article summaries and full content
+/// - Two-tier caching: summaries and full articles
 /// - Loading and error states
 /// - Content retrieval for display
 ///
 /// The provider uses [WikipediaRepository] to fetch article data and
 /// maintains an in-memory cache of loaded content indexed by title.
 ///
+/// Caching strategy:
+/// - Summary cached on first fetch (quick preview)
+/// - Full article cached separately when explicitly requested
+/// - Both cached for session lifetime (memory only)
+///
 /// Usage in widgets:
 /// ```dart
-/// // Listen to changes with Consumer
-/// Consumer<WikipediaProvider>(
-///   builder: (context, provider, child) {
-///     if (provider.isLoading) {
-///       return CircularProgressIndicator();
-///     }
-///     final content = provider.getContent('Paris');
-///     if (content == null) {
-///       return Text('Content not loaded');
-///     }
-///     return Column(
-///       children: [
-///         Text(content.title),
-///         Text(content.extract),
-///       ],
-///     );
-///   },
-/// )
+/// // Fetch summary first for quick display
+/// await provider.fetchContent('Paris');
 ///
-/// // Trigger content fetch
-/// Provider.of<WikipediaProvider>(context, listen: false)
-///   .fetchContent('Paris');
+/// // Then fetch full article when user wants more
+/// await provider.fetchFullArticle('Paris');
+///
+/// // Access cached content
+/// final content = provider.getContent('Paris');
+/// if (content?.isFullArticle ?? false) {
+///   // Render full article with sections
+/// } else {
+///   // Show summary only
+/// }
 /// ```
 class WikipediaProvider extends ChangeNotifier {
   /// Repository for Wikipedia API calls
@@ -72,11 +68,13 @@ class WikipediaProvider extends ChangeNotifier {
 
   // Methods
 
-  /// Fetches Wikipedia content for the given article title.
+  /// Fetches Wikipedia summary content for the given article title.
   ///
-  /// If content for [title] is already cached, returns immediately without
-  /// making an API call. Otherwise, fetches from Wikipedia API and caches
-  /// the result.
+  /// If content for [title] is already cached (summary or full article),
+  /// returns immediately without making an API call. Otherwise, fetches
+  /// summary from Wikipedia API and caches the result.
+  ///
+  /// For full article content with sections, use [fetchFullArticle].
   ///
   /// Updates [isLoading] and [errorMessage] during the operation.
   /// Notifies listeners when state changes.
@@ -85,10 +83,10 @@ class WikipediaProvider extends ChangeNotifier {
   /// ```dart
   /// await provider.fetchContent('Paris');
   /// final content = provider.getContent('Paris');
-  /// // content now contains Wikipedia summary for Paris
+  /// // content contains summary preview for Paris
   /// ```
   Future<void> fetchContent(String title) async {
-    // Return immediately if already cached
+    // Return immediately if already cached (summary or full)
     if (_content.containsKey(title)) {
       return;
     }
@@ -104,6 +102,52 @@ class WikipediaProvider extends ChangeNotifier {
     } catch (e) {
       debugPrint('WikipediaProvider: Failed to fetch content for "$title": $e');
       _errorMessage = 'Failed to fetch Wikipedia content: $e';
+    } finally {
+      _isLoading = false;
+      notifyListeners();
+    }
+  }
+
+  /// Fetches full Wikipedia article content with sections.
+  ///
+  /// If full article for [title] is already cached, returns immediately.
+  /// If only summary is cached, upgrades it to full article. Otherwise,
+  /// fetches complete article from Wikipedia API and caches it.
+  ///
+  /// Full articles include:
+  /// - All content from summary (title, extract, thumbnail)
+  /// - Complete article HTML
+  /// - Parsed sections for navigation
+  ///
+  /// Updates [isLoading] and [errorMessage] during the operation.
+  /// Notifies listeners when state changes.
+  ///
+  /// Example:
+  /// ```dart
+  /// await provider.fetchFullArticle('Paris');
+  /// final content = provider.getContent('Paris');
+  /// print('Article has ${content?.sections?.length ?? 0} sections');
+  /// ```
+  Future<void> fetchFullArticle(String title) async {
+    // Return immediately if full article already cached
+    final existing = _content[title];
+    if (existing?.isFullArticle ?? false) {
+      return;
+    }
+
+    _isLoading = true;
+    _errorMessage = null;
+    notifyListeners();
+
+    try {
+      final fullArticle = await _repository.fetchFullArticle(title);
+      _content[title] = fullArticle;
+      _errorMessage = null;
+    } catch (e) {
+      debugPrint(
+        'WikipediaProvider: Failed to fetch full article for "$title": $e',
+      );
+      _errorMessage = 'Failed to fetch full Wikipedia article: $e';
     } finally {
       _isLoading = false;
       notifyListeners();
