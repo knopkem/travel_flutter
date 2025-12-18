@@ -11,10 +11,10 @@ subtasks:
   - "T008"
 title: "Foundation - Data Models & Utilities"
 phase: "Phase 0 - Foundation"
-lane: "planned"
+lane: "doing"
 assignee: ""
-agent: ""
-shell_pid: ""
+agent: "claude"
+shell_pid: "3931"
 review_status: ""
 reviewed_by: ""
 history:
@@ -537,3 +537,4 @@ int calculateNotabilityScore({
 ## Activity Log
 
 - 2025-12-18T08:24:50+0100 – system – lane=planned – Prompt created via /spec-kitty.tasks
+- 2025-12-18T07:32:00Z – claude – shell_pid=3931 – lane=doing – Started WP01: Foundation - Data Models & Utilities
