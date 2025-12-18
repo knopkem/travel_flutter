@@ -10,10 +10,10 @@ subtasks:
   - "T022"
 title: "Full Wikipedia Content Enhancement"
 phase: "Phase 0 - Foundation"
-lane: "planned"
+lane: "doing"
 assignee: ""
-agent: ""
-shell_pid: ""
+agent: "claude"
+shell_pid: "68023"
 review_status: ""
 reviewed_by: ""
 history:
@@ -106,3 +106,4 @@ history:
 ## Activity Log
 
 - 2025-12-18T08:24:50+0100 – system – lane=planned – Prompt created via /spec-kitty.tasks
+- 2025-12-18T07:48:28Z – claude – shell_pid=68023 – lane=doing – Started WP03: Full Wikipedia Content Enhancement
