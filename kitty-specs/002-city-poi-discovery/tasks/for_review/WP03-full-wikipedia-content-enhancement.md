@@ -108,3 +108,5 @@ history:
 - 2025-12-18T08:24:50+0100 – system – lane=planned – Prompt created via /spec-kitty.tasks
 - 2025-12-18T07:48:28Z – claude – shell_pid=68023 – lane=doing – Started WP03: Full Wikipedia Content Enhancement
 - 2025-12-18T07:54:16Z – claude – shell_pid=68023 – lane=for_review – Completed T016-T020: Models, repository, and provider enhancements. T021-T022 (UI widgets) remain.
+- 2025-12-18T07:56:39Z – claude – shell_pid=68023 – lane=doing – Resuming WP03: Completing T021-T022 (UI widgets)
+- 2025-12-18T08:06:30Z – claude – shell_pid=68023 – lane=for_review – Completed WP03: All 7 subtasks (T016-T022) implemented
