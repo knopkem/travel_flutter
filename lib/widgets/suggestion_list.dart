@@ -5,8 +5,8 @@ import '../providers/providers.dart';
 /// Displays location search suggestions in a scrollable list.
 ///
 /// This widget shows the results from the geocoding API as an
-/// interactive list. When a user taps a suggestion, it is converted
-/// to a [Location] and added to the selected locations list.
+/// interactive list. When a user taps a suggestion, it becomes
+/// the active city, replacing any previously selected city.
 ///
 /// The list automatically updates when search results change via
 /// the [LocationProvider].
@@ -16,6 +16,7 @@ import '../providers/providers.dart';
 /// - Shows location icon and full display name
 /// - Clears suggestions after selection
 /// - Dismisses keyboard on tap
+/// - Navigates to city detail screen automatically
 /// - Shows "No results" message when empty after search
 ///
 /// Example:
@@ -40,10 +41,7 @@ class SuggestionList extends StatelessWidget {
           return const Center(
             child: Text(
               'No locations found',
-              style: TextStyle(
-                fontSize: 16,
-                color: Colors.grey,
-              ),
+              style: TextStyle(fontSize: 16, color: Colors.grey),
             ),
           );
         }
@@ -60,30 +58,28 @@ class SuggestionList extends StatelessWidget {
                 // Dismiss keyboard
                 FocusScope.of(context).unfocus();
 
-                // Try to select location
-                final wasAdded = provider.selectLocation(suggestion);
+                // Select city (replaces any previous selection)
+                provider.selectCity(suggestion);
 
-                if (wasAdded) {
-                  // Successfully added - clear suggestions and show confirmation
-                  provider.clearSuggestions();
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text('Added ${suggestion.name}'),
-                      duration: const Duration(seconds: 2),
-                      backgroundColor: Colors.green,
-                    ),
-                  );
-                } else {
-                  // Duplicate - show warning message
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content:
-                          Text('${suggestion.name} is already in your list'),
-                      duration: const Duration(seconds: 2),
-                      backgroundColor: Colors.orange,
-                    ),
-                  );
-                }
+                // Clear suggestions
+                provider.clearSuggestions();
+
+                // Show confirmation
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text('Selected ${suggestion.name}'),
+                    duration: const Duration(seconds: 2),
+                    backgroundColor: Colors.green,
+                  ),
+                );
+
+                // Navigate to location detail screen
+                final location = suggestion.toLocation();
+                Navigator.pushNamed(
+                  context,
+                  '/location-detail',
+                  arguments: location,
+                );
               },
             );
           },

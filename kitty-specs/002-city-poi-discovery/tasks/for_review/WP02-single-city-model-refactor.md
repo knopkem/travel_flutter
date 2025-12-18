@@ -10,7 +10,7 @@ subtasks:
   - "T015"
 title: "Single City Model Refactor"
 phase: "Phase 0 - Foundation"
-lane: "doing"
+lane: "for_review"
 assignee: ""
 agent: "claude"
 shell_pid: "68023"
@@ -111,3 +111,4 @@ history:
 
 - 2025-12-18T08:24:50+0100 – system – lane=planned – Prompt created via /spec-kitty.tasks
 - 2025-12-18T07:42:18Z – claude – shell_pid=68023 – lane=doing – Started WP02: Single City Model Refactor
+- 2025-12-18T07:47:23Z – claude – shell_pid=68023 – lane=for_review – Completed WP02: All 7 subtasks implemented

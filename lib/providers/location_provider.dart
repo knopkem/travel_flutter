@@ -2,18 +2,17 @@ import 'package:flutter/foundation.dart';
 import '../models/models.dart';
 import '../repositories/repositories.dart';
 
-/// Manages location search state and selected locations list.
+/// Manages location search state and single active city selection.
 ///
 /// This provider handles:
 /// - Search query execution against geocoding API
 /// - Location suggestions for autocomplete dropdown
-/// - Selected locations list (persistent during session)
+/// - Single active city selection (replaces previous selection)
 /// - Loading and error states
-/// - Duplicate prevention
 ///
 /// The provider uses [GeocodingRepository] to fetch location data and
 /// maintains separation between search suggestions (temporary) and
-/// selected locations (persistent).
+/// the selected city (persistent).
 ///
 /// Usage in widgets:
 /// ```dart
@@ -45,8 +44,9 @@ class LocationProvider extends ChangeNotifier {
   /// Current search suggestions (temporary, cleared on new search)
   List<LocationSuggestion> _suggestions = [];
 
-  /// Selected locations list (persistent during session)
-  final List<Location> _selectedLocations = [];
+  /// Currently selected city (persistent during session)
+  /// Only one city can be active at a time; selecting a new city replaces the previous one
+  Location? _selectedCity;
 
   /// Loading state for async operations
   bool _isLoading = false;
@@ -68,11 +68,14 @@ class LocationProvider extends ChangeNotifier {
   /// Cleared when a new search starts or when [clearSuggestions] is called.
   List<LocationSuggestion> get suggestions => _suggestions;
 
-  /// List of locations selected by the user.
+  /// Currently selected city.
   ///
-  /// Persists during the app session. Locations are added via
-  /// [selectLocation] and removed via [removeLocation].
-  List<Location> get selectedLocations => _selectedLocations;
+  /// Persists during the app session. Returns null if no city is selected.
+  /// A new city selection replaces the previous one.
+  Location? get selectedCity => _selectedCity;
+
+  /// Whether a city is currently selected.
+  bool get hasSelectedCity => _selectedCity != null;
 
   /// Whether an async operation is currently in progress.
   bool get isLoading => _isLoading;
@@ -120,13 +123,10 @@ class LocationProvider extends ChangeNotifier {
     }
   }
 
-  /// Adds a selected location to the list.
+  /// Selects a city, replacing any previously selected city.
   ///
-  /// Converts the [LocationSuggestion] to a [Location] and adds it to
-  /// [selectedLocations]. Prevents duplicates based on location ID.
-  ///
-  /// Returns `true` if the location was added successfully, or `false`
-  /// if it was already in the list (duplicate).
+  /// Converts the [LocationSuggestion] to a [Location] and sets it as
+  /// the active city. Any previously selected city is replaced.
   ///
   /// This method does not make additional API calls; it uses the data
   /// already present in the suggestion (which includes coordinates).
@@ -134,37 +134,25 @@ class LocationProvider extends ChangeNotifier {
   /// Example:
   /// ```dart
   /// final suggestion = suggestions.first;
-  /// final wasAdded = provider.selectLocation(suggestion);
-  /// if (!wasAdded) {
-  ///   // Show "already selected" message
-  /// }
+  /// provider.selectCity(suggestion);
+  /// // Previous city (if any) is now replaced
   /// ```
-  bool selectLocation(LocationSuggestion suggestion) {
+  void selectCity(LocationSuggestion suggestion) {
     // Convert suggestion to Location using the built-in method
-    final location = suggestion.toLocation();
-
-    // Check for duplicates based on ID
-    if (_selectedLocations.any((loc) => loc.id == location.id)) {
-      return false; // Duplicate, not added
-    }
-
-    // Add location and notify listeners
-    _selectedLocations.add(location);
+    _selectedCity = suggestion.toLocation();
     notifyListeners();
-    return true; // Successfully added
   }
 
-  /// Removes a location from the selected list.
+  /// Clears the currently selected city.
   ///
-  /// Removes the location with the specified [locationId] from
-  /// [selectedLocations] and notifies listeners.
+  /// Sets the selected city to null and notifies listeners.
   ///
   /// Example:
   /// ```dart
-  /// provider.removeLocation('123456');
+  /// provider.clearCity();
   /// ```
-  void removeLocation(String locationId) {
-    _selectedLocations.removeWhere((loc) => loc.id == locationId);
+  void clearCity() {
+    _selectedCity = null;
     notifyListeners();
   }
 

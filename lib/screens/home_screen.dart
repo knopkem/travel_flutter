@@ -3,24 +3,24 @@ import 'package:provider/provider.dart';
 import '../providers/providers.dart';
 import '../widgets/search_field.dart';
 import '../widgets/suggestion_list.dart';
-import '../widgets/selected_locations_list.dart';
 
-/// Main screen for location search and selection.
+/// Main screen for location search and single city selection.
 ///
 /// This screen provides the primary user interface for searching
-/// locations and managing the selected locations list. It integrates:
+/// locations and selecting a single active city. It integrates:
 /// - [SearchField] for text input with debouncing
 /// - [SuggestionList] for displaying search results
-/// - [SelectedLocationsList] for showing selected locations
 ///
 /// The screen layout adapts based on the current state:
 /// - Shows suggestions when search results are available
-/// - Shows selected locations when no suggestions present
-/// - Shows empty state when no data available
+/// - Shows selected city when available (single card with city name)
+/// - Shows empty state when no city selected
+///
+/// Selecting a new city replaces the previously selected city.
 ///
 /// This implements User Story US-001: "As a user, I want to search
-/// for locations by typing in a search field, see matching suggestions,
-/// and select locations that appear as buttons below the search field."
+/// for a city, see matching suggestions, and select a single active
+/// city that displays its Wikipedia content and nearby POIs."
 ///
 /// Example usage (set as home in MaterialApp):
 /// ```dart
@@ -46,7 +46,7 @@ class HomeScreen extends StatelessWidget {
             const SearchField(),
             const SizedBox(height: 16),
 
-            // Suggestions or selected locations
+            // Suggestions or selected city
             Expanded(
               child: Consumer<LocationProvider>(
                 builder: (context, provider, child) {
@@ -65,17 +65,45 @@ class HomeScreen extends StatelessWidget {
                     );
                   }
 
-                  // Show selected locations when no suggestions
-                  if (provider.selectedLocations.isNotEmpty) {
+                  // Show selected city when available
+                  if (provider.hasSelectedCity) {
+                    final city = provider.selectedCity!;
                     return Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          'Selected Locations',
+                          'Selected City',
                           style: Theme.of(context).textTheme.titleMedium,
                         ),
                         const SizedBox(height: 8),
-                        const Expanded(child: SelectedLocationsList()),
+                        Card(
+                          elevation: 2,
+                          child: ListTile(
+                            leading: const Icon(
+                              Icons.location_city,
+                              color: Colors.blue,
+                              size: 32,
+                            ),
+                            title: Text(
+                              city.name,
+                              style: Theme.of(context).textTheme.titleLarge,
+                            ),
+                            subtitle: Text(city.country),
+                            trailing: IconButton(
+                              icon: const Icon(Icons.close),
+                              tooltip: 'Clear selection',
+                              onPressed: () => provider.clearCity(),
+                            ),
+                            onTap: () {
+                              // Navigate to location detail screen
+                              Navigator.pushNamed(
+                                context,
+                                '/location-detail',
+                                arguments: city,
+                              );
+                            },
+                          ),
+                        ),
                       ],
                     );
                   }
@@ -88,11 +116,8 @@ class HomeScreen extends StatelessWidget {
                         Icon(Icons.search, size: 64, color: Colors.grey),
                         SizedBox(height: 16),
                         Text(
-                          'Search for a location to get started',
-                          style: TextStyle(
-                            fontSize: 16,
-                            color: Colors.grey,
-                          ),
+                          'Search for a city to get started',
+                          style: TextStyle(fontSize: 16, color: Colors.grey),
                         ),
                       ],
                     ),
