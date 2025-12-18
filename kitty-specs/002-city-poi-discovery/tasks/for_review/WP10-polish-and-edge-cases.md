@@ -12,7 +12,7 @@ subtasks:
   - "T080"
 title: "Polish & Edge Cases"
 phase: "Phase 3 - Polish"
-lane: "doing"
+lane: "for_review"
 assignee: ""
 agent: "claude"
 shell_pid: "68023"
@@ -115,3 +115,4 @@ history:
 
 - 2025-12-18T08:24:50+0100 – system – lane=planned – Prompt created via /spec-kitty.tasks
 - 2025-12-18T09:14:52Z – claude – shell_pid=68023 – lane=doing – Starting WP10: Polish and Edge Cases
+- 2025-12-18T09:31:49Z – claude – shell_pid=68023 – lane=for_review – Complete WP10: Pull-to-refresh, city switching, accessibility, and UI polish
