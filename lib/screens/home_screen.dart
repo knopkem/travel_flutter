@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import '../providers/providers.dart';
 import '../widgets/search_field.dart';
 import '../widgets/suggestion_list.dart';
+import '../screens/location_detail_screen.dart';
 
 /// Main screen for location search and single city selection.
 ///
@@ -96,10 +97,13 @@ class HomeScreen extends StatelessWidget {
                             ),
                             onTap: () {
                               // Navigate to location detail screen
-                              Navigator.pushNamed(
+                              Navigator.push(
                                 context,
-                                '/location-detail',
-                                arguments: city,
+                                MaterialPageRoute(
+                                  builder: (context) => LocationDetailScreen(
+                                    location: city,
+                                  ),
+                                ),
                               );
                             },
                           ),

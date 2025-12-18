@@ -114,7 +114,8 @@ class POIProvider extends ChangeNotifier {
       notifyListeners();
     } catch (e) {
       if (_currentCityId == cityId) {
-        _error = 'Failed to discover POIs: $e';
+        debugPrint('POI discovery error: $e');
+        _error = 'Unable to discover nearby places. Please try again.';
         _isLoading = false;
         _isLoadingPhase1 = false;
         _isLoadingPhase2 = false;

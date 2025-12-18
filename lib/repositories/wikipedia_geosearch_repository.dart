@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import '../models/location.dart';
 import '../models/poi.dart';
@@ -76,7 +77,7 @@ class WikipediaGeosearchRepository implements POIRepository {
           pois.add(poi);
         } catch (e) {
           // Skip invalid items but continue processing others
-          print('Warning: Failed to parse Wikipedia Geosearch item: $e');
+          debugPrint('Warning: Failed to parse Wikipedia Geosearch item: $e');
         }
       }
 

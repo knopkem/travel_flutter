@@ -287,7 +287,7 @@ class _POIDetailScreenState extends State<POIDetailScreen> {
           if (widget.poi.wikidataId != null) ...[
             _buildMetadataRow(
               context,
-              Icons.database,
+              Icons.storage,
               'Wikidata ID',
               widget.poi.wikidataId!,
             ),
@@ -426,7 +426,7 @@ class _POIDetailScreenState extends State<POIDetailScreen> {
       case 'OpenStreetMap Overpass':
         return Icons.map;
       case 'Wikidata':
-        return Icons.database;
+        return Icons.storage;
       default:
         return Icons.info;
     }

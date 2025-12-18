@@ -70,7 +70,7 @@ class POIListWidget extends StatelessWidget {
                     );
                   },
                 ),
-                if (provider.isLoadingPhase2) ..[
+                if (provider.isLoadingPhase2) ...[
                   const SizedBox(height: 16),
                   _buildPhase2Loading(),
                 ],
@@ -87,7 +87,8 @@ class POIListWidget extends StatelessWidget {
     final displayed = provider.pois.length;
 
     return Semantics(
-      label: 'Nearby Points of Interest section, showing $displayed of $count places',
+      label:
+          'Nearby Points of Interest section, showing $displayed of $count places',
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 16),
         child: Row(

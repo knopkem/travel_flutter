@@ -101,7 +101,7 @@ class WikipediaProvider extends ChangeNotifier {
       _errorMessage = null;
     } catch (e) {
       debugPrint('WikipediaProvider: Failed to fetch content for "$title": $e');
-      _errorMessage = 'Failed to fetch Wikipedia content: $e';
+      _errorMessage = 'Unable to load content. Please check your connection.';
     } finally {
       _isLoading = false;
       notifyListeners();
@@ -147,7 +147,7 @@ class WikipediaProvider extends ChangeNotifier {
       debugPrint(
         'WikipediaProvider: Failed to fetch full article for "$title": $e',
       );
-      _errorMessage = 'Failed to fetch full Wikipedia article: $e';
+      _errorMessage = 'Unable to load full article. Please try again later.';
     } finally {
       _isLoading = false;
       notifyListeners();

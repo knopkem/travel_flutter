@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../providers/providers.dart';
+import '../screens/location_detail_screen.dart';
 
 /// Displays location search suggestions in a scrollable list.
 ///
@@ -84,10 +85,13 @@ class SuggestionList extends StatelessWidget {
 
                 // Navigate to location detail screen
                 final location = suggestion.toLocation();
-                Navigator.pushNamed(
+                Navigator.push(
                   context,
-                  '/location-detail',
-                  arguments: location,
+                  MaterialPageRoute(
+                    builder: (context) => LocationDetailScreen(
+                      location: location,
+                    ),
+                  ),
                 );
               },
             );
