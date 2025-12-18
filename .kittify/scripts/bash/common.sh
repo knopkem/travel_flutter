@@ -7,7 +7,7 @@ get_repo_root() {
         git rev-parse --show-toplevel
     else
         # Fall back to script location for non-git repos
-        local script_dir="$(unset CDPATH && cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+        local script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
         (cd "$script_dir/../../.." && pwd)
     fi
 }
@@ -192,7 +192,7 @@ except Exception:
             try:
                 import yaml  # type: ignore
 
-                with config_path.open("r", encoding="utf-8-sig") as fh:
+                with config_path.open("r", encoding="utf-8") as fh:
                     data = yaml.safe_load(fh) or {}
             except Exception:
                 data = {}
@@ -231,7 +231,7 @@ except Exception:
                 mission_path = active_link.resolve()
             elif active_link.is_file():
                 try:
-                    mission_name = active_link.read_text(encoding="utf-8-sig").strip()
+                    mission_name = active_link.read_text(encoding="utf-8").strip()
                 except OSError:
                     mission_name = ""
                 if mission_name:
