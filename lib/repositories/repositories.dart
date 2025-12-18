@@ -11,9 +11,13 @@
 /// - [NominatimGeocodingRepository]: Nominatim API implementation
 /// - [WikipediaRepository]: Interface for Wikipedia content
 /// - [RestWikipediaRepository]: Wikipedia REST API implementation
+/// - [POIRepository]: Interface for POI discovery
+/// - [WikipediaGeosearchRepository]: Wikipedia Geosearch API implementation
 library;
 
 export 'geocoding_repository.dart';
 export 'nominatim_geocoding_repository.dart';
 export 'wikipedia_repository.dart';
 export 'rest_wikipedia_repository.dart';
+export 'poi_repository.dart';
+export 'wikipedia_geosearch_repository.dart';
