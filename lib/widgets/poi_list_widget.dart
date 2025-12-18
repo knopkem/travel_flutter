@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../models/location.dart';
 import '../providers/poi_provider.dart';
+import '../screens/poi_detail_screen.dart';
 import 'poi_list_item.dart';
 
 /// POI list widget with progressive loading
@@ -53,9 +54,11 @@ class POIListWidget extends StatelessWidget {
                 return POIListItem(
                   poi: poi,
                   onTap: () {
-                    // TODO: Navigate to POI detail screen (WP09)
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(content: Text('Tapped: ${poi.name}')),
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => POIDetailScreen(poi: poi),
+                      ),
                     );
                   },
                 );
