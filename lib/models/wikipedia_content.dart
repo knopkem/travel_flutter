@@ -1,12 +1,18 @@
+import 'article_section.dart';
+
 /// Represents Wikipedia article content for a location.
 ///
-/// This model holds summary information fetched from the Wikipedia REST API
-/// when the user views details for a selected location. Content is loaded
-/// on-demand and cached during the detail screen lifetime.
+/// This model holds both summary and full article content fetched from
+/// the Wikipedia REST API. Content is loaded on-demand and cached.
+///
+/// Two fetching modes:
+/// - Summary: Quick preview with first paragraph (from /page/summary endpoint)
+/// - Full article: Complete article with sections (from /page/mobile-html endpoint)
 ///
 /// State transitions:
 /// - Loading: Initial state when screen opens
-/// - Loaded: Content successfully fetched
+/// - Summary loaded: Quick preview available
+/// - Full article loaded: Complete content with sections available
 /// - Error: API failure or page not found
 ///
 /// Example:
@@ -46,19 +52,45 @@ class WikipediaContent {
   /// Can be used to open the complete article in an external browser.
   final String pageUrl;
 
+  /// Full article HTML content (null if only summary fetched)
+  ///
+  /// Contains the complete article HTML from the mobile-html endpoint.
+  /// Used for rendering the full article with all sections.
+  final String? fullContent;
+
+  /// Article sections parsed from full content (null if only summary fetched)
+  ///
+  /// Structured list of sections for navigation and progressive rendering.
+  /// Empty list means the article has no sections (very short article).
+  final List<ArticleSection>? sections;
+
+  /// Timestamp when the content was fetched
+  ///
+  /// Used for cache invalidation and displaying data freshness to users.
+  final DateTime fetchedAt;
+
+  /// Whether this is a full article or just a summary
+  ///
+  /// - true: Full article with sections has been fetched
+  /// - false: Only summary/extract is available
+  bool get isFullArticle => fullContent != null;
+
   /// Creates a new [WikipediaContent] instance.
   ///
-  /// [title], [summary], and [pageUrl] are required.
-  /// [extractHtml] and [thumbnailUrl] are optional.
+  /// [title], [summary], [pageUrl], and [fetchedAt] are required.
+  /// [extractHtml], [thumbnailUrl], [fullContent], and [sections] are optional.
   const WikipediaContent({
     required this.title,
     required this.summary,
     this.extractHtml,
     this.thumbnailUrl,
     required this.pageUrl,
+    this.fullContent,
+    this.sections,
+    required this.fetchedAt,
   });
 
-  /// Creates [WikipediaContent] from a Wikipedia REST API JSON response.
+  /// Creates [WikipediaContent] from a Wikipedia REST API summary JSON response.
   ///
   /// Expected JSON structure from the /page/summary/{title} endpoint:
   /// ```json
@@ -89,10 +121,42 @@ class WikipediaContent {
       thumbnailUrl:
           (json['thumbnail'] as Map<String, dynamic>?)?['source'] as String?,
       pageUrl: desktopUrls['page'] as String,
+      fetchedAt: DateTime.now(),
+    );
+  }
+
+  /// Creates a copy with updated fields (for adding full content to existing summary).
+  ///
+  /// Used when upgrading from summary to full article:
+  /// ```dart
+  /// final fullArticle = summaryContent.copyWith(
+  ///   fullContent: htmlContent,
+  ///   sections: parsedSections,
+  /// );
+  /// ```
+  WikipediaContent copyWith({
+    String? title,
+    String? summary,
+    String? extractHtml,
+    String? thumbnailUrl,
+    String? pageUrl,
+    String? fullContent,
+    List<ArticleSection>? sections,
+    DateTime? fetchedAt,
+  }) {
+    return WikipediaContent(
+      title: title ?? this.title,
+      summary: summary ?? this.summary,
+      extractHtml: extractHtml ?? this.extractHtml,
+      thumbnailUrl: thumbnailUrl ?? this.thumbnailUrl,
+      pageUrl: pageUrl ?? this.pageUrl,
+      fullContent: fullContent ?? this.fullContent,
+      sections: sections ?? this.sections,
+      fetchedAt: fetchedAt ?? this.fetchedAt,
     );
   }
 
   @override
   String toString() =>
-      'WikipediaContent(title: $title, hasImage: ${thumbnailUrl != null})';
+      'WikipediaContent(title: $title, hasImage: ${thumbnailUrl != null}, isFullArticle: $isFullArticle, sectionCount: ${sections?.length ?? 0})';
 }

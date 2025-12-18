@@ -18,6 +18,9 @@ void main() {
             RestWikipediaRepository(),
           ),
         ),
+        ChangeNotifierProvider(
+          create: (_) => POIProvider(),
+        ),
       ],
       child: const MyApp(),
     ),

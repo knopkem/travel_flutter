@@ -1,0 +1,7 @@
+{
+  "feature_number": "002",
+  "slug": "002-city-poi-discovery",
+  "friendly_name": "City POI Discovery & Detail View",
+  "source_description": "Rework city selection to single active city model. Display full Wikipedia article content instead of summaries. Add POI discovery: fetch nearby points of interest from OpenStreetMap/Overpass API, Wikipedia Geosearch, and Wikidata when city is selected. Filter duplicate POIs across sources. Enable users to view detailed information for each POI.",
+  "created_at": "2025-12-18T06:34:14Z"
+}
