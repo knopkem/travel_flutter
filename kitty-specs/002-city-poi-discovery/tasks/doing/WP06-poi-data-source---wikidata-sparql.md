@@ -11,10 +11,10 @@ subtasks:
   - "T043"
 title: "POI Data Source - Wikidata SPARQL"
 phase: "Phase 1 - Core POI Features"
-lane: "planned"
+lane: "doing"
 assignee: ""
-agent: ""
-shell_pid: ""
+agent: "claude"
+shell_pid: "68023"
 review_status: ""
 reviewed_by: ""
 history:
@@ -110,3 +110,4 @@ history:
 ## Activity Log
 
 - 2025-12-18T08:24:50+0100 – system – lane=planned – Prompt created via /spec-kitty.tasks
+- 2025-12-18T08:28:13Z – claude – shell_pid=68023 – lane=doing – Starting WP06: Wikidata SPARQL POI data source
