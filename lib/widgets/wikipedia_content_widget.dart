@@ -79,11 +79,10 @@ class _WikipediaContentWidgetState extends State<WikipediaContentWidget> {
               height: 200,
               alignment: Alignment.center,
               child: CircularProgressIndicator(
-                value:
-                    loadingProgress.expectedTotalBytes != null
-                        ? loadingProgress.cumulativeBytesLoaded /
-                            loadingProgress.expectedTotalBytes!
-                        : null,
+                value: loadingProgress.expectedTotalBytes != null
+                    ? loadingProgress.cumulativeBytesLoaded /
+                        loadingProgress.expectedTotalBytes!
+                    : null,
               ),
             );
           },
@@ -156,9 +155,9 @@ class _WikipediaContentWidgetState extends State<WikipediaContentWidget> {
               child: Text(
                 'Article Sections (${widget.content.sections!.length})',
                 style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                  color: Colors.blue[900],
-                  fontWeight: FontWeight.bold,
-                ),
+                      color: Colors.blue[900],
+                      fontWeight: FontWeight.bold,
+                    ),
               ),
             ),
           ],
@@ -196,9 +195,9 @@ class _WikipediaContentWidgetState extends State<WikipediaContentWidget> {
                     child: Text(
                       section.title,
                       style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.bold,
-                        fontSize: section.level == 2 ? 18 : 16,
-                      ),
+                            fontWeight: FontWeight.bold,
+                            fontSize: section.level == 2 ? 18 : 16,
+                          ),
                     ),
                   ),
                 ],
@@ -236,9 +235,9 @@ class _WikipediaContentWidgetState extends State<WikipediaContentWidget> {
               child: Text(
                 'Content from Wikipedia, the free encyclopedia',
                 style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: Colors.grey[600],
-                  fontStyle: FontStyle.italic,
-                ),
+                      color: Colors.grey[600],
+                      fontStyle: FontStyle.italic,
+                    ),
               ),
             ),
           ],
@@ -254,9 +253,9 @@ class _WikipediaContentWidgetState extends State<WikipediaContentWidget> {
                 child: Text(
                   widget.content.pageUrl,
                   style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: Colors.blue[700],
-                    decoration: TextDecoration.underline,
-                  ),
+                        color: Colors.blue[700],
+                        decoration: TextDecoration.underline,
+                      ),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),

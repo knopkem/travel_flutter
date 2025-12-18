@@ -46,7 +46,7 @@ class RestWikipediaRepository implements WikipediaRepository {
   /// Optionally provide a custom [client] for testing purposes.
   /// If not provided, a default HTTP client will be created.
   RestWikipediaRepository({http.Client? client})
-    : _client = client ?? http.Client();
+      : _client = client ?? http.Client();
 
   @override
   Future<WikipediaContent> fetchSummary(String title) async {
@@ -55,9 +55,9 @@ class RestWikipediaRepository implements WikipediaRepository {
     final uri = Uri.parse('$_baseUrl/page/summary/$encodedTitle');
 
     try {
-      final response = await _client
-          .get(uri, headers: {'User-Agent': 'TravelFlutterApp/1.0'})
-          .timeout(const Duration(seconds: 10));
+      final response = await _client.get(uri, headers: {
+        'User-Agent': 'TravelFlutterApp/1.0'
+      }).timeout(const Duration(seconds: 10));
 
       if (response.statusCode == 200) {
         final data = json.decode(response.body) as Map<String, dynamic>;
@@ -95,10 +95,9 @@ class RestWikipediaRepository implements WikipediaRepository {
 
     try {
       final response = await _client
-          .get(uri, headers: {'User-Agent': 'TravelFlutterApp/1.0'})
-          .timeout(
-            const Duration(seconds: 15),
-          ); // Longer timeout for full content
+          .get(uri, headers: {'User-Agent': 'TravelFlutterApp/1.0'}).timeout(
+        const Duration(seconds: 15),
+      ); // Longer timeout for full content
 
       if (response.statusCode == 200) {
         final html = response.body;

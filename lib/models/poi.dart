@@ -169,10 +169,7 @@ class POI {
       });
 
     final primary = sorted.first;
-    final allSources = duplicates
-        .expand((poi) => poi.sources)
-        .toSet()
-        .toList()
+    final allSources = duplicates.expand((poi) => poi.sources).toSet().toList()
       ..sort((a, b) => b.priority.compareTo(a.priority));
 
     return POI(

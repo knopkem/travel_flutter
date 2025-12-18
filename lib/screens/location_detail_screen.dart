@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import '../models/models.dart';
 import '../providers/providers.dart';
 import '../widgets/wikipedia_content_widget.dart';
+import '../widgets/poi_list_widget.dart';
 
 /// Detail screen showing Wikipedia content for a selected location.
 ///
@@ -46,12 +47,19 @@ class _LocationDetailScreenState extends State<LocationDetailScreen> {
   @override
   void initState() {
     super.initState();
-    // Fetch Wikipedia content when screen loads
+    // Fetch Wikipedia content and POIs when screen loads
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      Provider.of<WikipediaProvider>(
+      final wikipediaProvider = Provider.of<WikipediaProvider>(
         context,
         listen: false,
-      ).fetchContent(widget.location.name);
+      );
+      final poiProvider = Provider.of<POIProvider>(
+        context,
+        listen: false,
+      );
+
+      wikipediaProvider.fetchContent(widget.location.name);
+      poiProvider.discoverPOIs(widget.location);
     });
   }
 
@@ -163,6 +171,15 @@ class _LocationDetailScreenState extends State<LocationDetailScreen> {
                     ).fetchFullArticle(widget.location.name);
                   },
                 ),
+
+                const SizedBox(height: 32),
+                const Divider(),
+                const SizedBox(height: 16),
+
+                // POI list widget
+                POIListWidget(city: widget.location),
+
+                const SizedBox(height: 32),
               ],
             ),
           );
