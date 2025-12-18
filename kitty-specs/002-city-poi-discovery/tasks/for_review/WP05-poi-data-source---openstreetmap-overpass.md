@@ -10,7 +10,7 @@ subtasks:
   - "T035"
 title: "POI Data Source - OpenStreetMap Overpass"
 phase: "Phase 1 - Core POI Features"
-lane: "doing"
+lane: "for_review"
 assignee: ""
 agent: "claude"
 shell_pid: "68023"
@@ -107,3 +107,4 @@ history:
 
 - 2025-12-18T08:24:50+0100 – system – lane=planned – Prompt created via /spec-kitty.tasks
 - 2025-12-18T08:14:16Z – claude – shell_pid=68023 – lane=doing – Starting WP05: OpenStreetMap Overpass POI data source
+- 2025-12-18T08:17:14Z – claude – shell_pid=68023 – lane=for_review – Completed WP05: All 7 subtasks (T029-T035) implemented
