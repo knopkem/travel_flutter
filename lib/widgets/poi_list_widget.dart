@@ -39,36 +39,44 @@ class POIListWidget extends StatelessWidget {
           return _buildEmptyState();
         }
 
-        // Has data - show list
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            _buildHeader(context, provider),
-            const SizedBox(height: 8),
-            ListView.builder(
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
-              itemCount: provider.pois.length,
-              itemBuilder: (context, index) {
-                final poi = provider.pois[index];
-                return POIListItem(
-                  poi: poi,
-                  onTap: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (context) => POIDetailScreen(poi: poi),
-                      ),
+        // Has data - show list with pull-to-refresh
+        return RefreshIndicator(
+          onRefresh: () async {
+            await provider.retry(city);
+          },
+          child: SingleChildScrollView(
+            physics: const AlwaysScrollableScrollPhysics(),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _buildHeader(context, provider),
+                const SizedBox(height: 8),
+                ListView.builder(
+                  shrinkWrap: true,
+                  physics: const NeverScrollableScrollPhysics(),
+                  itemCount: provider.pois.length,
+                  itemBuilder: (context, index) {
+                    final poi = provider.pois[index];
+                    return POIListItem(
+                      poi: poi,
+                      onTap: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => POIDetailScreen(poi: poi),
+                          ),
+                        );
+                      },
                     );
                   },
-                );
-              },
+                ),
+                if (provider.isLoadingPhase2) ..[
+                  const SizedBox(height: 16),
+                  _buildPhase2Loading(),
+                ],
+              ],
             ),
-            if (provider.isLoadingPhase2) ...[
-              const SizedBox(height: 16),
-              _buildPhase2Loading(),
-            ],
-          ],
+          ),
         );
       },
     );
@@ -78,33 +86,36 @@ class POIListWidget extends StatelessWidget {
     final count = provider.allPois.length;
     final displayed = provider.pois.length;
 
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16),
-      child: Row(
-        children: [
-          Icon(
-            Icons.place,
-            size: 20,
-            color: Theme.of(context).colorScheme.primary,
-          ),
-          const SizedBox(width: 8),
-          Text(
-            'Nearby Points of Interest',
-            style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                  fontWeight: FontWeight.bold,
-                ),
-          ),
-          const Spacer(),
-          if (count > displayed)
-            Chip(
-              label: Text(
-                'Top $displayed of $count',
-                style: const TextStyle(fontSize: 11),
-              ),
-              padding: EdgeInsets.zero,
-              visualDensity: VisualDensity.compact,
+    return Semantics(
+      label: 'Nearby Points of Interest section, showing $displayed of $count places',
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16),
+        child: Row(
+          children: [
+            Icon(
+              Icons.place,
+              size: 20,
+              color: Theme.of(context).colorScheme.primary,
             ),
-        ],
+            const SizedBox(width: 8),
+            Text(
+              'Nearby Points of Interest',
+              style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                    fontWeight: FontWeight.bold,
+                  ),
+            ),
+            const Spacer(),
+            if (count > displayed)
+              Chip(
+                label: Text(
+                  'Top $displayed of $count',
+                  style: const TextStyle(fontSize: 11),
+                ),
+                padding: EdgeInsets.zero,
+                visualDensity: VisualDensity.compact,
+              ),
+          ],
+        ),
       ),
     );
   }

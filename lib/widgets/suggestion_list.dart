@@ -58,8 +58,17 @@ class SuggestionList extends StatelessWidget {
                 // Dismiss keyboard
                 FocusScope.of(context).unfocus();
 
-                // Select city (replaces any previous selection)
-                provider.selectCity(suggestion);
+                // Get POI provider to clear on city change
+                final poiProvider = Provider.of<POIProvider>(
+                  context,
+                  listen: false,
+                );
+
+                // Select city (replaces any previous selection and clears POIs)
+                provider.selectCity(
+                  suggestion,
+                  onCityChanged: () => poiProvider.clear(),
+                );
 
                 // Clear suggestions
                 provider.clearSuggestions();

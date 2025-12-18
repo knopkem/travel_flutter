@@ -13,69 +13,57 @@ class POIListItem extends StatelessWidget {
   final POI poi;
   final VoidCallback? onTap;
 
-  const POIListItem({
-    super.key,
-    required this.poi,
-    this.onTap,
-  });
+  const POIListItem({super.key, required this.poi, this.onTap});
 
   @override
   Widget build(BuildContext context) {
-    return Card(
-      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-      child: ListTile(
-        leading: CircleAvatar(
-          backgroundColor: _getTypeColor(poi.type),
-          child: Icon(
-            _getTypeIcon(poi.type),
-            color: Colors.white,
-            size: 20,
+    return Semantics(
+      label:
+          '${poi.name}, ${poi.type.displayName}, ${_formatDistance(poi.distanceFromCity)} away',
+      hint: 'Tap to view details',
+      button: true,
+      child: Card(
+        margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+        child: ListTile(
+          leading: CircleAvatar(
+            backgroundColor: _getTypeColor(poi.type),
+            child: Icon(_getTypeIcon(poi.type), color: Colors.white, size: 20),
           ),
-        ),
-        title: Text(
-          poi.name,
-          style: const TextStyle(
-            fontWeight: FontWeight.bold,
-            fontSize: 16,
+          title: Text(
+            poi.name,
+            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
           ),
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-        ),
-        subtitle: Row(
-          children: [
-            Icon(
-              Icons.location_on,
-              size: 14,
-              color: Colors.grey[600],
-            ),
-            const SizedBox(width: 4),
-            Text(
-              _formatDistance(poi.distanceFromCity),
-              style: TextStyle(
-                color: Colors.grey[600],
-                fontSize: 13,
+          subtitle: Row(
+            children: [
+              Icon(Icons.location_on, size: 14, color: Colors.grey[600]),
+              const SizedBox(width: 4),
+              Text(
+                _formatDistance(poi.distanceFromCity),
+                style: TextStyle(color: Colors.grey[600], fontSize: 13),
               ),
-            ),
-            const SizedBox(width: 12),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-              decoration: BoxDecoration(
-                color: Colors.blue[50],
-                borderRadius: BorderRadius.circular(4),
-              ),
-              child: Text(
-                poi.type.displayName,
-                style: TextStyle(
-                  color: Colors.blue[700],
-                  fontSize: 11,
-                  fontWeight: FontWeight.w500,
+              const SizedBox(width: 12),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                decoration: BoxDecoration(
+                  color: Colors.blue[50],
+                  borderRadius: BorderRadius.circular(4),
+                ),
+                child: Text(
+                  poi.type.displayName,
+                  style: TextStyle(
+                    color: Colors.blue[700],
+                    fontSize: 11,
+                    fontWeight: FontWeight.w500,
+                  ),
                 ),
               ),
-            ),
-          ],
+            ],
+          ),
+          trailing: const Icon(Icons.chevron_right),
+          onTap: onTap,
         ),
-        trailing: const Icon(Icons.chevron_right),
-        onTap: onTap,
       ),
     );
   }

@@ -128,16 +128,30 @@ class LocationProvider extends ChangeNotifier {
   /// Converts the [LocationSuggestion] to a [Location] and sets it as
   /// the active city. Any previously selected city is replaced.
   ///
+  /// If [onCityChanged] callback is provided, it will be called when
+  /// the city changes. This is useful for clearing related data (e.g., POIs).
+  ///
   /// This method does not make additional API calls; it uses the data
   /// already present in the suggestion (which includes coordinates).
   ///
   /// Example:
   /// ```dart
   /// final suggestion = suggestions.first;
-  /// provider.selectCity(suggestion);
+  /// provider.selectCity(
+  ///   suggestion,
+  ///   onCityChanged: () => poiProvider.clear(),
+  /// );
   /// // Previous city (if any) is now replaced
   /// ```
-  void selectCity(LocationSuggestion suggestion) {
+  void selectCity(
+    LocationSuggestion suggestion, {
+    VoidCallback? onCityChanged,
+  }) {
+    // Clear related data if city is changing
+    if (_selectedCity?.id != suggestion.id && onCityChanged != null) {
+      onCityChanged();
+    }
+
     // Convert suggestion to Location using the built-in method
     _selectedCity = suggestion.toLocation();
     notifyListeners();
