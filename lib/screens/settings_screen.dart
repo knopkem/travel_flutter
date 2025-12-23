@@ -93,6 +93,7 @@ class SettingsScreen extends StatelessWidget {
     return ReorderableListView.builder(
       shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),
+      buildDefaultDragHandles: false, // Disable default drag handles
       itemCount: poiOrder.length,
       onReorder: (oldIndex, newIndex) {
         final updatedOrder = List<POIType>.from(poiOrder);
@@ -105,7 +106,7 @@ class SettingsScreen extends StatelessWidget {
       },
       itemBuilder: (context, index) {
         final type = poiOrder[index];
-        return _buildPoiTypeItem(context, type, index + 1, key: ValueKey(type));
+        return _buildPoiTypeItem(context, type, index + 1, index, key: ValueKey(type));
       },
     );
   }
@@ -113,7 +114,8 @@ class SettingsScreen extends StatelessWidget {
   Widget _buildPoiTypeItem(
     BuildContext context,
     POIType type,
-    int rank, {
+    int rank,
+    int index, {
     required Key key,
   }) {
     return Card(
@@ -147,9 +149,12 @@ class SettingsScreen extends StatelessWidget {
             ),
           ],
         ),
-        trailing: Icon(
-          Icons.drag_handle,
-          color: Colors.grey[400],
+        trailing: ReorderableDragStartListener(
+          index: index,
+          child: Icon(
+            Icons.drag_handle,
+            color: Colors.grey[600],
+          ),
         ),
       ),
     );

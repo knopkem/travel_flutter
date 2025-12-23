@@ -508,8 +508,20 @@ class _POIDetailScreenState extends State<POIDetailScreen> {
   Future<void> _getDirections() async {
     final lat = widget.poi.latitude;
     final lng = widget.poi.longitude;
-    final url =
-        'https://www.google.com/maps/dir/?api=1&destination=$lat,$lng&travelmode=walking';
-    await _launchUrl(url);
+    // Use platform-agnostic geo: URI scheme that works on both iOS and Android
+    final url = 'geo:0,0?q=$lat,$lng';
+    final uri = Uri.parse(url);
+    try {
+      if (await canLaunchUrl(uri)) {
+        await launchUrl(uri, mode: LaunchMode.externalApplication);
+      } else {
+        // Fallback to Google Maps web URL if geo: scheme is not supported
+        final fallbackUrl = 'https://www.google.com/maps/dir/?api=1&destination=$lat,$lng&travelmode=walking';
+        final fallbackUri = Uri.parse(fallbackUrl);
+        await launchUrl(fallbackUri, mode: LaunchMode.externalApplication);
+      }
+    } catch (e) {
+      debugPrint('Error launching directions: $e');
+    }
   }
 }

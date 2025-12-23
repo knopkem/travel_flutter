@@ -128,65 +128,53 @@ class _POIListWidgetState extends State<POIListWidget> {
           });
         }
 
-        // Has data - show list with pull-to-refresh
-        return RefreshIndicator(
-          onRefresh: () async {
-            await provider.retry(widget.city);
-            setState(() {
-              _currentPage = 1;
-              _selectedFilters.clear();
-            });
-          },
-          child: SingleChildScrollView(
-            physics: const AlwaysScrollableScrollPhysics(),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                _buildHeader(context, provider, filteredPOIs.length),
-                const SizedBox(height: 8),
-                _buildFilterDropdown(context, provider),
-                const SizedBox(height: 8),
-                _buildDistanceSlider(context),
-                const SizedBox(height: 8),
+        // Has data - show list
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _buildHeader(context, provider, filteredPOIs.length),
+            const SizedBox(height: 8),
+            _buildFilterDropdown(context, provider),
+            const SizedBox(height: 8),
+            _buildDistanceSlider(context),
+            const SizedBox(height: 8),
 
-                // Show "no results" message if filter excludes everything
-                if (filteredPOIs.isEmpty && _selectedFilters.isNotEmpty)
-                  _buildNoFilterResultsState()
-                else ...[
-                  ListView.builder(
-                    shrinkWrap: true,
-                    physics: const NeverScrollableScrollPhysics(),
-                    itemCount: paginatedPOIs.length,
-                    itemBuilder: (context, index) {
-                      final poi = paginatedPOIs[index];
-                      return POIListItem(
-                        poi: poi,
-                        onTap: () {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (context) => POIDetailScreen(poi: poi),
-                            ),
-                          );
-                        },
-                        onShowOnMap: () => _showPoiOnMap(context, poi),
-                        onGetDirections: () => _getDirectionsToPoi(poi),
+            // Show "no results" message if filter excludes everything
+            if (filteredPOIs.isEmpty && _selectedFilters.isNotEmpty)
+              _buildNoFilterResultsState()
+            else ...[
+              ListView.builder(
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                itemCount: paginatedPOIs.length,
+                itemBuilder: (context, index) {
+                  final poi = paginatedPOIs[index];
+                  return POIListItem(
+                    poi: poi,
+                    onTap: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => POIDetailScreen(poi: poi),
+                        ),
                       );
                     },
-                  ),
+                    onShowOnMap: () => _showPoiOnMap(context, poi),
+                    onGetDirections: () => _getDirectionsToPoi(poi),
+                  );
+                },
+              ),
 
-                  // Pagination controls
-                  if (totalPages > 1)
-                    _buildPaginationControls(totalPages, filteredPOIs.length),
-                ],
+              // Pagination controls
+              if (totalPages > 1)
+                _buildPaginationControls(totalPages, filteredPOIs.length),
+            ],
 
-                if (provider.isLoadingPhase2) ...[
-                  const SizedBox(height: 16),
-                  _buildPhase2Loading(),
-                ],
-              ],
-            ),
-          ),
+            if (provider.isLoadingPhase2) ...[
+              const SizedBox(height: 16),
+              _buildPhase2Loading(),
+            ],
+          ],
         );
       },
     );
@@ -198,86 +186,97 @@ class _POIListWidgetState extends State<POIListWidget> {
 
     return Semantics(
       label:
-          'Nearby Points of Interest section, showing $filteredCount of $count places',
+          'Nearby Attractions section, showing $filteredCount of $count places',
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 16),
-        child: Row(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Icon(
-              Icons.place,
-              size: 20,
-              color: Theme.of(context).colorScheme.primary,
-            ),
-            const SizedBox(width: 8),
-            Text(
-              'Nearby Points of Interest',
-              style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                    fontWeight: FontWeight.bold,
-                  ),
-            ),
-            const Spacer(),
-            if (!provider.isLoading)
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                decoration: BoxDecoration(
-                  color: provider.allSourcesSucceeded
-                      ? Colors.green[50]
-                      : Colors.orange[50],
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(
-                    color: provider.allSourcesSucceeded
-                        ? Colors.green[300]!
-                        : Colors.orange[300]!,
-                    width: 1,
-                  ),
+            // First line: Icon, Title, and Count
+            Row(
+              children: [
+                Icon(
+                  Icons.place,
+                  size: 20,
+                  color: Theme.of(context).colorScheme.primary,
                 ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(
-                      provider.allSourcesSucceeded
-                          ? Icons.check_circle
-                          : Icons.warning,
-                      size: 14,
+                const SizedBox(width: 8),
+                Text(
+                  'Nearby Attractions',
+                  style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                        fontWeight: FontWeight.bold,
+                      ),
+                ),
+                const Spacer(),
+                Chip(
+                  label: Text(
+                    filteredCount < count
+                        ? '$filteredCount of $count'
+                        : '$count total',
+                    style: const TextStyle(fontSize: 11),
+                  ),
+                  padding: EdgeInsets.zero,
+                  visualDensity: VisualDensity.compact,
+                ),
+              ],
+            ),
+            // Second line: API status indicator and Refresh button
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                if (!provider.isLoading)
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    decoration: BoxDecoration(
                       color: provider.allSourcesSucceeded
-                          ? Colors.green[700]
-                          : Colors.orange[700],
-                    ),
-                    const SizedBox(width: 4),
-                    Text(
-                      '${provider.successfulSources}/${provider.totalSources}',
-                      style: TextStyle(
-                        fontSize: 11,
-                        fontWeight: FontWeight.w600,
+                          ? Colors.green[50]
+                          : Colors.orange[50],
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
                         color: provider.allSourcesSucceeded
-                            ? Colors.green[700]
-                            : Colors.orange[700],
+                            ? Colors.green[300]!
+                            : Colors.orange[300]!,
+                        width: 1,
                       ),
                     ),
-                  ],
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          provider.allSourcesSucceeded
+                              ? Icons.check_circle
+                              : Icons.warning,
+                          size: 14,
+                          color: provider.allSourcesSucceeded
+                              ? Colors.green[700]
+                              : Colors.orange[700],
+                        ),
+                        const SizedBox(width: 4),
+                        Text(
+                          'API Sources: ${provider.successfulSources}/${provider.totalSources}',
+                          style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w600,
+                            color: provider.allSourcesSucceeded
+                                ? Colors.green[700]
+                                : Colors.orange[700],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                if (!provider.isLoading) const SizedBox(width: 8),
+                IconButton(
+                  icon: const Icon(Icons.refresh, size: 20),
+                  onPressed: provider.isLoading
+                      ? null
+                      : () {
+                          provider.discoverPOIs(widget.city, forceRefresh: true);
+                        },
+                  tooltip: 'Refresh POIs',
+                  visualDensity: VisualDensity.compact,
                 ),
-              ),
-            if (!provider.isLoading) const SizedBox(width: 8),
-            IconButton(
-              icon: const Icon(Icons.refresh, size: 20),
-              onPressed: provider.isLoading
-                  ? null
-                  : () {
-                      provider.discoverPOIs(widget.city, forceRefresh: true);
-                    },
-              tooltip: 'Refresh POIs',
-              visualDensity: VisualDensity.compact,
-            ),
-            const SizedBox(width: 8),
-            Chip(
-              label: Text(
-                filteredCount < count
-                    ? '$filteredCount of $count'
-                    : '$count total',
-                style: const TextStyle(fontSize: 11),
-              ),
-              padding: EdgeInsets.zero,
-              visualDensity: VisualDensity.compact,
+              ],
             ),
           ],
         ),
@@ -824,11 +823,20 @@ class _POIListWidgetState extends State<POIListWidget> {
   Future<void> _getDirectionsToPoi(POI poi) async {
     final lat = poi.latitude;
     final lng = poi.longitude;
-    final url =
-        'https://www.google.com/maps/dir/?api=1&destination=$lat,$lng&travelmode=walking';
+    // Use platform-agnostic geo: URI scheme that works on both iOS and Android
+    final url = 'geo:0,0?q=$lat,$lng';
     final uri = Uri.parse(url);
-    if (await canLaunchUrl(uri)) {
-      await launchUrl(uri, mode: LaunchMode.externalApplication);
+    try {
+      if (await canLaunchUrl(uri)) {
+        await launchUrl(uri, mode: LaunchMode.externalApplication);
+      } else {
+        // Fallback to Google Maps web URL if geo: scheme is not supported
+        final fallbackUrl = 'https://www.google.com/maps/dir/?api=1&destination=$lat,$lng&travelmode=walking';
+        final fallbackUri = Uri.parse(fallbackUrl);
+        await launchUrl(fallbackUri, mode: LaunchMode.externalApplication);
+      }
+    } catch (e) {
+      debugPrint('Error launching directions: $e');
     }
   }
 
