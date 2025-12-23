@@ -1,4 +1,5 @@
-import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart';
+import 'package:geolocator/geolocator.dart';
 import '../models/models.dart';
 import '../repositories/repositories.dart';
 
@@ -54,6 +55,9 @@ class LocationProvider extends ChangeNotifier {
   /// Error message from last failed operation
   String? _errorMessage;
 
+  /// Error message from GPS operations (shown in GPS button state)
+  String? _gpsError;
+
   /// Creates a [LocationProvider] with the specified repository.
   ///
   /// The repository is typically injected via dependency injection
@@ -82,6 +86,9 @@ class LocationProvider extends ChangeNotifier {
 
   /// Error message from the last failed operation, or null if no error.
   String? get errorMessage => _errorMessage;
+
+  /// GPS error message for display in GPS button, or null if no error.
+  String? get gpsError => _gpsError;
 
   // Methods
 
@@ -147,8 +154,8 @@ class LocationProvider extends ChangeNotifier {
     LocationSuggestion suggestion, {
     VoidCallback? onCityChanged,
   }) {
-    // Clear related data if city is changing
-    if (_selectedCity?.id != suggestion.id && onCityChanged != null) {
+    // Always clear related data to force refresh
+    if (onCityChanged != null) {
       onCityChanged();
     }
 
@@ -182,6 +189,156 @@ class LocationProvider extends ChangeNotifier {
   void clearSuggestions() {
     _suggestions = [];
     notifyListeners();
+  }
+
+  /// Shows a permission explanation dialog before requesting location access.
+  ///
+  /// This dialog explains why the app needs location access and provides
+  /// an "Allow" button that triggers the permission request. Returns true
+  /// if the user accepted, false if they dismissed the dialog.
+  Future<bool> showLocationPermissionDialog(BuildContext context) async {
+    final result = await showDialog<bool>(
+      context: context,
+      barrierDismissible: true,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: const Row(
+            children: [
+              Icon(Icons.location_on, color: Colors.blue),
+              SizedBox(width: 8),
+              Text('Enable Location'),
+            ],
+          ),
+          content: const Text(
+            'This app needs your location to discover nearby attractions automatically. '
+            'Your location data is only used to find points of interest near you and is never stored or shared.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: const Text('Not Now'),
+            ),
+            ElevatedButton(
+              onPressed: () => Navigator.of(context).pop(true),
+              child: const Text('Allow'),
+            ),
+          ],
+        );
+      },
+    );
+    return result ?? false;
+  }
+
+  /// Fetches the user's current GPS location and sets it as the selected city.
+  ///
+  /// This method:
+  /// 1. Shows permission explanation dialog if permissions not yet requested
+  /// 2. Checks if location services are enabled
+  /// 3. Requests location permissions if needed
+  /// 4. Gets current GPS position (30 second timeout)
+  /// 5. Attempts reverse geocoding to get city name
+  /// 6. Falls back to coordinate-only mode if reverse geocoding fails
+  /// 7. Sets the location as selected city (triggers POI auto-fetch)
+  ///
+  /// GPS errors are stored in [gpsError] for display in the GPS button.
+  ///
+  /// Example:
+  /// ```dart
+  /// await provider.fetchCurrentLocation(context);
+  /// if (provider.hasSelectedCity) {
+  ///   print('Location set: ${provider.selectedCity!.displayName}');
+  /// }
+  /// ```
+  Future<void> fetchCurrentLocation(BuildContext context) async {
+    _isLoading = true;
+    _gpsError = null;
+    _errorMessage = null;
+    notifyListeners();
+
+    try {
+      // Check if location services are enabled
+      final serviceEnabled = await Geolocator.isLocationServiceEnabled();
+      if (!serviceEnabled) {
+        throw Exception('Location services are disabled. Please enable them in settings.');
+      }
+
+      // Check permission status
+      LocationPermission permission = await Geolocator.checkPermission();
+      
+      // Show explanation dialog if permission was never requested
+      if (permission == LocationPermission.denied) {
+        if (context.mounted) {
+          final userAccepted = await showLocationPermissionDialog(context);
+          if (!userAccepted) {
+            throw Exception('Location permission is required to use this feature.');
+          }
+        }
+        
+        // Request permission
+        permission = await Geolocator.requestPermission();
+        if (permission == LocationPermission.denied) {
+          throw Exception('Location permission denied. Tap the GPS button to try again.');
+        }
+      }
+
+      if (permission == LocationPermission.deniedForever) {
+        throw Exception(
+          'Location permission permanently denied. Please enable it in app settings.',
+        );
+      }
+
+      // Get current position with 30 second timeout
+      final Position position = await Geolocator.getCurrentPosition(
+        desiredAccuracy: LocationAccuracy.high,
+        timeLimit: const Duration(seconds: 30),
+      );
+
+      debugPrint('GPS position: ${position.latitude}, ${position.longitude}');
+
+      // Attempt reverse geocoding to get location name
+      final LocationSuggestion? suggestion = await _repository.reverseGeocode(
+        position.latitude,
+        position.longitude,
+      );
+
+      // Create location object
+      Location location;
+      if (suggestion != null) {
+        // Use resolved location name
+        location = suggestion.toLocation();
+        debugPrint('Reverse geocoded to: ${location.displayName}');
+      } else {
+        // Fall back to coordinate-only mode
+        location = Location.fromCoordinates(
+          position.latitude,
+          position.longitude,
+        );
+        debugPrint('Using coordinate-only location');
+      }
+
+      // Set as selected city (this will trigger POI fetch in UI)
+      _selectedCity = location;
+      _gpsError = null;
+
+    } catch (e) {
+      debugPrint('LocationProvider: GPS fetch failed: $e');
+      
+      // Store user-friendly error message for GPS button
+      if (e.toString().contains('Location services are disabled')) {
+        _gpsError = 'GPS is turned off';
+      } else if (e.toString().contains('permission')) {
+        _gpsError = 'Location permission denied';
+      } else if (e.toString().contains('TimeoutException')) {
+        _gpsError = 'GPS signal timeout';
+      } else {
+        _gpsError = 'Could not get location';
+      }
+      
+      _errorMessage = e.toString().replaceAll('Exception: ', '');
+    } finally {
+      _isLoading = false;
+      notifyListeners();
+    }
   }
 
   @override

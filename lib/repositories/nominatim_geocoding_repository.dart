@@ -116,6 +116,66 @@ class NominatimGeocodingRepository implements GeocodingRepository {
   }
 
   @override
+  Future<LocationSuggestion?> reverseGeocode(
+      double latitude, double longitude) async {
+    // Rate limiting: ensure at least 1 second between requests
+    if (_lastRequestTime != null) {
+      final elapsed = DateTime.now().difference(_lastRequestTime!);
+      if (elapsed.inMilliseconds < 1000) {
+        await Future.delayed(
+            Duration(milliseconds: 1000 - elapsed.inMilliseconds));
+      }
+    }
+    _lastRequestTime = DateTime.now();
+
+    // Build the reverse geocode URL
+    final uri = Uri.parse('$_baseUrl/reverse').replace(queryParameters: {
+      'lat': latitude.toString(),
+      'lon': longitude.toString(),
+      'format': 'json',
+      'addressdetails': '1',
+      'email': 'travel-flutter-app@example.com',
+    });
+
+    try {
+      final response = await _client.get(
+        uri,
+        headers: {
+          'User-Agent':
+              'TravelFlutterApp/1.0 (Flutter; +https://github.com/flutter/flutter)',
+          'Accept-Language': 'en',
+        },
+      ).timeout(const Duration(seconds: 10));
+
+      if (response.statusCode == 200) {
+        final Map<String, dynamic> data = json.decode(response.body);
+        // Check if a valid location was found
+        if (data.containsKey('error')) {
+          debugPrint('Nominatim reverse geocode: ${data['error']}');
+          return null;
+        }
+        return LocationSuggestion.fromJson(data);
+      } else if (response.statusCode == 429) {
+        debugPrint('Nominatim rate limit exceeded (HTTP 429)');
+        return null; // Graceful fallback
+      } else {
+        debugPrint('Nominatim reverse geocode error: HTTP ${response.statusCode}');
+        return null; // Graceful fallback
+      }
+    } on http.ClientException catch (e) {
+      debugPrint('Nominatim reverse geocode network error: $e');
+      return null; // Graceful fallback for offline mode
+    } catch (e) {
+      if (e.toString().contains('TimeoutException')) {
+        debugPrint('Nominatim reverse geocode timeout');
+      } else {
+        debugPrint('Nominatim reverse geocode unexpected error: $e');
+      }
+      return null; // Graceful fallback
+    }
+  }
+
+  @override
   void dispose() {
     _client.close();
   }

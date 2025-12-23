@@ -4,6 +4,7 @@ import '../providers/providers.dart';
 import '../widgets/search_field.dart';
 import '../widgets/suggestion_list.dart';
 import '../screens/location_detail_screen.dart';
+import '../screens/settings_screen.dart';
 
 /// Main screen for location search and single city selection.
 ///
@@ -37,6 +38,20 @@ class HomeScreen extends StatelessWidget {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Location Search'),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.settings),
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => const SettingsScreen(),
+                ),
+              );
+            },
+            tooltip: 'Settings',
+          ),
+        ],
         backgroundColor: Theme.of(context).colorScheme.inversePrimary,
       ),
       body: Padding(
@@ -86,10 +101,10 @@ class HomeScreen extends StatelessWidget {
                               size: 32,
                             ),
                             title: Text(
-                              city.name,
+                              city.name ?? 'Lat: ${city.latitude.toStringAsFixed(3)}, Lon: ${city.longitude.toStringAsFixed(3)}',
                               style: Theme.of(context).textTheme.titleLarge,
                             ),
-                            subtitle: Text(city.country),
+                            subtitle: Text(city.country ?? 'GPS Location'),
                             trailing: IconButton(
                               icon: const Icon(Icons.close),
                               tooltip: 'Clear selection',

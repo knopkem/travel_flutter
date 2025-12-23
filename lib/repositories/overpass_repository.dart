@@ -11,7 +11,6 @@ import 'poi_repository.dart';
 class OverpassRepository implements POIRepository {
   final http.Client _client;
   static const String _baseUrl = 'https://overpass-api.de/api/interpreter';
-  static const int _searchRadiusMeters = 10000; // 10km
   static const Duration _timeout = Duration(seconds: 25);
   static const Duration _minRequestInterval = Duration(seconds: 1);
 
@@ -20,7 +19,10 @@ class OverpassRepository implements POIRepository {
   OverpassRepository({http.Client? client}) : _client = client ?? http.Client();
 
   @override
-  Future<List<POI>> fetchNearbyPOIs(Location city) async {
+  Future<List<POI>> fetchNearbyPOIs(
+    Location city, {
+    int radiusMeters = 10000,
+  }) async {
     // Validate coordinates
     if (city.latitude < -90 || city.latitude > 90) {
       throw ArgumentError('Invalid latitude: ${city.latitude}');
@@ -35,7 +37,7 @@ class OverpassRepository implements POIRepository {
     final query = _buildOverpassQuery(
       city.latitude,
       city.longitude,
-      _searchRadiusMeters,
+      radiusMeters,
     );
 
     try {

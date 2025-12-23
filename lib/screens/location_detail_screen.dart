@@ -65,7 +65,10 @@ class _LocationDetailScreenState extends State<LocationDetailScreen> {
 
     // Fetch Wikipedia content (errors handled in provider)
     try {
-      await wikipediaProvider.fetchContent(widget.location.name);
+      // Only fetch Wikipedia if location has a name
+      if (widget.location.name != null) {
+        await wikipediaProvider.fetchContent(widget.location.name!);
+      }
     } catch (e) {
       // Error already handled by provider, just log
       debugPrint('Wikipedia fetch failed: $e');
@@ -84,13 +87,16 @@ class _LocationDetailScreenState extends State<LocationDetailScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text(widget.location.name),
+        title: Text(widget.location.name ?? 'Lat: ${widget.location.latitude.toStringAsFixed(3)}, Lon: ${widget.location.longitude.toStringAsFixed(3)}'),
         backgroundColor: Theme.of(context).colorScheme.inversePrimary,
+        automaticallyImplyLeading: false,
       ),
       body: Consumer<WikipediaProvider>(
         builder: (context, provider, child) {
-          // Get content from cache (might be null if fetch failed)
-          final content = provider.getContent(widget.location.name);
+          // Get content from cache (might be null if fetch failed or no name)
+          final content = widget.location.name != null 
+              ? provider.getContent(widget.location.name!)
+              : null;
 
           // Show full loading only if no content available yet
           if (provider.isLoading && content == null) {
@@ -148,7 +154,7 @@ class _LocationDetailScreenState extends State<LocationDetailScreen> {
                             const SizedBox(width: 8),
                             Expanded(
                               child: Text(
-                                widget.location.displayName,
+                                widget.location.displayName ?? 'Lat: ${widget.location.latitude.toStringAsFixed(3)}, Lon: ${widget.location.longitude.toStringAsFixed(3)}',
                                 style: Theme.of(context).textTheme.titleLarge,
                               ),
                             ),
@@ -170,10 +176,12 @@ class _LocationDetailScreenState extends State<LocationDetailScreen> {
                   WikipediaContentWidget(
                     content: content,
                     onLoadFullArticle: () {
-                      Provider.of<WikipediaProvider>(
-                        context,
-                        listen: false,
-                      ).fetchFullArticle(widget.location.name);
+                      if (widget.location.name != null) {
+                        Provider.of<WikipediaProvider>(
+                          context,
+                          listen: false,
+                        ).fetchFullArticle(widget.location.name!);
+                      }
                     },
                   )
                 else

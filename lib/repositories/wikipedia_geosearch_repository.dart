@@ -12,7 +12,6 @@ import 'poi_repository.dart';
 class WikipediaGeosearchRepository implements POIRepository {
   final http.Client _client;
   static const String _baseUrl = 'https://en.wikipedia.org/w/api.php';
-  static const int _searchRadiusMeters = 10000; // 10km
   static const int _resultLimit = 50;
   static const Duration _timeout = Duration(seconds: 15);
 
@@ -20,7 +19,10 @@ class WikipediaGeosearchRepository implements POIRepository {
       : _client = client ?? http.Client();
 
   @override
-  Future<List<POI>> fetchNearbyPOIs(Location city) async {
+  Future<List<POI>> fetchNearbyPOIs(
+    Location city, {
+    int radiusMeters = 10000,
+  }) async {
     // Validate coordinates
     if (city.latitude < -90 || city.latitude > 90) {
       throw ArgumentError('Invalid latitude: ${city.latitude}');
@@ -33,10 +35,11 @@ class WikipediaGeosearchRepository implements POIRepository {
       'action': 'query',
       'list': 'geosearch',
       'gscoord': '${city.latitude}|${city.longitude}',
-      'gsradius': _searchRadiusMeters.toString(),
+      'gsradius': radiusMeters.toString(),
       'gslimit': _resultLimit.toString(),
       'gsnamespace': '0', // Main articles only
       'format': 'json',
+      'origin': '*', // Enable CORS for web browsers
     });
 
     try {

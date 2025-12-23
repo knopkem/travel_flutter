@@ -40,6 +40,27 @@ abstract class GeocodingRepository {
   /// ```
   Future<List<LocationSuggestion>> searchLocations(String query);
 
+  /// Reverse geocodes coordinates to a location name.
+  ///
+  /// Returns a [LocationSuggestion] representing the place at the given
+  /// coordinates, or null if the operation fails (network error, timeout, etc.).
+  ///
+  /// The [latitude] parameter must be between -90 and 90.
+  /// The [longitude] parameter must be between -180 and 180.
+  ///
+  /// Returns null on failure to allow graceful fallback to coordinate-only mode.
+  ///
+  /// Example:
+  /// ```dart
+  /// final location = await repository.reverseGeocode(48.8566, 2.3522);
+  /// if (location != null) {
+  ///   print('Found: ${location.displayName}');
+  /// } else {
+  ///   print('Could not resolve location name');
+  /// }
+  /// ```
+  Future<LocationSuggestion?> reverseGeocode(double latitude, double longitude);
+
   /// Releases resources used by this repository.
   ///
   /// Call this method when the repository is no longer needed to close

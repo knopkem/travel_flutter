@@ -11,14 +11,16 @@ import 'poi_repository.dart';
 class WikidataRepository implements POIRepository {
   final http.Client _client;
   static const String _baseUrl = 'https://query.wikidata.org/sparql';
-  static const int _searchRadiusKm = 10;
   static const int _resultLimit = 100;
   static const Duration _timeout = Duration(seconds: 30);
 
   WikidataRepository({http.Client? client}) : _client = client ?? http.Client();
 
   @override
-  Future<List<POI>> fetchNearbyPOIs(Location city) async {
+  Future<List<POI>> fetchNearbyPOIs(
+    Location city, {
+    int radiusMeters = 10000,
+  }) async {
     // Validate coordinates
     if (city.latitude < -90 || city.latitude > 90) {
       throw ArgumentError('Invalid latitude: ${city.latitude}');
@@ -27,7 +29,8 @@ class WikidataRepository implements POIRepository {
       throw ArgumentError('Invalid longitude: ${city.longitude}');
     }
 
-    final query = _buildSPARQLQuery(city.latitude, city.longitude);
+    final radiusKm = (radiusMeters / 1000).round();
+    final query = _buildSPARQLQuery(city.latitude, city.longitude, radiusKm);
     final uri = Uri.parse(_baseUrl).replace(queryParameters: {
       'query': query,
       'format': 'json',
@@ -105,14 +108,14 @@ class WikidataRepository implements POIRepository {
   }
 
   /// Build SPARQL query for notable places within radius
-  String _buildSPARQLQuery(double lat, double lon) {
+  String _buildSPARQLQuery(double lat, double lon, int radiusKm) {
     return '''
 SELECT DISTINCT ?place ?placeLabel ?coord ?wikipedia ?description ?inception ?visitorCount ?heritageStatus
 WHERE {
   SERVICE wikibase:around {
     ?place wdt:P625 ?coord.
     bd:serviceParam wikibase:center "Point($lon $lat)"^^geo:wktLiteral.
-    bd:serviceParam wikibase:radius "$_searchRadiusKm".
+    bd:serviceParam wikibase:radius "$radiusKm".
     bd:serviceParam wikibase:distance ?dist.
   }
   

@@ -8,12 +8,20 @@ import '../models/poi_type.dart';
 /// - Type icon on the left
 /// - POI name (bold)
 /// - Distance from city (gray text)
-/// - Right chevron for navigation
+/// - Action buttons for map and directions
 class POIListItem extends StatelessWidget {
   final POI poi;
   final VoidCallback? onTap;
+  final VoidCallback? onShowOnMap;
+  final VoidCallback? onGetDirections;
 
-  const POIListItem({super.key, required this.poi, this.onTap});
+  const POIListItem({
+    super.key,
+    required this.poi,
+    this.onTap,
+    this.onShowOnMap,
+    this.onGetDirections,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -61,7 +69,31 @@ class POIListItem extends StatelessWidget {
               ),
             ],
           ),
-          trailing: const Icon(Icons.chevron_right),
+          trailing: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              IconButton(
+                icon: const Icon(Icons.map_outlined, size: 20),
+                onPressed: onShowOnMap,
+                tooltip: 'Show on map',
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(
+                  minWidth: 36,
+                  minHeight: 36,
+                ),
+              ),
+              IconButton(
+                icon: const Icon(Icons.directions, size: 20),
+                onPressed: onGetDirections,
+                tooltip: 'Get directions',
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(
+                  minWidth: 36,
+                  minHeight: 36,
+                ),
+              ),
+            ],
+          ),
           onTap: onTap,
         ),
       ),

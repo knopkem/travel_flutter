@@ -50,6 +50,8 @@ class _POIDetailScreenState extends State<POIDetailScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 _buildHeader(context),
+                _buildActionButtons(context),
+                const Divider(height: 1),
                 if (widget.poi.wikipediaTitle != null)
                   _buildWikipediaContent(context),
                 if (widget.poi.description != null) _buildDescription(context),
@@ -68,6 +70,7 @@ class _POIDetailScreenState extends State<POIDetailScreen> {
     return SliverAppBar(
       expandedHeight: 200,
       pinned: true,
+      automaticallyImplyLeading: false,
       flexibleSpace: FlexibleSpaceBar(
         title: Text(
           widget.poi.name,
@@ -173,6 +176,37 @@ class _POIDetailScreenState extends State<POIDetailScreen> {
                 ),
               ),
             ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildActionButtons(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0),
+      child: Row(
+        children: [
+          Expanded(
+            child: OutlinedButton.icon(
+              onPressed: () => _showOnMap(context),
+              icon: const Icon(Icons.map_outlined),
+              label: const Text('Show on Map'),
+              style: OutlinedButton.styleFrom(
+                padding: const EdgeInsets.symmetric(vertical: 12.0),
+              ),
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: ElevatedButton.icon(
+              onPressed: () => _getDirections(),
+              icon: const Icon(Icons.directions),
+              label: const Text('Get Directions'),
+              style: ElevatedButton.styleFrom(
+                padding: const EdgeInsets.symmetric(vertical: 12.0),
+              ),
+            ),
           ),
         ],
       ),
@@ -458,5 +492,24 @@ class _POIDetailScreenState extends State<POIDetailScreen> {
     if (await canLaunchUrl(url)) {
       await launchUrl(url, mode: LaunchMode.externalApplication);
     }
+  }
+
+  /// Show POI on map by switching to map tab and centering
+  void _showOnMap(BuildContext context) {
+    final mapNavProvider = Provider.of<MapNavigationProvider>(
+      context,
+      listen: false,
+    );
+    mapNavProvider.navigateToPoiOnMap(widget.poi);
+    Navigator.pop(context); // Return to previous screen
+  }
+
+  /// Open native routing app with directions to POI
+  Future<void> _getDirections() async {
+    final lat = widget.poi.latitude;
+    final lng = widget.poi.longitude;
+    final url =
+        'https://www.google.com/maps/dir/?api=1&destination=$lat,$lng&travelmode=walking';
+    await _launchUrl(url);
   }
 }

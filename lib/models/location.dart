@@ -22,17 +22,17 @@
 /// });
 /// ```
 class Location {
-  /// Unique identifier from OpenStreetMap (osm_id)
+  /// Unique identifier from OpenStreetMap (osm_id) or GPS coordinates
   final String id;
 
-  /// City or town name (e.g., "Paris")
-  final String name;
+  /// City or town name (e.g., "Paris"). Null for GPS-only locations.
+  final String? name;
 
-  /// Country name (e.g., "France")
-  final String country;
+  /// Country name (e.g., "France"). Null for GPS-only locations.
+  final String? country;
 
-  /// Full display name for UI (e.g., "Paris, France")
-  final String displayName;
+  /// Full display name for UI (e.g., "Paris, France"). Null for GPS-only locations.
+  final String? displayName;
 
   /// Geographic latitude coordinate (range: -90 to 90)
   final double latitude;
@@ -42,19 +42,36 @@ class Location {
 
   /// Creates a new [Location] instance.
   ///
-  /// All parameters are required and must not be null.
+  /// Name, country, and displayName can be null for GPS-derived locations.
   /// Coordinates must be within valid ranges.
   const Location({
     required this.id,
-    required this.name,
-    required this.country,
-    required this.displayName,
+    this.name,
+    this.country,
+    this.displayName,
     required this.latitude,
     required this.longitude,
   })  : assert(latitude >= -90 && latitude <= 90,
             'Latitude must be between -90 and 90'),
         assert(longitude >= -180 && longitude <= 180,
             'Longitude must be between -180 and 180');
+
+  /// Creates a [Location] from GPS coordinates without a resolved address.
+  ///
+  /// Coordinates are rounded to 3 decimal places (~100m precision) for stable caching.
+  /// The ID is generated from the rounded coordinates as "gps_LAT_LON".
+  factory Location.fromCoordinates(double latitude, double longitude) {
+    final roundedLat = double.parse(latitude.toStringAsFixed(3));
+    final roundedLon = double.parse(longitude.toStringAsFixed(3));
+    return Location(
+      id: 'gps_${roundedLat.toStringAsFixed(3)}_${roundedLon.toStringAsFixed(3)}',
+      name: null,
+      country: null,
+      displayName: null,
+      latitude: roundedLat,
+      longitude: roundedLon,
+    );
+  }
 
   /// Creates a [Location] from a Nominatim API JSON response.
   ///

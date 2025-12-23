@@ -1,8 +1,11 @@
 import 'package:flutter/foundation.dart';
 import '../models/location.dart';
 import '../models/poi.dart';
+import '../models/poi_type.dart';
 import '../repositories/repositories.dart';
 import '../utils/deduplication_utils.dart';
+import '../utils/settings_service.dart';
+import 'settings_provider.dart';
 
 /// Provider for managing POI discovery and state
 ///
@@ -19,12 +22,19 @@ class POIProvider extends ChangeNotifier {
   bool _isLoadingPhase2 = false;
   String? _error;
   String? _currentCityId;
+  SettingsProvider? _settingsProvider;
+  int _successfulSources = 0;
+  int _totalSources = 3; // Wikipedia, Overpass, Wikidata
+  Set<POIType> _selectedFilters = {}; // Active POI type filters
+  int? _tempSearchDistance; // Temporary distance override from UI slider
 
   // In-memory cache: cityId -> POI list
   final Map<String, List<POI>> _cache = {};
   final List<String> _cacheKeys = []; // For LRU eviction
   static const int _maxCacheEntries = 10;
   static const int _displayLimit = 25;
+  static const int _maxRetries = 3;
+  static const Duration _retryDelay = Duration(milliseconds: 500);
 
   POIProvider({
     WikipediaGeosearchRepository? wikipediaRepo,
@@ -34,23 +44,37 @@ class POIProvider extends ChangeNotifier {
         _overpassRepo = overpassRepo ?? OverpassRepository(),
         _wikidataRepo = wikidataRepo ?? WikidataRepository();
 
+  /// Update settings provider reference
+  void updateSettings(SettingsProvider settingsProvider) {
+    _settingsProvider = settingsProvider;
+  }
+
   List<POI> get pois => _pois.take(_displayLimit).toList();
   List<POI> get allPois => _pois;
+  List<POI> get filteredPois {
+    if (_selectedFilters.isEmpty) return _pois;
+    return _pois.where((poi) => _selectedFilters.contains(poi.type)).toList();
+  }
+
+  Set<POIType> get selectedFilters => Set.unmodifiable(_selectedFilters);
   bool get isLoading => _isLoading;
   bool get isLoadingPhase1 => _isLoadingPhase1;
   bool get isLoadingPhase2 => _isLoadingPhase2;
   String? get error => _error;
   bool get hasData => _pois.isNotEmpty;
+  int get successfulSources => _successfulSources;
+  int get totalSources => _totalSources;
+  bool get allSourcesSucceeded => _successfulSources == _totalSources;
 
   /// Discover POIs for a city with progressive loading
   ///
   /// Phase 1: Fast Wikipedia Geosearch (~2s)
   /// Phase 2: Parallel Overpass + Wikidata (~3s)
-  Future<void> discoverPOIs(Location city) async {
+  Future<void> discoverPOIs(Location city, {bool forceRefresh = false}) async {
     final cityId = city.id;
 
-    // Check cache first
-    if (_cache.containsKey(cityId)) {
+    // Check cache first (unless force refresh)
+    if (!forceRefresh && _cache.containsKey(cityId)) {
       _pois = _cache[cityId]!;
       _currentCityId = cityId;
       _error = null;
@@ -63,6 +87,7 @@ class POIProvider extends ChangeNotifier {
     _isLoading = true;
     _error = null;
     _pois = [];
+    _successfulSources = 0;
     notifyListeners();
 
     try {
@@ -70,10 +95,15 @@ class POIProvider extends ChangeNotifier {
       _isLoadingPhase1 = true;
       notifyListeners();
 
-      final wikipediaPOIs = await _fetchWithErrorHandling(
-        () => _wikipediaRepo.fetchNearbyPOIs(city),
+      final distance =
+          _tempSearchDistance ?? _settingsProvider?.poiSearchDistance ?? 5000;
+
+      final wikipediaPOIs = await _fetchWithRetry(
+        (dist) => _wikipediaRepo.fetchNearbyPOIs(city, radiusMeters: dist),
         'Wikipedia Geosearch',
+        distance,
       );
+      if (wikipediaPOIs.isNotEmpty) _successfulSources++;
 
       // Check if city changed during fetch
       if (_currentCityId != cityId) return;
@@ -87,13 +117,15 @@ class POIProvider extends ChangeNotifier {
       notifyListeners();
 
       final results = await Future.wait([
-        _fetchWithErrorHandling(
-          () => _overpassRepo.fetchNearbyPOIs(city),
+        _fetchWithRetry(
+          (dist) => _overpassRepo.fetchNearbyPOIs(city, radiusMeters: dist),
           'Overpass',
+          distance,
         ),
-        _fetchWithErrorHandling(
-          () => _wikidataRepo.fetchNearbyPOIs(city),
+        _fetchWithRetry(
+          (dist) => _wikidataRepo.fetchNearbyPOIs(city, radiusMeters: dist),
           'Wikidata',
+          distance,
         ),
       ]);
 
@@ -102,6 +134,8 @@ class POIProvider extends ChangeNotifier {
 
       final overpassPOIs = results[0];
       final wikidataPOIs = results[1];
+      if (overpassPOIs.isNotEmpty) _successfulSources++;
+      if (wikidataPOIs.isNotEmpty) _successfulSources++;
 
       // Merge all sources with deduplication
       _pois = _sortAndDeduplicate([wikipediaPOIs, overpassPOIs, wikidataPOIs]);
@@ -124,21 +158,45 @@ class POIProvider extends ChangeNotifier {
     }
   }
 
-  /// Fetch POIs from a repository with error handling
-  Future<List<POI>> _fetchWithErrorHandling(
-    Future<List<POI>> Function() fetch,
+  /// Fetch POIs from a repository with retry logic and error handling
+  /// Reduces search distance by 500m on each retry attempt
+  Future<List<POI>> _fetchWithRetry(
+    Future<List<POI>> Function(int distance) fetch,
     String sourceName,
+    int initialDistance,
   ) async {
-    try {
-      return await fetch();
-    } catch (e) {
-      // Log error but continue with other sources
-      debugPrint('Warning: $sourceName failed: $e');
-      return [];
+    int attempts = 0;
+    int currentDistance = initialDistance;
+
+    while (attempts < _maxRetries) {
+      try {
+        return await fetch(currentDistance);
+      } catch (e) {
+        attempts++;
+        if (attempts >= _maxRetries) {
+          // Log error but continue with other sources
+          debugPrint(
+              'Warning: $sourceName failed after $_maxRetries attempts: $e');
+          return [];
+        }
+        // Reduce distance by 500m for next attempt (min 1000m)
+        currentDistance = (currentDistance - 500).clamp(1000, initialDistance);
+        debugPrint(
+            '$sourceName attempt $attempts failed, retrying with ${currentDistance}m radius...');
+        await Future.delayed(_retryDelay * attempts); // Exponential backoff
+      }
     }
+
+    return [];
   }
 
   /// Sort and deduplicate POIs from multiple sources
+  ///
+  /// Applies the following logic:
+  /// 1. Deduplicates by ID
+  /// 2. Groups by POI type
+  /// 3. Sorts each group by notability score (descending)
+  /// 4. Orders groups according to user's preference (from SettingsProvider)
   List<POI> _sortAndDeduplicate(List<List<POI>> poiLists) {
     final allPOIs = poiLists.expand((list) => list).toList();
     if (allPOIs.isEmpty) return [];
@@ -146,10 +204,30 @@ class POIProvider extends ChangeNotifier {
     // Deduplicate using utility from WP01
     final deduplicated = deduplicatePOIs(allPOIs);
 
-    // Sort by notability score (highest first)
-    deduplicated.sort((a, b) => b.notabilityScore.compareTo(a.notabilityScore));
+    // Group by POI type
+    final grouped = <POIType, List<POI>>{};
+    for (final poi in deduplicated) {
+      grouped.putIfAbsent(poi.type, () => []).add(poi);
+    }
 
-    return deduplicated;
+    // Sort each group by notability score (descending)
+    for (final group in grouped.values) {
+      group.sort((a, b) => b.notabilityScore.compareTo(a.notabilityScore));
+    }
+
+    // Get user's preferred order (or default)
+    final typeOrder =
+        _settingsProvider?.poiTypeOrder ?? SettingsService.defaultPoiOrder;
+
+    // Combine groups according to user's preference order
+    final sorted = <POI>[];
+    for (final type in typeOrder) {
+      if (grouped.containsKey(type)) {
+        sorted.addAll(grouped[type]!);
+      }
+    }
+
+    return sorted;
   }
 
   /// Update cache with LRU eviction
@@ -172,7 +250,7 @@ class POIProvider extends ChangeNotifier {
 
   /// Retry POI discovery after error
   Future<void> retry(Location city) async {
-    await discoverPOIs(city);
+    await discoverPOIs(city, forceRefresh: true);
   }
 
   /// Clear all POIs and reset state
@@ -183,6 +261,7 @@ class POIProvider extends ChangeNotifier {
     _isLoadingPhase2 = false;
     _error = null;
     _currentCityId = null;
+    _selectedFilters.clear();
     notifyListeners();
   }
 
@@ -190,6 +269,25 @@ class POIProvider extends ChangeNotifier {
   void clearCache() {
     _cache.clear();
     _cacheKeys.clear();
+  }
+
+  /// Update active POI type filters
+  void updateFilters(Set<POIType> filters) {
+    _selectedFilters = Set.from(filters);
+    notifyListeners();
+  }
+
+  /// Clear all filters
+  void clearFilters() {
+    _selectedFilters.clear();
+    notifyListeners();
+  }
+
+  /// Update temporary search distance override
+  /// Pass null to use default from settings
+  void updateSearchDistance(int? distanceMeters) {
+    _tempSearchDistance = distanceMeters;
+    notifyListeners();
   }
 
   @override

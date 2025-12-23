@@ -11,9 +11,12 @@
 /// // - LocationProvider
 /// // - WikipediaProvider
 /// // - POIProvider
+/// // - SettingsProvider
 /// ```
 library;
 
 export 'location_provider.dart';
 export 'wikipedia_provider.dart';
 export 'poi_provider.dart';
+export 'settings_provider.dart';
+export 'map_navigation_provider.dart';
