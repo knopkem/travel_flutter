@@ -12,6 +12,7 @@
 /// // - WikipediaProvider
 /// // - POIProvider
 /// // - SettingsProvider
+/// // - AIGuidanceProvider
 /// ```
 library;
 
@@ -20,3 +21,4 @@ export 'wikipedia_provider.dart';
 export 'poi_provider.dart';
 export 'settings_provider.dart';
 export 'map_navigation_provider.dart';
+export 'ai_guidance_provider.dart';

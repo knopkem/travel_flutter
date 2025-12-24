@@ -1,4 +1,5 @@
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import '../models/poi_type.dart';
 import '../models/poi_source.dart';
 
@@ -7,6 +8,13 @@ class SettingsService {
   static const String _poiOrderKey = 'poi_type_order';
   static const String _poiDistanceKey = 'poi_search_distance';
   static const String _poiProvidersEnabledKey = 'poi_providers_enabled';
+
+  // Secure storage keys for OpenAI API
+  static const String _openaiApiKeyKey = 'openai_api_key';
+  static const String _aiRequestCountKey = 'ai_request_count';
+  static const String _aiRequestDateKey = 'ai_request_date';
+
+  final FlutterSecureStorage _secureStorage = const FlutterSecureStorage();
 
   /// Default POI type order (prioritized by user preference)
   static final List<POIType> defaultPoiOrder = [
@@ -204,6 +212,76 @@ class SettingsService {
       return await prefs.remove(_poiProvidersEnabledKey);
     } catch (e) {
       return false;
+    }
+  }
+
+  /// Save OpenAI API key to secure storage
+  Future<bool> saveOpenAIApiKey(String apiKey) async {
+    try {
+      await _secureStorage.write(key: _openaiApiKeyKey, value: apiKey);
+      return true;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  /// Load OpenAI API key from secure storage
+  Future<String?> loadOpenAIApiKey() async {
+    try {
+      return await _secureStorage.read(key: _openaiApiKeyKey);
+    } catch (e) {
+      return null;
+    }
+  }
+
+  /// Delete OpenAI API key from secure storage
+  Future<bool> deleteOpenAIApiKey() async {
+    try {
+      await _secureStorage.delete(key: _openaiApiKeyKey);
+      return true;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  /// Save AI request count and date to secure storage
+  Future<bool> saveAIRequestCount(int count, DateTime date) async {
+    try {
+      await _secureStorage.write(
+          key: _aiRequestCountKey, value: count.toString());
+      await _secureStorage.write(
+          key: _aiRequestDateKey, value: date.toIso8601String());
+      return true;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  /// Load AI request count and date from secure storage
+  /// Returns (count, date) tuple, or (0, today) if not found
+  Future<(int, DateTime)> loadAIRequestCount() async {
+    try {
+      final countStr = await _secureStorage.read(key: _aiRequestCountKey);
+      final dateStr = await _secureStorage.read(key: _aiRequestDateKey);
+
+      if (countStr == null || dateStr == null) {
+        return (0, DateTime.now());
+      }
+
+      final count = int.tryParse(countStr) ?? 0;
+      final date = DateTime.tryParse(dateStr) ?? DateTime.now();
+
+      // Reset count if it's a new day
+      final now = DateTime.now();
+      if (date.year != now.year ||
+          date.month != now.month ||
+          date.day != now.day) {
+        return (0, now);
+      }
+
+      return (count, date);
+    } catch (e) {
+      return (0, DateTime.now());
     }
   }
 }

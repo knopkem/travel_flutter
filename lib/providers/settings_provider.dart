@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../models/poi_type.dart';
 import '../models/poi_source.dart';
 import '../utils/settings_service.dart';
+import '../services/openai_service.dart';
 
 /// Provider for managing user settings
 ///
@@ -9,13 +10,18 @@ import '../utils/settings_service.dart';
 /// POI type ordering and enabled state for personalized results.
 class SettingsProvider extends ChangeNotifier {
   final SettingsService _settingsService;
+  final OpenAIService _openAIService;
   List<(POIType, bool)> _poiTypeOrder = [];
   int _poiSearchDistance = SettingsService.defaultPoiDistance;
   Map<POISource, bool> _poiProvidersEnabled = {};
+  String? _openaiApiKey;
   bool _isLoading = true;
 
-  SettingsProvider({SettingsService? settingsService})
-      : _settingsService = settingsService ?? SettingsService();
+  SettingsProvider({
+    SettingsService? settingsService,
+    OpenAIService? openAIService,
+  })  : _settingsService = settingsService ?? SettingsService(),
+        _openAIService = openAIService ?? OpenAIService();
 
   /// Current POI type order with enabled state (user's preference)
   List<(POIType, bool)> get poiTypeOrder => List.unmodifiable(_poiTypeOrder);
@@ -59,6 +65,12 @@ class SettingsProvider extends ChangeNotifier {
   bool get allProvidersDisabled =>
       _poiProvidersEnabled.values.every((enabled) => !enabled);
 
+  /// Check if OpenAI API key is configured
+  bool get hasValidOpenAIKey => _openaiApiKey != null && _openaiApiKey!.isNotEmpty;
+
+  /// Get the OpenAI API key (for use by other providers)
+  String? get openaiApiKey => _openaiApiKey;
+
   /// Whether settings are currently being loaded
   bool get isLoading => _isLoading;
 
@@ -66,6 +78,7 @@ class SettingsProvider extends ChangeNotifier {
   Future<void> initialize() async {
     _poiSearchDistance = await _settingsService.loadPoiDistance();
     _poiProvidersEnabled = await _settingsService.loadPoiProvidersEnabled();
+    _openaiApiKey = await _settingsService.loadOpenAIApiKey();
     _isLoading = true;
     notifyListeners();
 
@@ -137,5 +150,39 @@ class SettingsProvider extends ChangeNotifier {
     await _settingsService.resetPoiProvidersEnabled();
     _poiProvidersEnabled = Map.from(SettingsService.defaultPoiProvidersEnabled);
     notifyListeners();
+  }
+
+  /// Update OpenAI API key after validation
+  Future<bool> updateOpenAIApiKey(String apiKey) async {
+    try {
+      // Validate the API key first
+      final isValid = await _openAIService.validateApiKey(apiKey);
+      if (!isValid) {
+        return false;
+      }
+
+      // Save the valid key
+      final saved = await _settingsService.saveOpenAIApiKey(apiKey);
+      if (saved) {
+        _openaiApiKey = apiKey;
+        notifyListeners();
+        return true;
+      }
+      return false;
+    } catch (e) {
+      // Validation failed (network error, etc.)
+      return false;
+    }
+  }
+
+  /// Remove OpenAI API key
+  Future<bool> removeOpenAIApiKey() async {
+    final deleted = await _settingsService.deleteOpenAIApiKey();
+    if (deleted) {
+      _openaiApiKey = null;
+      notifyListeners();
+      return true;
+    }
+    return false;
   }
 }

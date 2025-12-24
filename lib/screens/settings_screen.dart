@@ -26,6 +26,7 @@ class SettingsScreen extends StatelessWidget {
 
           return ListView(
             children: [
+              _buildAIGuidanceSection(context, settingsProvider),
               _buildProvidersSection(context, settingsProvider),
               _buildPoiTypesSection(context, settingsProvider),
               _buildInterestsSection(context, settingsProvider),
@@ -270,6 +271,13 @@ class SettingsScreen extends StatelessWidget {
         ),
       ],
     );
+  }
+
+  Widget _buildAIGuidanceSection(
+    BuildContext context,
+    SettingsProvider settingsProvider,
+  ) {
+    return _AIGuidanceSettings(settingsProvider: settingsProvider);
   }
 
   Widget _buildInterestsSection(
@@ -588,5 +596,227 @@ class SettingsScreen extends StatelessWidget {
       case POISource.wikidata:
         return 'Structured knowledge base';
     }
+  }
+}
+
+class _AIGuidanceSettings extends StatefulWidget {
+  final SettingsProvider settingsProvider;
+
+  const _AIGuidanceSettings({required this.settingsProvider});
+
+  @override
+  State<_AIGuidanceSettings> createState() => _AIGuidanceSettingsState();
+}
+
+class _AIGuidanceSettingsState extends State<_AIGuidanceSettings> {
+  final TextEditingController _apiKeyController = TextEditingController();
+  bool _isValidating = false;
+  String? _validationMessage;
+  bool _isValid = false;
+
+  @override
+  void initState() {
+    super.initState();
+    // Check if key exists on init
+    _isValid = widget.settingsProvider.hasValidOpenAIKey;
+    if (_isValid) {
+      _validationMessage = 'API key configured';
+    }
+  }
+
+  @override
+  void dispose() {
+    _apiKeyController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _validateAndSave() async {
+    final apiKey = _apiKeyController.text.trim();
+    if (apiKey.isEmpty) {
+      setState(() {
+        _validationMessage = 'Please enter an API key';
+        _isValid = false;
+      });
+      return;
+    }
+
+    setState(() {
+      _isValidating = true;
+      _validationMessage = null;
+    });
+
+    try {
+      await widget.settingsProvider.updateOpenAIApiKey(apiKey);
+      setState(() {
+        _isValid = true;
+        _validationMessage = 'API key validated and saved';
+        _apiKeyController.clear();
+      });
+    } catch (e) {
+      setState(() {
+        _isValid = false;
+        _validationMessage = 'Invalid API key: $e';
+      });
+    } finally {
+      setState(() {
+        _isValidating = false;
+      });
+    }
+  }
+
+  Future<void> _removeKey() async {
+    await widget.settingsProvider.removeOpenAIApiKey();
+    setState(() {
+      _isValid = false;
+      _validationMessage = null;
+      _apiKeyController.clear();
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return ExpansionTile(
+      initiallyExpanded: false,
+      leading: Icon(
+        Icons.auto_awesome,
+        color: _isValid ? Colors.green : null,
+      ),
+      title: const Text(
+        'AI Guidance',
+        style: TextStyle(
+          fontSize: 18,
+          fontWeight: FontWeight.bold,
+        ),
+      ),
+      subtitle: Text(_isValid
+          ? 'API key configured - Filter POIs with AI'
+          : 'Configure OpenAI API key for semantic filtering'),
+      children: [
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text(
+                'Use AI to filter attractions by themes like "romantic", "kid-friendly", or "historical".',
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      color: Colors.grey[600],
+                    ),
+              ),
+              const SizedBox(height: 16),
+              if (_isValid)
+                Card(
+                  color: Colors.green.shade50,
+                  child: Padding(
+                    padding: const EdgeInsets.all(12.0),
+                    child: Row(
+                      children: [
+                        Icon(Icons.check_circle, color: Colors.green.shade700),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            _validationMessage ?? 'API key configured',
+                            style: TextStyle(color: Colors.green.shade700),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                )
+              else ...[
+                TextField(
+                  controller: _apiKeyController,
+                  obscureText: true,
+                  decoration: const InputDecoration(
+                    labelText: 'OpenAI API Key',
+                    hintText: 'sk-...',
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                if (_validationMessage != null)
+                  Card(
+                    color: _isValid ? Colors.green.shade50 : Colors.red.shade50,
+                    child: Padding(
+                      padding: const EdgeInsets.all(12.0),
+                      child: Row(
+                        children: [
+                          Icon(
+                            _isValid ? Icons.check_circle : Icons.error,
+                            color: _isValid
+                                ? Colors.green.shade700
+                                : Colors.red.shade700,
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              _validationMessage!,
+                              style: TextStyle(
+                                color: _isValid
+                                    ? Colors.green.shade700
+                                    : Colors.red.shade700,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                const SizedBox(height: 8),
+              ],
+              Row(
+                children: [
+                  if (_isValid)
+                    Expanded(
+                      child: ElevatedButton.icon(
+                        onPressed: _removeKey,
+                        icon: const Icon(Icons.delete),
+                        label: const Text('Remove Key'),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.red.shade100,
+                          foregroundColor: Colors.red.shade900,
+                        ),
+                      ),
+                    )
+                  else
+                    Expanded(
+                      child: ElevatedButton.icon(
+                        onPressed: _isValidating ? null : _validateAndSave,
+                        icon: _isValidating
+                            ? const SizedBox(
+                                width: 16,
+                                height: 16,
+                                child:
+                                    CircularProgressIndicator(strokeWidth: 2),
+                              )
+                            : const Icon(Icons.check),
+                        label: Text(
+                          _isValidating ? 'Validating...' : 'Validate & Save',
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              Row(
+                children: [
+                  Icon(Icons.info_outline, size: 16, color: Colors.grey[600]),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: Text(
+                      'Get your API key from platform.openai.com • 50 requests/day limit',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: Colors.grey[600],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
   }
 }

@@ -8,6 +8,7 @@ import '../models/poi_type.dart';
 import '../providers/poi_provider.dart';
 import '../providers/map_navigation_provider.dart';
 import '../providers/settings_provider.dart';
+import '../providers/ai_guidance_provider.dart';
 import '../screens/poi_detail_screen.dart';
 import 'poi_list_item.dart';
 
@@ -64,10 +65,21 @@ class _POIListWidgetState extends State<POIListWidget> {
     }
   }
 
-  List<POI> _getFilteredPOIs(POIProvider provider) {
-    final allPois = provider.allPois;
+  List<POI> _getFilteredPOIs(
+      POIProvider provider, AIGuidanceProvider aiGuidanceProvider) {
+    var allPois = provider.allPois;
     debugPrint(
         'POIListWidget: All POIs count: ${allPois.length}, Selected filters: $_selectedFilters');
+
+    // Apply AI guidance filter first
+    if (aiGuidanceProvider.hasActiveGuidance) {
+      allPois = allPois
+          .where((poi) => aiGuidanceProvider.isPoiMatchingGuidance(poi))
+          .toList();
+      debugPrint('POIListWidget: After AI guidance filter: ${allPois.length}');
+    }
+
+    // Then apply type filter
     if (_selectedFilters.isEmpty) {
       return allPois;
     }
@@ -90,8 +102,8 @@ class _POIListWidgetState extends State<POIListWidget> {
 
   @override
   Widget build(BuildContext context) {
-    return Consumer<POIProvider>(
-      builder: (context, provider, child) {
+    return Consumer2<POIProvider, AIGuidanceProvider>(
+      builder: (context, provider, aiGuidanceProvider, child) {
         // All providers disabled state
         if (provider.allProvidersDisabled) {
           return _buildAllProvidersDisabledState(context);
@@ -113,7 +125,7 @@ class _POIListWidgetState extends State<POIListWidget> {
         }
 
         // Get filtered and paginated POIs
-        final filteredPOIs = _getFilteredPOIs(provider);
+        final filteredPOIs = _getFilteredPOIs(provider, aiGuidanceProvider);
         final paginatedPOIs = _getPaginatedPOIs(filteredPOIs);
         final totalPages = _getTotalPages(filteredPOIs.length);
 
@@ -138,6 +150,8 @@ class _POIListWidgetState extends State<POIListWidget> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             _buildHeader(context, provider, filteredPOIs.length),
+            const SizedBox(height: 8),
+            _buildAIGuidanceField(context),
             const SizedBox(height: 8),
             _buildFilterDropdown(context, provider),
             const SizedBox(height: 8),
@@ -289,6 +303,10 @@ class _POIListWidgetState extends State<POIListWidget> {
         ),
       ),
     );
+  }
+
+  Widget _buildAIGuidanceField(BuildContext context) {
+    return _AIGuidanceField();
   }
 
   Widget _buildFilterDropdown(BuildContext context, POIProvider provider) {
@@ -925,5 +943,196 @@ class _POIListWidgetState extends State<POIListWidget> {
         ),
       ),
     );
+  }
+}
+
+class _AIGuidanceField extends StatefulWidget {
+  const _AIGuidanceField();
+
+  @override
+  State<_AIGuidanceField> createState() => _AIGuidanceFieldState();
+}
+
+class _AIGuidanceFieldState extends State<_AIGuidanceField> {
+  final TextEditingController _guidanceController = TextEditingController();
+
+  @override
+  void dispose() {
+    _guidanceController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final settingsProvider = Provider.of<SettingsProvider>(context);
+    final aiGuidanceProvider = Provider.of<AIGuidanceProvider>(context);
+    final poiProvider = Provider.of<POIProvider>(context);
+
+    // Only show if API key is configured
+    if (!settingsProvider.hasValidOpenAIKey) {
+      return const SizedBox.shrink();
+    }
+
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(12.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Row(
+              children: [
+                Icon(Icons.auto_awesome,
+                    size: 20, color: Theme.of(context).colorScheme.primary),
+                const SizedBox(width: 8),
+                Text(
+                  'AI Guidance',
+                  style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                        fontWeight: FontWeight.bold,
+                      ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            TextField(
+              controller: _guidanceController,
+              decoration: InputDecoration(
+                hintText: 'e.g., romantic, kid-friendly, historical...',
+                border: const OutlineInputBorder(),
+                contentPadding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                suffixIcon: aiGuidanceProvider.hasActiveGuidance
+                    ? IconButton(
+                        icon: const Icon(Icons.close, size: 20),
+                        onPressed: () {
+                          _guidanceController.clear();
+                          aiGuidanceProvider.clearGuidance();
+                        },
+                      )
+                    : null,
+              ),
+              onSubmitted: (value) => _applyGuidance(
+                context,
+                aiGuidanceProvider,
+                poiProvider,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                Expanded(
+                  child: ElevatedButton.icon(
+                    onPressed: aiGuidanceProvider.isLoading
+                        ? null
+                        : () => _applyGuidance(
+                              context,
+                              aiGuidanceProvider,
+                              poiProvider,
+                            ),
+                    icon: aiGuidanceProvider.isLoading
+                        ? const SizedBox(
+                            width: 16,
+                            height: 16,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Icon(Icons.filter_list, size: 20),
+                    label: Text(aiGuidanceProvider.isLoading
+                        ? 'Filtering...'
+                        : 'Apply AI Filter'),
+                  ),
+                ),
+                if (aiGuidanceProvider.hasActiveGuidance) ...[
+                  const SizedBox(width: 8),
+                  OutlinedButton(
+                    onPressed: () {
+                      _guidanceController.clear();
+                      aiGuidanceProvider.clearGuidance();
+                    },
+                    child: const Text('Clear'),
+                  ),
+                ],
+              ],
+            ),
+            if (aiGuidanceProvider.error != null) ...[
+              const SizedBox(height: 8),
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: aiGuidanceProvider.noMatchesFound
+                      ? Colors.orange.shade50
+                      : Colors.red.shade50,
+                  borderRadius: BorderRadius.circular(4),
+                ),
+                child: Row(
+                  children: [
+                    Icon(
+                      aiGuidanceProvider.noMatchesFound
+                          ? Icons.info_outline
+                          : Icons.error,
+                      color: aiGuidanceProvider.noMatchesFound
+                          ? Colors.orange.shade700
+                          : Colors.red.shade700,
+                      size: 16,
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        aiGuidanceProvider.error!,
+                        style: TextStyle(
+                          color: aiGuidanceProvider.noMatchesFound
+                              ? Colors.orange.shade700
+                              : Colors.red.shade700,
+                          fontSize: 12,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+            if (aiGuidanceProvider.hasActiveGuidance &&
+                aiGuidanceProvider.error == null) ...[
+              const SizedBox(height: 8),
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: Colors.green.shade50,
+                  borderRadius: BorderRadius.circular(4),
+                ),
+                child: Row(
+                  children: [
+                    Icon(Icons.check_circle,
+                        color: Colors.green.shade700, size: 16),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        'Filtering by: "${aiGuidanceProvider.guidanceText}"',
+                        style: TextStyle(
+                          color: Colors.green.shade700,
+                          fontSize: 12,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _applyGuidance(
+    BuildContext context,
+    AIGuidanceProvider aiGuidanceProvider,
+    POIProvider poiProvider,
+  ) async {
+    final guidance = _guidanceController.text.trim();
+    if (guidance.isEmpty) {
+      aiGuidanceProvider.clearGuidance();
+      return;
+    }
+
+    await aiGuidanceProvider.applyGuidance(guidance, poiProvider.allPois);
   }
 }
