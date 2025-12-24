@@ -1,11 +1,11 @@
 import 'dart:convert';
+import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import '../models/poi.dart';
 
 /// Service for interacting with OpenAI API for POI guidance filtering
 class OpenAIService {
   static const String _baseUrl = 'https://api.openai.com/v1';
-  static const String _model = 'gpt-4o-mini';
   static const Duration _timeout = Duration(seconds: 30);
   static const int _maxDailyRequests = 50;
 
@@ -46,10 +46,15 @@ class OpenAIService {
   ///
   /// Returns a list of POI IDs that match the guidance.
   /// Throws an exception if the API call fails or daily limit is reached.
+  ///
+  /// For large POI lists, automatically batches requests to avoid context limits.
+
   Future<List<String>> filterPOIsByGuidance(
     List<POI> pois,
     String guidance,
     String apiKey,
+    String model,
+    int batchSize,
   ) async {
     if (apiKey.isEmpty) {
       throw Exception('API key is required');
@@ -59,6 +64,41 @@ class OpenAIService {
       return [];
     }
 
+    // Split into batches if needed
+    if (pois.length <= batchSize) {
+      return _filterBatch(pois, guidance, apiKey, model);
+    }
+
+    // Process in batches and merge results
+    final List<String> allMatchingIds = [];
+    final batches = <List<POI>>[];
+
+    for (var i = 0; i < pois.length; i += batchSize) {
+      final end = (i + batchSize < pois.length) ? i + batchSize : pois.length;
+      batches.add(pois.sublist(i, end));
+    }
+
+    // Process batches (could be parallelized but doing sequentially to avoid rate limits)
+    for (final batch in batches) {
+      try {
+        final batchResults = await _filterBatch(batch, guidance, apiKey, model);
+        allMatchingIds.addAll(batchResults);
+      } catch (e) {
+        // If one batch fails, continue with others
+        debugPrint('Batch failed: $e');
+      }
+    }
+
+    return allMatchingIds;
+  }
+
+  /// Filter a single batch of POIs
+  Future<List<String>> _filterBatch(
+    List<POI> pois,
+    String guidance,
+    String apiKey,
+    String model,
+  ) async {
     // Prepare POI data for the API (truncate descriptions to save tokens)
     final poisData = pois.map((poi) {
       return {
@@ -66,23 +106,20 @@ class OpenAIService {
         'name': poi.name,
         'type': poi.type.displayName,
         'description': poi.description != null
-            ? (poi.description!.length > 100
-                ? '${poi.description!.substring(0, 100)}...'
+            ? (poi.description!.length > 80
+                ? '${poi.description!.substring(0, 80)}...'
                 : poi.description!)
-            : 'No description available',
+            : '',
       };
     }).toList();
 
     final prompt = '''
-Given these Points of Interest (POIs), identify which ones match or are relevant to the theme/keywords: "$guidance"
-
-Consider the POI's name, type, and description. Return ONLY a JSON array of matching POI IDs.
+Filter POIs matching theme: "$guidance"
 
 POIs:
 ${jsonEncode(poisData)}
 
-Return format: ["id1", "id2", "id3"]
-Only return the JSON array, nothing else.
+Return ONLY a JSON array of matching IDs: ["id1", "id2"]
 ''';
 
     try {
@@ -94,12 +131,12 @@ Only return the JSON array, nothing else.
               'Content-Type': 'application/json',
             },
             body: jsonEncode({
-              'model': _model,
+              'model': model,
               'messages': [
                 {
                   'role': 'system',
                   'content':
-                      'You are a helpful assistant that filters tourist attractions based on themes and keywords. Always respond with valid JSON only.',
+                      'You filter tourist attractions by theme. Respond with valid JSON array only.',
                 },
                 {
                   'role': 'user',
@@ -107,7 +144,7 @@ Only return the JSON array, nothing else.
                 },
               ],
               'temperature': 0.3,
-              'max_tokens': 500,
+              'max_tokens': 300,
             }),
           )
           .timeout(_timeout);

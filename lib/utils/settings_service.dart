@@ -13,6 +13,10 @@ class SettingsService {
   static const String _openaiApiKeyKey = 'openai_api_key';
   static const String _aiRequestCountKey = 'ai_request_count';
   static const String _aiRequestDateKey = 'ai_request_date';
+  static const String _openaiModelKey = 'openai_model';
+  static const String _aiBatchSizeKey = 'ai_batch_size';
+  static const String defaultOpenAIModel = 'gpt-4o-mini';
+  static const int defaultAIBatchSize = 500;
 
   final FlutterSecureStorage _secureStorage = const FlutterSecureStorage();
 
@@ -282,6 +286,46 @@ class SettingsService {
       return (count, date);
     } catch (e) {
       return (0, DateTime.now());
+    }
+  }
+
+  /// Save OpenAI model selection
+  Future<bool> saveOpenAIModel(String model) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      return await prefs.setString(_openaiModelKey, model);
+    } catch (e) {
+      return false;
+    }
+  }
+
+  /// Load OpenAI model selection
+  Future<String> loadOpenAIModel() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      return prefs.getString(_openaiModelKey) ?? defaultOpenAIModel;
+    } catch (e) {
+      return defaultOpenAIModel;
+    }
+  }
+
+  /// Save AI batch size
+  Future<bool> saveAIBatchSize(int batchSize) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      return await prefs.setInt(_aiBatchSizeKey, batchSize);
+    } catch (e) {
+      return false;
+    }
+  }
+
+  /// Load AI batch size
+  Future<int> loadAIBatchSize() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      return prefs.getInt(_aiBatchSizeKey) ?? defaultAIBatchSize;
+    } catch (e) {
+      return defaultAIBatchSize;
     }
   }
 }

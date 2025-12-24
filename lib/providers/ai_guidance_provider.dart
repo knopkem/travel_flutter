@@ -2,10 +2,12 @@ import 'package:flutter/material.dart';
 import '../models/models.dart';
 import '../services/openai_service.dart';
 import '../utils/settings_service.dart';
+import 'settings_provider.dart';
 
 class AIGuidanceProvider extends ChangeNotifier {
   final OpenAIService _openaiService;
   final SettingsService _settingsService;
+  final SettingsProvider _settingsProvider;
 
   String _guidanceText = '';
   Set<String> _filteredPoiIds = {};
@@ -17,8 +19,10 @@ class AIGuidanceProvider extends ChangeNotifier {
   AIGuidanceProvider({
     required OpenAIService openaiService,
     required SettingsService settingsService,
+    required SettingsProvider settingsProvider,
   })  : _openaiService = openaiService,
-        _settingsService = settingsService;
+        _settingsService = settingsService,
+        _settingsProvider = settingsProvider;
 
   String get guidanceText => _guidanceText;
   bool get isLoading => _isLoading;
@@ -65,7 +69,11 @@ class AIGuidanceProvider extends ChangeNotifier {
       }
 
       final matchingPoiIds = await _openaiService.filterPOIsByGuidance(
-          allPois, _guidanceText, apiKey);
+          allPois,
+          _guidanceText,
+          apiKey,
+          _settingsProvider.openaiModel,
+          _settingsProvider.aiBatchSize);
 
       _filteredPoiIds = matchingPoiIds.toSet();
 

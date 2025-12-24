@@ -16,6 +16,8 @@ class SettingsProvider extends ChangeNotifier {
   Map<POISource, bool> _poiProvidersEnabled = {};
   String? _openaiApiKey;
   bool _isLoading = true;
+  String _openaiModel = SettingsService.defaultOpenAIModel;
+  int _aiBatchSize = SettingsService.defaultAIBatchSize;
 
   SettingsProvider({
     SettingsService? settingsService,
@@ -66,10 +68,17 @@ class SettingsProvider extends ChangeNotifier {
       _poiProvidersEnabled.values.every((enabled) => !enabled);
 
   /// Check if OpenAI API key is configured
-  bool get hasValidOpenAIKey => _openaiApiKey != null && _openaiApiKey!.isNotEmpty;
+  bool get hasValidOpenAIKey =>
+      _openaiApiKey != null && _openaiApiKey!.isNotEmpty;
 
   /// Get the OpenAI API key (for use by other providers)
   String? get openaiApiKey => _openaiApiKey;
+
+  /// Get the selected OpenAI model
+  String get openaiModel => _openaiModel;
+
+  /// Get the AI batch size
+  int get aiBatchSize => _aiBatchSize;
 
   /// Whether settings are currently being loaded
   bool get isLoading => _isLoading;
@@ -79,6 +88,8 @@ class SettingsProvider extends ChangeNotifier {
     _poiSearchDistance = await _settingsService.loadPoiDistance();
     _poiProvidersEnabled = await _settingsService.loadPoiProvidersEnabled();
     _openaiApiKey = await _settingsService.loadOpenAIApiKey();
+    _openaiModel = await _settingsService.loadOpenAIModel();
+    _aiBatchSize = await _settingsService.loadAIBatchSize();
     _isLoading = true;
     notifyListeners();
 
@@ -184,5 +195,19 @@ class SettingsProvider extends ChangeNotifier {
       return true;
     }
     return false;
+  }
+
+  /// Update OpenAI model selection
+  Future<void> updateOpenAIModel(String model) async {
+    await _settingsService.saveOpenAIModel(model);
+    _openaiModel = model;
+    notifyListeners();
+  }
+
+  /// Update AI batch size
+  Future<void> updateAIBatchSize(int batchSize) async {
+    await _settingsService.saveAIBatchSize(batchSize);
+    _aiBatchSize = batchSize;
+    notifyListeners();
   }
 }

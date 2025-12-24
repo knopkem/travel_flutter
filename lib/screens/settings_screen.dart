@@ -704,6 +704,92 @@ class _AIGuidanceSettingsState extends State<_AIGuidanceSettings> {
                     ),
               ),
               const SizedBox(height: 16),
+              Row(
+                children: [
+                  Text(
+                    'Model:',
+                    style: Theme.of(context).textTheme.titleSmall,
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: DropdownButtonFormField<String>(
+                      value: _OpenAIModels.models.any((m) =>
+                              m.id == widget.settingsProvider.openaiModel)
+                          ? widget.settingsProvider.openaiModel
+                          : 'gpt-4o-mini',
+                      decoration: const InputDecoration(
+                        border: OutlineInputBorder(),
+                        contentPadding:
+                            EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                      ),
+                      items: _OpenAIModels.models.map((model) {
+                        return DropdownMenuItem(
+                          value: model.id,
+                          child: Text('${model.name} ${model.priceIndicator}'),
+                        );
+                      }).toList(),
+                      onChanged: (value) {
+                        if (value != null) {
+                          // Defer the update to avoid rebuilding during onChange
+                          Future.microtask(() {
+                            widget.settingsProvider.updateOpenAIModel(value);
+                          });
+                        }
+                      },
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+              Row(
+                children: [
+                  Text(
+                    'Batch Size:',
+                    style: Theme.of(context).textTheme.titleSmall,
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: DropdownButtonFormField<int>(
+                      value: [25, 50, 100, 150, 500, 1000]
+                              .contains(widget.settingsProvider.aiBatchSize)
+                          ? widget.settingsProvider.aiBatchSize
+                          : 500,
+                      decoration: const InputDecoration(
+                        border: OutlineInputBorder(),
+                        contentPadding:
+                            EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                      ),
+                      items: const [
+                        DropdownMenuItem(
+                            value: 25, child: Text('25 (fastest)')),
+                        DropdownMenuItem(value: 50, child: Text('50')),
+                        DropdownMenuItem(value: 100, child: Text('100')),
+                        DropdownMenuItem(value: 150, child: Text('150')),
+                        DropdownMenuItem(value: 500, child: Text('500')),
+                        DropdownMenuItem(
+                            value: 1000, child: Text('1000 (slowest)')),
+                      ],
+                      onChanged: (value) {
+                        if (value != null) {
+                          Future.microtask(() {
+                            widget.settingsProvider.updateAIBatchSize(value);
+                          });
+                        }
+                      },
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'POIs per API request. Smaller = faster but more requests.',
+                style: TextStyle(
+                  fontSize: 11,
+                  color: Colors.grey[600],
+                  fontStyle: FontStyle.italic,
+                ),
+              ),
+              const SizedBox(height: 16),
               if (_isValid)
                 Card(
                   color: Colors.green.shade50,
@@ -819,4 +905,53 @@ class _AIGuidanceSettingsState extends State<_AIGuidanceSettings> {
       ],
     );
   }
+}
+
+/// OpenAI model information
+class _OpenAIModelInfo {
+  final String id;
+  final String name;
+  final String priceIndicator;
+
+  const _OpenAIModelInfo({
+    required this.id,
+    required this.name,
+    required this.priceIndicator,
+  });
+}
+
+/// Available OpenAI models with pricing
+class _OpenAIModels {
+  static const List<_OpenAIModelInfo> models = [
+    _OpenAIModelInfo(
+      id: 'gpt-4o-mini',
+      name: 'GPT-4o Mini',
+      priceIndicator: r'$',
+    ),
+    _OpenAIModelInfo(
+      id: 'gpt-4o',
+      name: 'GPT-4o',
+      priceIndicator: r'$$',
+    ),
+    _OpenAIModelInfo(
+      id: 'gpt-4-turbo',
+      name: 'GPT-4 Turbo',
+      priceIndicator: r'$$$',
+    ),
+    _OpenAIModelInfo(
+      id: 'gpt-3.5-turbo',
+      name: 'GPT-3.5 Turbo',
+      priceIndicator: r'$',
+    ),
+    _OpenAIModelInfo(
+      id: 'o1-mini',
+      name: 'O1 Mini',
+      priceIndicator: r'$$',
+    ),
+    _OpenAIModelInfo(
+      id: 'o1',
+      name: 'O1',
+      priceIndicator: r'$$$$',
+    ),
+  ];
 }

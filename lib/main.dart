@@ -41,9 +41,10 @@ void main() async {
           },
         ),
         ChangeNotifierProvider(
-          create: (_) => AIGuidanceProvider(
+          create: (context) => AIGuidanceProvider(
             openaiService: OpenAIService(),
             settingsService: settingsService,
+            settingsProvider: settingsProvider,
           ),
         ),
       ],
