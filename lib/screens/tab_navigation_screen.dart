@@ -44,6 +44,10 @@ class _TabNavigationScreenState extends State<TabNavigationScreen> {
         setState(() {
           _currentIndex = 1;
         });
+        // Update back button visibility after tab switch
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          _updateBackButtonVisibility();
+        });
       }
     });
   }
@@ -143,7 +147,10 @@ class _TabNavigationScreenState extends State<TabNavigationScreen> {
               setState(() {
                 _currentIndex = index;
               });
-              _updateBackButtonVisibility();
+              // Update back button visibility after switching tabs
+              WidgetsBinding.instance.addPostFrameCallback((_) {
+                _updateBackButtonVisibility();
+              });
             }
           },
           items: [

@@ -71,7 +71,6 @@ class _POIDetailScreenState extends State<POIDetailScreen> {
     return SliverAppBar(
       expandedHeight: 200,
       pinned: true,
-      automaticallyImplyLeading: false,
       actions: [
         IconButton(
           icon: const Icon(Icons.settings),

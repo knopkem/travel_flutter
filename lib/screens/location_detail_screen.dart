@@ -92,7 +92,6 @@ class _LocationDetailScreenState extends State<LocationDetailScreen> {
         title: Text(widget.location.name ??
             'Lat: ${widget.location.latitude.toStringAsFixed(3)}, Lon: ${widget.location.longitude.toStringAsFixed(3)}'),
         backgroundColor: Theme.of(context).colorScheme.inversePrimary,
-        automaticallyImplyLeading: false,
         actions: [
           IconButton(
             icon: const Icon(Icons.settings),
