@@ -4,6 +4,8 @@ import '../models/models.dart';
 import '../providers/providers.dart';
 import '../widgets/wikipedia_content_widget.dart';
 import '../widgets/poi_list_widget.dart';
+import 'wikipedia_article_screen.dart';
+import 'settings_screen.dart';
 
 /// Detail screen showing Wikipedia content for a selected location.
 ///
@@ -87,14 +89,29 @@ class _LocationDetailScreenState extends State<LocationDetailScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text(widget.location.name ?? 'Lat: ${widget.location.latitude.toStringAsFixed(3)}, Lon: ${widget.location.longitude.toStringAsFixed(3)}'),
+        title: Text(widget.location.name ??
+            'Lat: ${widget.location.latitude.toStringAsFixed(3)}, Lon: ${widget.location.longitude.toStringAsFixed(3)}'),
         backgroundColor: Theme.of(context).colorScheme.inversePrimary,
         automaticallyImplyLeading: false,
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.settings),
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => const SettingsScreen(),
+                ),
+              );
+            },
+            tooltip: 'Settings',
+          ),
+        ],
       ),
       body: Consumer<WikipediaProvider>(
         builder: (context, provider, child) {
           // Get content from cache (might be null if fetch failed or no name)
-          final content = widget.location.name != null 
+          final content = widget.location.name != null
               ? provider.getContent(widget.location.name!)
               : null;
 
@@ -154,7 +171,8 @@ class _LocationDetailScreenState extends State<LocationDetailScreen> {
                             const SizedBox(width: 8),
                             Expanded(
                               child: Text(
-                                widget.location.displayName ?? 'Lat: ${widget.location.latitude.toStringAsFixed(3)}, Lon: ${widget.location.longitude.toStringAsFixed(3)}',
+                                widget.location.displayName ??
+                                    'Lat: ${widget.location.latitude.toStringAsFixed(3)}, Lon: ${widget.location.longitude.toStringAsFixed(3)}',
                                 style: Theme.of(context).textTheme.titleLarge,
                               ),
                             ),
@@ -172,15 +190,46 @@ class _LocationDetailScreenState extends State<LocationDetailScreen> {
                 ),
 
                 // Wikipedia content widget (if available)
+                // Always show summary view here, even if full article is cached
                 if (content != null)
                   WikipediaContentWidget(
-                    content: content,
-                    onLoadFullArticle: () {
+                    content: WikipediaContent(
+                      title: content.title,
+                      summary: content.summary,
+                      extractHtml: content.extractHtml,
+                      thumbnailUrl: content.thumbnailUrl,
+                      pageUrl: content.pageUrl,
+                      fetchedAt: content.fetchedAt,
+                      // Explicitly omit fullContent and sections to show summary only
+                    ),
+                    onLoadFullArticle: () async {
                       if (widget.location.name != null) {
-                        Provider.of<WikipediaProvider>(
+                        // Fetch full article first
+                        await Provider.of<WikipediaProvider>(
                           context,
                           listen: false,
                         ).fetchFullArticle(widget.location.name!);
+
+                        // Get the updated content with full article
+                        if (mounted) {
+                          final fullContent = Provider.of<WikipediaProvider>(
+                            context,
+                            listen: false,
+                          ).getContent(widget.location.name!);
+
+                          if (fullContent != null &&
+                              fullContent.isFullArticle) {
+                            // Navigate to dedicated full article screen
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (context) => WikipediaArticleScreen(
+                                  content: fullContent,
+                                ),
+                              ),
+                            );
+                          }
+                        }
                       }
                     },
                   )

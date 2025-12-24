@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../models/poi.dart';
 import '../providers/providers.dart';
+import 'settings_screen.dart';
 
 /// POI detail screen showing comprehensive information
 ///
@@ -71,6 +72,20 @@ class _POIDetailScreenState extends State<POIDetailScreen> {
       expandedHeight: 200,
       pinned: true,
       automaticallyImplyLeading: false,
+      actions: [
+        IconButton(
+          icon: const Icon(Icons.settings),
+          onPressed: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (context) => const SettingsScreen(),
+              ),
+            );
+          },
+          tooltip: 'Settings',
+        ),
+      ],
       flexibleSpace: FlexibleSpaceBar(
         title: Text(
           widget.poi.name,
@@ -516,7 +531,8 @@ class _POIDetailScreenState extends State<POIDetailScreen> {
         await launchUrl(uri, mode: LaunchMode.externalApplication);
       } else {
         // Fallback to Google Maps web URL if geo: scheme is not supported
-        final fallbackUrl = 'https://www.google.com/maps/dir/?api=1&destination=$lat,$lng&travelmode=walking';
+        final fallbackUrl =
+            'https://www.google.com/maps/dir/?api=1&destination=$lat,$lng&travelmode=walking';
         final fallbackUri = Uri.parse(fallbackUrl);
         await launchUrl(fallbackUri, mode: LaunchMode.externalApplication);
       }

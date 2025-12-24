@@ -93,7 +93,12 @@ class OverpassRepository implements POIRepository {
               element as Map<String, dynamic>,
               city,
             );
-            pois.add(poi);
+            // Filter out POIs with no proper name
+            if (poi.name.isNotEmpty &&
+                poi.name != 'Unnamed Location' &&
+                !poi.name.toLowerCase().contains('unnamed')) {
+              pois.add(poi);
+            }
           }
         } catch (e) {
           // Skip invalid items but continue processing others

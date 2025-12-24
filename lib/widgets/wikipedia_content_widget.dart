@@ -23,8 +23,9 @@ class _WikipediaContentWidgetState extends State<WikipediaContentWidget> {
   @override
   void initState() {
     super.initState();
+    // Initialize all sections as collapsed (false) by default
     for (final section in widget.content.sections ?? []) {
-      _expandedSections[section.title] = true;
+      _expandedSections[section.title] = false;
     }
   }
 
@@ -168,58 +169,40 @@ class _WikipediaContentWidgetState extends State<WikipediaContentWidget> {
 
   List<Widget> _buildSections(BuildContext context) {
     return widget.content.sections!.map((section) {
-      final isExpanded = _expandedSections[section.title] ?? true;
-      return Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          InkWell(
-            onTap: () {
-              setState(() {
-                _expandedSections[section.title] = !isExpanded;
-              });
-            },
-            child: Container(
-              padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
-              decoration: BoxDecoration(
-                color: Colors.grey[100],
-                borderRadius: BorderRadius.circular(4),
-              ),
-              child: Row(
-                children: [
-                  Icon(
-                    isExpanded ? Icons.expand_less : Icons.expand_more,
-                    size: 20,
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      section.title,
-                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                            fontWeight: FontWeight.bold,
-                            fontSize: section.level == 2 ? 18 : 16,
-                          ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
+      final isExpanded = _expandedSections[section.title] ?? false;
+      return Card(
+        margin: const EdgeInsets.only(bottom: 8),
+        child: ExpansionTile(
+          initiallyExpanded: isExpanded,
+          onExpansionChanged: (expanded) {
+            setState(() {
+              _expandedSections[section.title] = expanded;
+            });
+          },
+          title: Text(
+            section.title,
+            style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                  fontWeight: FontWeight.bold,
+                  fontSize: section.level == 2 ? 18 : 16,
+                ),
           ),
-          const SizedBox(height: 8),
-          if (isExpanded) ...[
+          children: [
             Padding(
               padding: EdgeInsets.only(
-                left: (section.level - 2) * 16.0,
-                bottom: 16,
+                left: (section.level - 2) * 16.0 + 16.0,
+                right: 16.0,
+                bottom: 16.0,
+                top: 8.0,
               ),
               child: Text(
-                _stripHtmlTags(section.content),
-                style: Theme.of(
-                  context,
-                ).textTheme.bodyMedium?.copyWith(height: 1.6),
+                _stripHtmlAndTables(section.content),
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      height: 1.6,
+                    ),
               ),
             ),
           ],
-        ],
+        ),
       );
     }).toList();
   }
@@ -267,8 +250,13 @@ class _WikipediaContentWidgetState extends State<WikipediaContentWidget> {
     );
   }
 
-  String _stripHtmlTags(String html) {
-    return html
+  String _stripHtmlAndTables(String html) {
+    // Remove tables completely (they don't render well in plain text)
+    String cleaned =
+        html.replaceAll(RegExp(r'<table[^>]*>.*?</table>', dotAll: true), '');
+
+    // Remove all remaining HTML tags
+    cleaned = cleaned
         .replaceAll(RegExp(r'<[^>]*>'), '')
         .replaceAll('&nbsp;', ' ')
         .replaceAll('&amp;', '&')
@@ -276,7 +264,10 @@ class _WikipediaContentWidgetState extends State<WikipediaContentWidget> {
         .replaceAll('&gt;', '>')
         .replaceAll('&quot;', '"')
         .replaceAll('&#39;', "'")
+        .replaceAll(RegExp(r'\n\s*\n'), '\n\n') // Normalize multiple newlines
         .trim();
+
+    return cleaned;
   }
 
   Future<void> _launchUrl(String urlString) async {

@@ -9,6 +9,7 @@ import '../providers/location_provider.dart';
 import '../providers/poi_provider.dart';
 import '../providers/map_navigation_provider.dart';
 import 'poi_detail_screen.dart';
+import 'settings_screen.dart';
 
 class MapScreen extends StatefulWidget {
   const MapScreen({super.key});
@@ -302,6 +303,20 @@ class _MapScreenState extends State<MapScreen> {
       appBar: AppBar(
         title: const Text('Map View'),
         backgroundColor: Theme.of(context).colorScheme.inversePrimary,
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.settings),
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => const SettingsScreen(),
+                ),
+              );
+            },
+            tooltip: 'Settings',
+          ),
+        ],
       ),
       body: Consumer2<LocationProvider, POIProvider>(
         builder: (context, locationProvider, poiProvider, child) {
