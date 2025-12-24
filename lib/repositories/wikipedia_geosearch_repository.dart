@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import '../models/location.dart';
 import '../models/poi.dart';
+import '../models/poi_type.dart';
 import 'poi_repository.dart';
 
 /// Wikipedia Geosearch API repository implementation
@@ -22,7 +23,12 @@ class WikipediaGeosearchRepository implements POIRepository {
   Future<List<POI>> fetchNearbyPOIs(
     Location city, {
     int radiusMeters = 10000,
+    Set<POIType>? enabledTypes,
   }) async {
+    // Wikipedia geosearch cannot filter by type at API level
+    // All results default to touristAttraction type
+    // Post-filtering will handle disabled types
+
     // Validate coordinates
     if (city.latitude < -90 || city.latitude > 90) {
       throw ArgumentError('Invalid latitude: ${city.latitude}');

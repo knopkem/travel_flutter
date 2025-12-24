@@ -14,11 +14,9 @@ class SettingsService {
     POIType.museum,
     POIType.historicSite,
     POIType.monument,
-    POIType.landmark,
     POIType.viewpoint,
     POIType.religiousSite,
     POIType.park,
-    POIType.square,
     POIType.other,
   ];
 
@@ -34,56 +32,82 @@ class SettingsService {
     POISource.wikidata: true,
   };
 
-  /// Load POI type order from persistent storage
-  Future<List<POIType>> loadPoiOrder() async {
+  /// Load POI type order with enabled state from persistent storage
+  /// Returns list of (POIType, bool) tuples where bool indicates if enabled
+  Future<List<(POIType, bool)>> loadPoiOrder() async {
     try {
       final prefs = await SharedPreferences.getInstance();
       final orderStrings = prefs.getStringList(_poiOrderKey);
 
       if (orderStrings == null || orderStrings.isEmpty) {
-        return List.from(defaultPoiOrder);
+        // Return default with all types enabled
+        return defaultPoiOrder.map((type) => (type, true)).toList();
       }
 
-      // Convert strings back to POIType enum values
-      final order = <POIType>[];
-      for (final typeString in orderStrings) {
-        try {
-          final type = POIType.values.firstWhere(
-            (t) => t.toString() == typeString,
-          );
-          order.add(type);
-        } catch (e) {
-          // Skip invalid types (e.g., if enum changes)
-          continue;
+      // Check if this is old format (just type names) or new format (type=enabled)
+      final order = <(POIType, bool)>[];
+      final bool isOldFormat = !orderStrings.first.contains('=');
+
+      if (isOldFormat) {
+        // Migrate from old format: just type names
+        for (final typeString in orderStrings) {
+          try {
+            final type = POIType.values.firstWhere(
+              (t) => t.toString() == typeString,
+            );
+            // All types enabled by default in migration
+            order.add((type, true));
+          } catch (e) {
+            // Skip invalid types (e.g., if enum changes or removed types)
+            continue;
+          }
+        }
+      } else {
+        // New format: "type=enabled"
+        for (final entry in orderStrings) {
+          final parts = entry.split('=');
+          if (parts.length == 2) {
+            try {
+              final type = POIType.values.firstWhere(
+                (t) => t.toString() == parts[0],
+              );
+              final enabled = parts[1] == 'true';
+              order.add((type, enabled));
+            } catch (e) {
+              // Skip invalid entries
+              continue;
+            }
+          }
         }
       }
 
       // Ensure all POI types are present (in case new types were added)
       for (final type in POIType.values) {
-        if (!order.contains(type)) {
-          order.add(type);
+        if (!order.any((entry) => entry.$1 == type)) {
+          order.add((type, true)); // New types enabled by default
         }
       }
 
       return order;
     } catch (e) {
-      // Return default order on error
-      return List.from(defaultPoiOrder);
+      // Return default order with all enabled on error
+      return defaultPoiOrder.map((type) => (type, true)).toList();
     }
   }
 
-  /// Save POI type order to persistent storage
-  Future<bool> savePoiOrder(List<POIType> order) async {
+  /// Save POI type order with enabled state to persistent storage
+  Future<bool> savePoiOrder(List<(POIType, bool)> order) async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      final orderStrings = order.map((type) => type.toString()).toList();
+      final orderStrings =
+          order.map((entry) => '${entry.$1.toString()}=${entry.$2}').toList();
       return await prefs.setStringList(_poiOrderKey, orderStrings);
     } catch (e) {
       return false;
     }
   }
 
-  /// Reset POI order to default
+  /// Reset POI order to default (all types enabled)
   Future<bool> resetPoiOrder() async {
     try {
       final prefs = await SharedPreferences.getInstance();

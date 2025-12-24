@@ -80,8 +80,6 @@ class _MapScreenState extends State<MapScreen> {
         return Colors.brown;
       case POIType.museum:
         return Colors.purple;
-      case POIType.landmark:
-        return Colors.red;
       case POIType.religiousSite:
         return Colors.blue;
       case POIType.park:
@@ -92,8 +90,6 @@ class _MapScreenState extends State<MapScreen> {
         return Colors.pink;
       case POIType.historicSite:
         return Colors.amber;
-      case POIType.square:
-        return Colors.teal;
       case POIType.other:
         return Colors.grey;
     }
@@ -106,8 +102,6 @@ class _MapScreenState extends State<MapScreen> {
         return Icons.account_balance;
       case POIType.museum:
         return Icons.museum;
-      case POIType.landmark:
-        return Icons.location_city;
       case POIType.religiousSite:
         return Icons.church;
       case POIType.park:
@@ -118,8 +112,6 @@ class _MapScreenState extends State<MapScreen> {
         return Icons.attractions;
       case POIType.historicSite:
         return Icons.castle;
-      case POIType.square:
-        return Icons.location_on;
       case POIType.other:
         return Icons.place;
     }

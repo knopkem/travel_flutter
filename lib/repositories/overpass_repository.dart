@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 import '../models/location.dart';
 import '../models/poi.dart';
+import '../models/poi_type.dart';
 import 'poi_repository.dart';
 
 /// OpenStreetMap Overpass API repository implementation
@@ -22,7 +23,13 @@ class OverpassRepository implements POIRepository {
   Future<List<POI>> fetchNearbyPOIs(
     Location city, {
     int radiusMeters = 10000,
+    Set<POIType>? enabledTypes,
   }) async {
+    // Return empty list if no types enabled
+    if (enabledTypes != null && enabledTypes.isEmpty) {
+      return [];
+    }
+
     // Validate coordinates
     if (city.latitude < -90 || city.latitude > 90) {
       throw ArgumentError('Invalid latitude: ${city.latitude}');
@@ -38,6 +45,7 @@ class OverpassRepository implements POIRepository {
       city.latitude,
       city.longitude,
       radiusMeters,
+      enabledTypes,
     );
 
     try {
@@ -131,18 +139,71 @@ class OverpassRepository implements POIRepository {
     _lastRequestTime = DateTime.now();
   }
 
-  /// Build Overpass QL query for POI discovery
-  String _buildOverpassQuery(double lat, double lon, int radius) {
-    // URL encode the query for form data submission
+  /// Build Overpass QL query for POI discovery based on enabled types
+  String _buildOverpassQuery(
+      double lat, double lon, int radius, Set<POIType>? enabledTypes) {
+    // If no filter provided, include all types
+    final types = enabledTypes ?? POIType.values.toSet();
+
+    final queryParts = <String>[];
+
+    // Monument: historic=monument|memorial
+    if (types.contains(POIType.monument)) {
+      queryParts.add(
+          '  node["historic"~"^(monument|memorial)\$"](around:$radius,$lat,$lon);');
+    }
+
+    // Museum: tourism=museum|gallery
+    if (types.contains(POIType.museum)) {
+      queryParts.add(
+          '  node["tourism"~"^(museum|gallery)\$"](around:$radius,$lat,$lon);');
+    }
+
+    // Viewpoint: tourism=viewpoint
+    if (types.contains(POIType.viewpoint)) {
+      queryParts
+          .add('  node["tourism"="viewpoint"](around:$radius,$lat,$lon);');
+    }
+
+    // Park: leisure=park
+    if (types.contains(POIType.park)) {
+      queryParts.add('  node["leisure"="park"](around:$radius,$lat,$lon);');
+    }
+
+    // Religious Site: amenity=place_of_worship
+    if (types.contains(POIType.religiousSite)) {
+      queryParts.add(
+          '  node["amenity"="place_of_worship"](around:$radius,$lat,$lon);');
+    }
+
+    // Historic Site: historic=castle|ruins|archaeological_site|fort
+    if (types.contains(POIType.historicSite)) {
+      queryParts.add(
+          '  node["historic"~"^(castle|ruins|archaeological_site|fort)\$"](around:$radius,$lat,$lon);');
+    }
+
+    // Tourist Attraction: tourism=attraction|artwork|zoo|aquarium|theme_park
+    if (types.contains(POIType.touristAttraction)) {
+      queryParts.add(
+          '  node["tourism"~"^(attraction|artwork|zoo|aquarium|theme_park)\$"](around:$radius,$lat,$lon);');
+    }
+
+    // Other: catch various cultural/entertainment venues
+    if (types.contains(POIType.other)) {
+      queryParts.add(
+          '  node["amenity"~"^(theatre|cinema|arts_centre)\$"](around:$radius,$lat,$lon);');
+    }
+
+    // If no query parts, return empty result
+    if (queryParts.isEmpty) {
+      return Uri.encodeComponent(
+          '[out:json][timeout:25];();out body;>;out skel qt;');
+    }
+
     final query = '''
 [out:json][timeout:25];
 (
-  node["tourism"~"^(attraction|museum|monument|artwork|viewpoint|gallery|zoo|aquarium|theme_park)\$"]
-    (around:$radius,$lat,$lon);
-  node["historic"~"^(monument|memorial|archaeological_site|castle|ruins|fort|manor|palace)\$"]
-    (around:$radius,$lat,$lon);
-  node["amenity"~"^(theatre|cinema|arts_centre|library|community_centre)\$"]
-    (around:$radius,$lat,$lon);
+${queryParts.join('\n')}
 );
 out body;
 >;

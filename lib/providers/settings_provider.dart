@@ -6,10 +6,10 @@ import '../utils/settings_service.dart';
 /// Provider for managing user settings
 ///
 /// Handles loading, saving, and updating user preferences including
-/// POI type ordering for personalized results.
+/// POI type ordering and enabled state for personalized results.
 class SettingsProvider extends ChangeNotifier {
   final SettingsService _settingsService;
-  List<POIType> _poiTypeOrder = [];
+  List<(POIType, bool)> _poiTypeOrder = [];
   int _poiSearchDistance = SettingsService.defaultPoiDistance;
   Map<POISource, bool> _poiProvidersEnabled = {};
   bool _isLoading = true;
@@ -17,8 +17,26 @@ class SettingsProvider extends ChangeNotifier {
   SettingsProvider({SettingsService? settingsService})
       : _settingsService = settingsService ?? SettingsService();
 
-  /// Current POI type order (user's preference)
-  List<POIType> get poiTypeOrder => List.unmodifiable(_poiTypeOrder);
+  /// Current POI type order with enabled state (user's preference)
+  List<(POIType, bool)> get poiTypeOrder => List.unmodifiable(_poiTypeOrder);
+
+  /// Get list of enabled POI types in priority order
+  List<POIType> get enabledPoiTypes => _poiTypeOrder
+      .where((entry) => entry.$2)
+      .map((entry) => entry.$1)
+      .toList();
+
+  /// Check if a specific POI type is enabled
+  bool isPoiTypeEnabled(POIType type) {
+    final entry = _poiTypeOrder.firstWhere(
+      (e) => e.$1 == type,
+      orElse: () => (type, true),
+    );
+    return entry.$2;
+  }
+
+  /// Check if all POI types are disabled
+  bool get allPoiTypesDisabled => _poiTypeOrder.every((entry) => !entry.$2);
 
   /// Current POI search distance in meters
   int get poiSearchDistance => _poiSearchDistance;
@@ -58,17 +76,28 @@ class SettingsProvider extends ChangeNotifier {
   }
 
   /// Update POI type order and persist to storage
-  Future<void> updatePoiOrder(List<POIType> newOrder) async {
+  Future<void> updatePoiOrder(List<(POIType, bool)> newOrder) async {
     _poiTypeOrder = List.from(newOrder);
     notifyListeners();
 
     await _settingsService.savePoiOrder(newOrder);
   }
 
-  /// Reset POI order to default
+  /// Update POI type enabled state and persist to storage
+  Future<void> updatePoiTypeEnabled(POIType type, bool enabled) async {
+    final index = _poiTypeOrder.indexWhere((entry) => entry.$1 == type);
+    if (index >= 0) {
+      _poiTypeOrder[index] = (type, enabled);
+      notifyListeners();
+      await _settingsService.savePoiOrder(_poiTypeOrder);
+    }
+  }
+
+  /// Reset POI order to default (all types enabled)
   Future<void> resetPoiOrder() async {
     await _settingsService.resetPoiOrder();
-    _poiTypeOrder = List.from(SettingsService.defaultPoiOrder);
+    _poiTypeOrder =
+        SettingsService.defaultPoiOrder.map((type) => (type, true)).toList();
     notifyListeners();
   }
 
@@ -81,9 +110,9 @@ class SettingsProvider extends ChangeNotifier {
   }
 
   /// Get priority index for a POI type (lower = higher priority)
-  /// Returns the position in the user's ordered list
+  /// Returns the position in the user's ordered list (only considering enabled types)
   int getPriorityIndex(POIType type) {
-    final index = _poiTypeOrder.indexOf(type);
+    final index = _poiTypeOrder.indexWhere((entry) => entry.$1 == type);
     return index >= 0 ? index : _poiTypeOrder.length;
   }
 

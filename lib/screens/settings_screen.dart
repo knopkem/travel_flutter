@@ -27,6 +27,7 @@ class SettingsScreen extends StatelessWidget {
           return ListView(
             children: [
               _buildProvidersSection(context, settingsProvider),
+              _buildPoiTypesSection(context, settingsProvider),
               _buildInterestsSection(context, settingsProvider),
               _buildDistanceSection(context, settingsProvider),
               // Future sections can be added here
@@ -173,6 +174,104 @@ class SettingsScreen extends StatelessWidget {
     );
   }
 
+  Widget _buildPoiTypesSection(
+    BuildContext context,
+    SettingsProvider settingsProvider,
+  ) {
+    final poiOrder = settingsProvider.poiTypeOrder;
+    final enabledCount = poiOrder.where((entry) => entry.$2).length;
+    final totalCount = poiOrder.length;
+
+    return ExpansionTile(
+      initiallyExpanded: false,
+      leading: const Icon(Icons.category),
+      title: const Text(
+        'POI Types',
+        style: TextStyle(
+          fontSize: 18,
+          fontWeight: FontWeight.bold,
+        ),
+      ),
+      subtitle: Text('$enabledCount of $totalCount types enabled'),
+      children: [
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              if (settingsProvider.allPoiTypesDisabled)
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  margin: const EdgeInsets.only(bottom: 16),
+                  decoration: BoxDecoration(
+                    color: Colors.orange[100],
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: Colors.orange[300]!),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(Icons.warning_amber, color: Colors.orange[700]),
+                      const SizedBox(width: 12),
+                      const Expanded(
+                        child: Text(
+                          'At least one POI type must be enabled for discovery to work.',
+                          style: TextStyle(fontSize: 14),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              const Text(
+                'Enable or disable specific POI types',
+                style: TextStyle(
+                  fontSize: 14,
+                  color: Colors.grey,
+                ),
+              ),
+              const SizedBox(height: 12),
+              ...poiOrder.map((entry) {
+                final type = entry.$1;
+                final enabled = entry.$2;
+                return CheckboxListTile(
+                  value: enabled,
+                  onChanged: (value) {
+                    if (value != null) {
+                      settingsProvider.updatePoiTypeEnabled(type, value);
+                    }
+                  },
+                  title: Text(type.displayName),
+                  secondary: Icon(_getTypeIcon(type)),
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 8),
+                );
+              }),
+              const SizedBox(height: 8),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  TextButton.icon(
+                    onPressed: () async {
+                      await settingsProvider.resetPoiOrder();
+                      if (context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text('All POI types enabled'),
+                            backgroundColor: Colors.green,
+                          ),
+                        );
+                      }
+                    },
+                    icon: const Icon(Icons.restart_alt),
+                    label: const Text('Enable All'),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
   Widget _buildInterestsSection(
     BuildContext context,
     SettingsProvider settingsProvider,
@@ -233,7 +332,7 @@ class SettingsScreen extends StatelessWidget {
       buildDefaultDragHandles: false, // Disable default drag handles
       itemCount: poiOrder.length,
       onReorder: (oldIndex, newIndex) {
-        final updatedOrder = List<POIType>.from(poiOrder);
+        final updatedOrder = List<(POIType, bool)>.from(poiOrder);
         if (newIndex > oldIndex) {
           newIndex -= 1;
         }
@@ -242,9 +341,9 @@ class SettingsScreen extends StatelessWidget {
         settingsProvider.updatePoiOrder(updatedOrder);
       },
       itemBuilder: (context, index) {
-        final type = poiOrder[index];
-        return _buildPoiTypeItem(context, type, index + 1, index,
-            key: ValueKey(type));
+        final entry = poiOrder[index];
+        return _buildPoiTypeItem(context, entry.$1, index + 1, index,
+            key: ValueKey(entry.$1));
       },
     );
   }
@@ -433,8 +532,6 @@ class SettingsScreen extends StatelessWidget {
         return Icons.account_balance;
       case POIType.museum:
         return Icons.museum;
-      case POIType.landmark:
-        return Icons.location_city;
       case POIType.religiousSite:
         return Icons.church;
       case POIType.park:
@@ -445,8 +542,6 @@ class SettingsScreen extends StatelessWidget {
         return Icons.attractions;
       case POIType.historicSite:
         return Icons.castle;
-      case POIType.square:
-        return Icons.location_on;
       case POIType.other:
         return Icons.place;
     }
@@ -458,8 +553,6 @@ class SettingsScreen extends StatelessWidget {
         return 'Monument';
       case POIType.museum:
         return 'Museum';
-      case POIType.landmark:
-        return 'Landmark';
       case POIType.religiousSite:
         return 'Religious Site';
       case POIType.park:
@@ -470,8 +563,6 @@ class SettingsScreen extends StatelessWidget {
         return 'Tourist Attraction';
       case POIType.historicSite:
         return 'Historic Site';
-      case POIType.square:
-        return 'Square';
       case POIType.other:
         return 'Other';
     }

@@ -292,15 +292,23 @@ class _POIListWidgetState extends State<POIListWidget> {
   }
 
   Widget _buildFilterDropdown(BuildContext context, POIProvider provider) {
-    // Count POIs by type
+    // Get enabled types from settings
+    final settingsProvider = Provider.of<SettingsProvider>(context);
+    final enabledTypes = settingsProvider.enabledPoiTypes.toSet();
+
+    // Count POIs by type, only for enabled types
     final typeCounts = <POIType, int>{};
     for (final poi in provider.allPois) {
-      typeCounts[poi.type] = (typeCounts[poi.type] ?? 0) + 1;
+      if (enabledTypes.contains(poi.type)) {
+        typeCounts[poi.type] = (typeCounts[poi.type] ?? 0) + 1;
+      }
     }
     debugPrint('POIListWidget: Type counts: $typeCounts');
 
-    final availableTypes =
-        POIType.values.where((type) => typeCounts[type] != null).toList();
+    final availableTypes = POIType.values
+        .where(
+            (type) => typeCounts[type] != null && enabledTypes.contains(type))
+        .toList();
 
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -571,8 +579,6 @@ class _POIListWidgetState extends State<POIListWidget> {
         return Icons.account_balance;
       case POIType.museum:
         return Icons.museum;
-      case POIType.landmark:
-        return Icons.location_city;
       case POIType.religiousSite:
         return Icons.church;
       case POIType.park:
@@ -583,8 +589,6 @@ class _POIListWidgetState extends State<POIListWidget> {
         return Icons.attractions;
       case POIType.historicSite:
         return Icons.castle;
-      case POIType.square:
-        return Icons.location_on;
       case POIType.other:
         return Icons.place;
     }
@@ -596,8 +600,6 @@ class _POIListWidgetState extends State<POIListWidget> {
         return 'Monument';
       case POIType.museum:
         return 'Museum';
-      case POIType.landmark:
-        return 'Landmark';
       case POIType.religiousSite:
         return 'Religious Site';
       case POIType.park:
@@ -608,8 +610,6 @@ class _POIListWidgetState extends State<POIListWidget> {
         return 'Tourist Attraction';
       case POIType.historicSite:
         return 'Historic Site';
-      case POIType.square:
-        return 'Square';
       case POIType.other:
         return 'Other';
     }

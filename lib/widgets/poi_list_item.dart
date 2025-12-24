@@ -114,8 +114,6 @@ class POIListItem extends StatelessWidget {
         return Icons.museum;
       case POIType.monument:
         return Icons.account_balance;
-      case POIType.landmark:
-        return Icons.place;
       case POIType.park:
         return Icons.park;
       case POIType.viewpoint:
@@ -124,8 +122,6 @@ class POIListItem extends StatelessWidget {
         return Icons.church;
       case POIType.historicSite:
         return Icons.history_edu;
-      case POIType.square:
-        return Icons.grid_view;
       case POIType.touristAttraction:
         return Icons.star;
       case POIType.other:
@@ -139,8 +135,6 @@ class POIListItem extends StatelessWidget {
         return Colors.purple;
       case POIType.monument:
         return Colors.amber[700]!;
-      case POIType.landmark:
-        return Colors.red;
       case POIType.park:
         return Colors.green;
       case POIType.viewpoint:
@@ -149,8 +143,6 @@ class POIListItem extends StatelessWidget {
         return Colors.indigo;
       case POIType.historicSite:
         return Colors.brown;
-      case POIType.square:
-        return Colors.teal;
       case POIType.touristAttraction:
         return Colors.orange;
       case POIType.other:

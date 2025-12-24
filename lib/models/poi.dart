@@ -135,7 +135,7 @@ class POI {
       id: _generateId(name, coord['lat']!, coord['lon']!),
       name: name,
       description: binding['description']?['value'] as String?,
-      type: POIType.landmark,
+      type: POIType.other,
       latitude: coord['lat']!,
       longitude: coord['lon']!,
       distanceFromCity: distanceFromCity,

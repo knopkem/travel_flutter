@@ -88,6 +88,17 @@ class POIProvider extends ChangeNotifier {
       return;
     }
 
+    // Check if all POI types are disabled
+    if (_settingsProvider?.allPoiTypesDisabled ?? false) {
+      _pois = [];
+      _currentCityId = cityId;
+      _error = 'Please enable at least one POI type in settings';
+      _isLoading = false;
+      _successfulSources = 0;
+      notifyListeners();
+      return;
+    }
+
     // Get enabled sources
     final enabledSources =
         _settingsProvider?.enabledPoiSources ?? POISource.values;
@@ -116,11 +127,13 @@ class POIProvider extends ChangeNotifier {
 
       final distance =
           _tempSearchDistance ?? _settingsProvider?.poiSearchDistance ?? 5000;
+      final enabledTypes = _settingsProvider?.enabledPoiTypes.toSet();
 
       List<POI> wikipediaPOIs = [];
       if (enabledSources.contains(POISource.wikipediaGeosearch)) {
         wikipediaPOIs = await _fetchWithRetry(
-          (dist) => _wikipediaRepo.fetchNearbyPOIs(city, radiusMeters: dist),
+          (dist) => _wikipediaRepo.fetchNearbyPOIs(city,
+              radiusMeters: dist, enabledTypes: enabledTypes),
           'Wikipedia Geosearch',
           distance,
         );
@@ -143,7 +156,8 @@ class POIProvider extends ChangeNotifier {
 
       if (enabledSources.contains(POISource.overpass)) {
         futures.add(_fetchWithRetry(
-          (dist) => _overpassRepo.fetchNearbyPOIs(city, radiusMeters: dist),
+          (dist) => _overpassRepo.fetchNearbyPOIs(city,
+              radiusMeters: dist, enabledTypes: enabledTypes),
           'Overpass',
           distance,
         ));
@@ -152,7 +166,8 @@ class POIProvider extends ChangeNotifier {
 
       if (enabledSources.contains(POISource.wikidata)) {
         futures.add(_fetchWithRetry(
-          (dist) => _wikidataRepo.fetchNearbyPOIs(city, radiusMeters: dist),
+          (dist) => _wikidataRepo.fetchNearbyPOIs(city,
+              radiusMeters: dist, enabledTypes: enabledTypes),
           'Wikidata',
           distance,
         ));
@@ -243,9 +258,16 @@ class POIProvider extends ChangeNotifier {
     // Deduplicate using utility from WP01
     final deduplicated = deduplicatePOIs(allPOIs);
 
+    // Filter out disabled POI types
+    final enabledTypesSet =
+        _settingsProvider?.enabledPoiTypes.toSet() ?? POIType.values.toSet();
+    final filtered = deduplicated
+        .where((poi) => enabledTypesSet.contains(poi.type))
+        .toList();
+
     // Group by POI type
     final grouped = <POIType, List<POI>>{};
-    for (final poi in deduplicated) {
+    for (final poi in filtered) {
       grouped.putIfAbsent(poi.type, () => []).add(poi);
     }
 
@@ -254,9 +276,10 @@ class POIProvider extends ChangeNotifier {
       group.sort((a, b) => b.notabilityScore.compareTo(a.notabilityScore));
     }
 
-    // Get user's preferred order (or default)
+    // Get user's preferred order (or default) - extract just the types
     final typeOrder =
-        _settingsProvider?.poiTypeOrder ?? SettingsService.defaultPoiOrder;
+        _settingsProvider?.poiTypeOrder.map((entry) => entry.$1).toList() ??
+            SettingsService.defaultPoiOrder;
 
     // Combine groups according to user's preference order
     final sorted = <POI>[];

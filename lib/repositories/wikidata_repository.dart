@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 import '../models/location.dart';
 import '../models/poi.dart';
+import '../models/poi_type.dart';
 import 'poi_repository.dart';
 
 /// Wikidata SPARQL API repository implementation
@@ -20,7 +21,13 @@ class WikidataRepository implements POIRepository {
   Future<List<POI>> fetchNearbyPOIs(
     Location city, {
     int radiusMeters = 10000,
+    Set<POIType>? enabledTypes,
   }) async {
+    // Return empty list if no types enabled
+    if (enabledTypes != null && enabledTypes.isEmpty) {
+      return [];
+    }
+
     // Validate coordinates
     if (city.latitude < -90 || city.latitude > 90) {
       throw ArgumentError('Invalid latitude: ${city.latitude}');
@@ -30,7 +37,8 @@ class WikidataRepository implements POIRepository {
     }
 
     final radiusKm = (radiusMeters / 1000).round();
-    final query = _buildSPARQLQuery(city.latitude, city.longitude, radiusKm);
+    final query = _buildSPARQLQuery(
+        city.latitude, city.longitude, radiusKm, enabledTypes);
     final uri = Uri.parse(_baseUrl).replace(queryParameters: {
       'query': query,
       'format': 'json',
@@ -112,8 +120,78 @@ class WikidataRepository implements POIRepository {
     }
   }
 
-  /// Build SPARQL query for notable places within radius
-  String _buildSPARQLQuery(double lat, double lon, int radiusKm) {
+  /// Build SPARQL query for notable places within radius based on enabled types
+  String _buildSPARQLQuery(
+      double lat, double lon, int radiusKm, Set<POIType>? enabledTypes) {
+    // If no filter provided, include all types
+    final types = enabledTypes ?? POIType.values.toSet();
+
+    // Build VALUES clause based on enabled types
+    final qCodes = <String>[];
+
+    if (types.contains(POIType.touristAttraction)) {
+      qCodes.add('wd:Q570116'); // tourist attraction
+    }
+
+    if (types.contains(POIType.museum)) {
+      qCodes.add('wd:Q33506'); // museum
+    }
+
+    if (types.contains(POIType.monument)) {
+      qCodes.add('wd:Q4989906'); // monument
+    }
+
+    if (types.contains(POIType.historicSite)) {
+      qCodes.add('wd:Q23413'); // castle
+      qCodes.add('wd:Q839954'); // archaeological site
+    }
+
+    if (types.contains(POIType.park)) {
+      qCodes.add('wd:Q22698'); // park
+    }
+
+    if (types.contains(POIType.religiousSite)) {
+      qCodes.add('wd:Q16970'); // church
+      qCodes.add('wd:Q44539'); // temple
+      qCodes.add('wd:Q34627'); // synagogue
+      qCodes.add('wd:Q32815'); // mosque
+    }
+
+    if (types.contains(POIType.viewpoint)) {
+      qCodes.add('wd:Q215380'); // viewpoint
+    }
+
+    // If 'other' is enabled, add general architectural/cultural types
+    if (types.contains(POIType.other)) {
+      qCodes.add('wd:Q811979'); // architectural structure
+      qCodes.add('wd:Q12518'); // tower
+      qCodes.add('wd:Q41176'); // building
+    }
+
+    // If no Q-codes selected, return query that matches nothing
+    if (qCodes.isEmpty) {
+      return '''
+SELECT DISTINCT ?place ?placeLabel ?coord ?wikipedia ?description ?inception ?visitorCount ?heritageStatus
+WHERE {
+  SERVICE wikibase:around {
+    ?place wdt:P625 ?coord.
+    bd:serviceParam wikibase:center "Point($lon $lat)"^^geo:wktLiteral.
+    bd:serviceParam wikibase:radius "$radiusKm".
+  }
+  FILTER(false)
+}
+LIMIT $_resultLimit
+''';
+    }
+
+    // Build VALUES clause
+    final valuesClause = qCodes.isNotEmpty
+        ? '''VALUES ?placeType {
+    ${qCodes.join('\n    ')}
+  }
+  ?place wdt:P31/wdt:P279* ?placeType.'''
+        : '';
+
     return '''
 SELECT DISTINCT ?place ?placeLabel ?coord ?wikipedia ?description ?inception ?visitorCount ?heritageStatus
 WHERE {
@@ -124,21 +202,7 @@ WHERE {
     bd:serviceParam wikibase:distance ?dist.
   }
   
-  VALUES ?placeType {
-    wd:Q570116    # tourist attraction
-    wd:Q33506     # museum
-    wd:Q4989906   # monument
-    wd:Q839954    # archaeological site
-    wd:Q23413     # castle
-    wd:Q811979    # architectural structure
-    wd:Q12518     # tower
-    wd:Q16970     # church
-    wd:Q44539     # temple
-    wd:Q34627     # synagogue
-    wd:Q32815     # mosque
-    wd:Q41176     # building
-  }
-  ?place wdt:P31/wdt:P279* ?placeType.
+  $valuesClause
   
   OPTIONAL {
     ?wikipedia schema:about ?place;
