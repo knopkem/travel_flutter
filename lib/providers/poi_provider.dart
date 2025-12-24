@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 import '../models/location.dart';
 import '../models/poi.dart';
+import '../models/poi_source.dart';
 import '../models/poi_type.dart';
 import '../repositories/repositories.dart';
 import '../utils/deduplication_utils.dart';
@@ -63,8 +64,11 @@ class POIProvider extends ChangeNotifier {
   String? get error => _error;
   bool get hasData => _pois.isNotEmpty;
   int get successfulSources => _successfulSources;
-  int get totalSources => _totalSources;
-  bool get allSourcesSucceeded => _successfulSources == _totalSources;
+  int get totalSources =>
+      _settingsProvider?.enabledPoiSources.length ?? _totalSources;
+  bool get allSourcesSucceeded => _successfulSources == totalSources;
+  bool get allProvidersDisabled =>
+      _settingsProvider?.allProvidersDisabled ?? false;
 
   /// Discover POIs for a city with progressive loading
   ///
@@ -72,6 +76,21 @@ class POIProvider extends ChangeNotifier {
   /// Phase 2: Parallel Overpass + Wikidata (~3s)
   Future<void> discoverPOIs(Location city, {bool forceRefresh = false}) async {
     final cityId = city.id;
+
+    // Check if all providers are disabled
+    if (_settingsProvider?.allProvidersDisabled ?? false) {
+      _pois = [];
+      _currentCityId = cityId;
+      _error = null;
+      _isLoading = false;
+      _successfulSources = 0;
+      notifyListeners();
+      return;
+    }
+
+    // Get enabled sources
+    final enabledSources =
+        _settingsProvider?.enabledPoiSources ?? POISource.values;
 
     // Check cache first (unless force refresh)
     if (!forceRefresh && _cache.containsKey(cityId)) {
@@ -98,12 +117,15 @@ class POIProvider extends ChangeNotifier {
       final distance =
           _tempSearchDistance ?? _settingsProvider?.poiSearchDistance ?? 5000;
 
-      final wikipediaPOIs = await _fetchWithRetry(
-        (dist) => _wikipediaRepo.fetchNearbyPOIs(city, radiusMeters: dist),
-        'Wikipedia Geosearch',
-        distance,
-      );
-      if (wikipediaPOIs.isNotEmpty) _successfulSources++;
+      List<POI> wikipediaPOIs = [];
+      if (enabledSources.contains(POISource.wikipediaGeosearch)) {
+        wikipediaPOIs = await _fetchWithRetry(
+          (dist) => _wikipediaRepo.fetchNearbyPOIs(city, radiusMeters: dist),
+          'Wikipedia Geosearch',
+          distance,
+        );
+        if (wikipediaPOIs.isNotEmpty) _successfulSources++;
+      }
 
       // Check if city changed during fetch
       if (_currentCityId != cityId) return;
@@ -116,26 +138,43 @@ class POIProvider extends ChangeNotifier {
       _isLoadingPhase2 = true;
       notifyListeners();
 
-      final results = await Future.wait([
-        _fetchWithRetry(
+      final futures = <Future<List<POI>>>[];
+      final sourceNames = <String>[];
+
+      if (enabledSources.contains(POISource.overpass)) {
+        futures.add(_fetchWithRetry(
           (dist) => _overpassRepo.fetchNearbyPOIs(city, radiusMeters: dist),
           'Overpass',
           distance,
-        ),
-        _fetchWithRetry(
+        ));
+        sourceNames.add('overpass');
+      }
+
+      if (enabledSources.contains(POISource.wikidata)) {
+        futures.add(_fetchWithRetry(
           (dist) => _wikidataRepo.fetchNearbyPOIs(city, radiusMeters: dist),
           'Wikidata',
           distance,
-        ),
-      ]);
+        ));
+        sourceNames.add('wikidata');
+      }
+
+      final results = await Future.wait(futures);
 
       // Check if city changed during fetch
       if (_currentCityId != cityId) return;
 
-      final overpassPOIs = results[0];
-      final wikidataPOIs = results[1];
-      if (overpassPOIs.isNotEmpty) _successfulSources++;
-      if (wikidataPOIs.isNotEmpty) _successfulSources++;
+      List<POI> overpassPOIs = [];
+      List<POI> wikidataPOIs = [];
+
+      for (int i = 0; i < results.length; i++) {
+        if (results[i].isNotEmpty) _successfulSources++;
+        if (sourceNames[i] == 'overpass') {
+          overpassPOIs = results[i];
+        } else if (sourceNames[i] == 'wikidata') {
+          wikidataPOIs = results[i];
+        }
+      }
 
       // Merge all sources with deduplication
       _pois = _sortAndDeduplicate([wikipediaPOIs, overpassPOIs, wikidataPOIs]);

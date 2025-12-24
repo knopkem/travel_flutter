@@ -92,6 +92,11 @@ class _POIListWidgetState extends State<POIListWidget> {
   Widget build(BuildContext context) {
     return Consumer<POIProvider>(
       builder: (context, provider, child) {
+        // All providers disabled state
+        if (provider.allProvidersDisabled) {
+          return _buildAllProvidersDisabledState(context);
+        }
+
         // Error state
         if (provider.error != null && !provider.hasData) {
           return _buildErrorState(context, provider);
@@ -226,7 +231,8 @@ class _POIListWidgetState extends State<POIListWidget> {
               children: [
                 if (!provider.isLoading)
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                     decoration: BoxDecoration(
                       color: provider.allSourcesSucceeded
                           ? Colors.green[50]
@@ -271,7 +277,8 @@ class _POIListWidgetState extends State<POIListWidget> {
                   onPressed: provider.isLoading
                       ? null
                       : () {
-                          provider.discoverPOIs(widget.city, forceRefresh: true);
+                          provider.discoverPOIs(widget.city,
+                              forceRefresh: true);
                         },
                   tooltip: 'Refresh POIs',
                   visualDensity: VisualDensity.compact,
@@ -774,6 +781,51 @@ class _POIListWidgetState extends State<POIListWidget> {
     );
   }
 
+  Widget _buildAllProvidersDisabledState(BuildContext context) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(32.0),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              Icons.cloud_off,
+              size: 64,
+              color: Colors.grey[400],
+            ),
+            const SizedBox(height: 16),
+            Text(
+              'POI Discovery Disabled',
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+                color: Colors.grey[700],
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'All POI data sources are disabled. Enable at least one source in Settings to discover points of interest.',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                color: Colors.grey[600],
+                fontSize: 14,
+              ),
+            ),
+            const SizedBox(height: 24),
+            ElevatedButton.icon(
+              onPressed: () {
+                // Navigate to settings
+                Navigator.pushNamed(context, '/settings');
+              },
+              icon: const Icon(Icons.settings),
+              label: const Text('Go to Settings'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _buildEmptyState() {
     return Center(
       child: Padding(
@@ -831,7 +883,8 @@ class _POIListWidgetState extends State<POIListWidget> {
         await launchUrl(uri, mode: LaunchMode.externalApplication);
       } else {
         // Fallback to Google Maps web URL if geo: scheme is not supported
-        final fallbackUrl = 'https://www.google.com/maps/dir/?api=1&destination=$lat,$lng&travelmode=walking';
+        final fallbackUrl =
+            'https://www.google.com/maps/dir/?api=1&destination=$lat,$lng&travelmode=walking';
         final fallbackUri = Uri.parse(fallbackUrl);
         await launchUrl(fallbackUri, mode: LaunchMode.externalApplication);
       }

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../models/poi_type.dart';
+import '../models/poi_source.dart';
 import '../utils/settings_service.dart';
 
 /// Provider for managing user settings
@@ -10,6 +11,7 @@ class SettingsProvider extends ChangeNotifier {
   final SettingsService _settingsService;
   List<POIType> _poiTypeOrder = [];
   int _poiSearchDistance = SettingsService.defaultPoiDistance;
+  Map<POISource, bool> _poiProvidersEnabled = {};
   bool _isLoading = true;
 
   SettingsProvider({SettingsService? settingsService})
@@ -21,12 +23,31 @@ class SettingsProvider extends ChangeNotifier {
   /// Current POI search distance in meters
   int get poiSearchDistance => _poiSearchDistance;
 
+  /// Current POI providers enabled state
+  Map<POISource, bool> get poiProvidersEnabled =>
+      Map.unmodifiable(_poiProvidersEnabled);
+
+  /// Get list of enabled POI sources
+  List<POISource> get enabledPoiSources => _poiProvidersEnabled.entries
+      .where((e) => e.value)
+      .map((e) => e.key)
+      .toList();
+
+  /// Check if a specific POI source is enabled
+  bool isProviderEnabled(POISource source) =>
+      _poiProvidersEnabled[source] ?? true;
+
+  /// Check if all providers are disabled
+  bool get allProvidersDisabled =>
+      _poiProvidersEnabled.values.every((enabled) => !enabled);
+
   /// Whether settings are currently being loaded
   bool get isLoading => _isLoading;
 
   /// Initialize and load settings from storage
   Future<void> initialize() async {
     _poiSearchDistance = await _settingsService.loadPoiDistance();
+    _poiProvidersEnabled = await _settingsService.loadPoiProvidersEnabled();
     _isLoading = true;
     notifyListeners();
 
@@ -64,5 +85,28 @@ class SettingsProvider extends ChangeNotifier {
   int getPriorityIndex(POIType type) {
     final index = _poiTypeOrder.indexOf(type);
     return index >= 0 ? index : _poiTypeOrder.length;
+  }
+
+  /// Update POI provider enabled state and persist to storage
+  Future<void> updateProviderEnabled(POISource source, bool enabled) async {
+    _poiProvidersEnabled[source] = enabled;
+    notifyListeners();
+
+    await _settingsService.savePoiProvidersEnabled(_poiProvidersEnabled);
+  }
+
+  /// Update multiple POI providers at once
+  Future<void> updateProvidersEnabled(Map<POISource, bool> enabled) async {
+    _poiProvidersEnabled = Map.from(enabled);
+    notifyListeners();
+
+    await _settingsService.savePoiProvidersEnabled(_poiProvidersEnabled);
+  }
+
+  /// Reset POI providers to default (all enabled)
+  Future<void> resetPoiProviders() async {
+    await _settingsService.resetPoiProvidersEnabled();
+    _poiProvidersEnabled = Map.from(SettingsService.defaultPoiProvidersEnabled);
+    notifyListeners();
   }
 }

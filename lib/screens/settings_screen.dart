@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../models/poi_type.dart';
+import '../models/poi_source.dart';
 import '../providers/settings_provider.dart';
 
 /// Settings screen for customizing app preferences
@@ -25,6 +26,7 @@ class SettingsScreen extends StatelessWidget {
 
           return ListView(
             children: [
+              _buildProvidersSection(context, settingsProvider),
               _buildInterestsSection(context, settingsProvider),
               _buildDistanceSection(context, settingsProvider),
               // Future sections can be added here
@@ -34,6 +36,140 @@ class SettingsScreen extends StatelessWidget {
           );
         },
       ),
+    );
+  }
+
+  Widget _buildProvidersSection(
+    BuildContext context,
+    SettingsProvider settingsProvider,
+  ) {
+    final enabledCount = settingsProvider.enabledPoiSources.length;
+    final totalCount = POISource.values.length;
+
+    return ExpansionTile(
+      initiallyExpanded: true,
+      leading: const Icon(Icons.cloud_sync),
+      title: const Text(
+        'POI Data Sources',
+        style: TextStyle(
+          fontSize: 18,
+          fontWeight: FontWeight.bold,
+        ),
+      ),
+      subtitle: Text('$enabledCount of $totalCount sources enabled'),
+      children: [
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              if (settingsProvider.allProvidersDisabled)
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  margin: const EdgeInsets.only(bottom: 16),
+                  decoration: BoxDecoration(
+                    color: Colors.orange[100],
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: Colors.orange[300]!),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(Icons.warning, color: Colors.orange[900], size: 20),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Text(
+                          'All data sources are disabled. POI discovery is inactive.',
+                          style: TextStyle(
+                            color: Colors.orange[900],
+                            fontSize: 13,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              Text(
+                'Enable or disable POI data sources',
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      color: Colors.grey[600],
+                    ),
+              ),
+              const SizedBox(height: 12),
+              ...POISource.values.map((source) {
+                final isEnabled = settingsProvider.isProviderEnabled(source);
+                return Card(
+                  elevation: 1,
+                  margin: const EdgeInsets.symmetric(vertical: 4),
+                  child: SwitchListTile(
+                    value: isEnabled,
+                    onChanged: (value) async {
+                      // Check if this is the last enabled provider being turned off
+                      if (!value && enabledCount == 1 && isEnabled) {
+                        final confirmed =
+                            await _showDisableAllProvidersDialog(context);
+                        if (confirmed == true) {
+                          await settingsProvider.updateProviderEnabled(
+                              source, value);
+                        }
+                      } else {
+                        await settingsProvider.updateProviderEnabled(
+                            source, value);
+                      }
+                    },
+                    title: Row(
+                      children: [
+                        Icon(
+                          _getProviderIcon(source),
+                          size: 20,
+                          color: isEnabled
+                              ? Theme.of(context).colorScheme.primary
+                              : Colors.grey,
+                        ),
+                        const SizedBox(width: 12),
+                        Text(
+                          source.displayName,
+                          style: TextStyle(
+                            fontWeight: FontWeight.w500,
+                            color: isEnabled ? null : Colors.grey,
+                          ),
+                        ),
+                      ],
+                    ),
+                    subtitle: Text(
+                      _getProviderDescription(source),
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: Colors.grey[600],
+                      ),
+                    ),
+                  ),
+                );
+              }).toList(),
+              const SizedBox(height: 8),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  TextButton.icon(
+                    icon: const Icon(Icons.refresh, size: 18),
+                    label: const Text('Reset All'),
+                    onPressed: () async {
+                      await settingsProvider.resetPoiProviders();
+                      if (context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text('All POI sources enabled'),
+                            backgroundColor: Colors.green,
+                          ),
+                        );
+                      }
+                    },
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ],
     );
   }
 
@@ -71,7 +207,8 @@ class SettingsScreen extends StatelessWidget {
                   TextButton.icon(
                     icon: const Icon(Icons.refresh, size: 18),
                     label: const Text('Reset'),
-                    onPressed: () => _showResetDialog(context, settingsProvider),
+                    onPressed: () =>
+                        _showResetDialog(context, settingsProvider),
                   ),
                 ],
               ),
@@ -106,7 +243,8 @@ class SettingsScreen extends StatelessWidget {
       },
       itemBuilder: (context, index) {
         final type = poiOrder[index];
-        return _buildPoiTypeItem(context, type, index + 1, index, key: ValueKey(type));
+        return _buildPoiTypeItem(context, type, index + 1, index,
+            key: ValueKey(type));
       },
     );
   }
@@ -159,12 +297,13 @@ class SettingsScreen extends StatelessWidget {
       ),
     );
   }
-Widget _buildDistanceSection(
+
+  Widget _buildDistanceSection(
     BuildContext context,
     SettingsProvider settingsProvider,
   ) {
     final distanceKm = (settingsProvider.poiSearchDistance / 1000).round();
-    
+
     return ExpansionTile(
       initiallyExpanded: true,
       leading: const Icon(Icons.near_me),
@@ -229,7 +368,31 @@ Widget _buildDistanceSection(
     );
   }
 
-  
+  Future<bool?> _showDisableAllProvidersDialog(BuildContext context) async {
+    return showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Disable POI Discovery?'),
+        content: const Text(
+          'You are about to disable all POI data sources. This will prevent the app from discovering points of interest near locations.\n\nYou can re-enable sources at any time in settings.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: FilledButton.styleFrom(
+              backgroundColor: Colors.orange,
+            ),
+            child: const Text('Disable All'),
+          ),
+        ],
+      ),
+    );
+  }
+
   void _showResetDialog(
     BuildContext context,
     SettingsProvider settingsProvider,
@@ -311,6 +474,28 @@ Widget _buildDistanceSection(
         return 'Square';
       case POIType.other:
         return 'Other';
+    }
+  }
+
+  IconData _getProviderIcon(POISource source) {
+    switch (source) {
+      case POISource.wikipediaGeosearch:
+        return Icons.article;
+      case POISource.overpass:
+        return Icons.map;
+      case POISource.wikidata:
+        return Icons.storage;
+    }
+  }
+
+  String _getProviderDescription(POISource source) {
+    switch (source) {
+      case POISource.wikipediaGeosearch:
+        return 'Articles about notable places';
+      case POISource.overpass:
+        return 'Tourist attractions from OpenStreetMap';
+      case POISource.wikidata:
+        return 'Structured knowledge base';
     }
   }
 }
