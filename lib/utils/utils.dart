@@ -1,4 +1,4 @@
-/// Utility functions for the Travel Flutter app.
+/// Utility functions for the TravelPal app.
 ///
 /// This barrel file exports all utility functions for convenient importing.
 /// Instead of importing individual utility files, use:

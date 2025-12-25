@@ -31,9 +31,7 @@ class SettingsScreen extends StatelessWidget {
               _buildPoiTypesSection(context, settingsProvider),
               _buildInterestsSection(context, settingsProvider),
               _buildDistanceSection(context, settingsProvider),
-              // Future sections can be added here
-              // _buildAppearanceSection(context, settingsProvider),
-              // _buildPrivacySection(context, settingsProvider),
+              _buildAboutSection(context),
             ],
           );
         },
@@ -613,6 +611,117 @@ class SettingsScreen extends StatelessWidget {
       case POISource.wikidata:
         return 'Structured knowledge base';
     }
+  }
+
+  Widget _buildAboutSection(BuildContext context) {
+    return ExpansionTile(
+      leading: const Icon(Icons.info_outline),
+      title: const Text(
+        'About',
+        style: TextStyle(
+          fontSize: 18,
+          fontWeight: FontWeight.bold,
+        ),
+      ),
+      subtitle: const Text('App info, licenses & attributions'),
+      children: [
+        ListTile(
+          leading: const Icon(Icons.travel_explore),
+          title: const Text('TravelPal'),
+          subtitle: const Text('Version 1.0.0'),
+        ),
+        const Divider(),
+        ListTile(
+          leading: const Icon(Icons.description),
+          title: const Text('Open Source Licenses'),
+          subtitle: const Text('View third-party software licenses'),
+          trailing: const Icon(Icons.chevron_right),
+          onTap: () {
+            showLicensePage(
+              context: context,
+              applicationName: 'TravelPal',
+              applicationVersion: '1.0.0',
+              applicationLegalese: '© 2025 TravelPal',
+            );
+          },
+        ),
+        const Divider(),
+        Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Data Attributions',
+                style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                      fontWeight: FontWeight.bold,
+                    ),
+              ),
+              const SizedBox(height: 12),
+              _buildAttributionItem(
+                context,
+                'Wikipedia',
+                'Content licensed under CC BY-SA 3.0',
+                'https://wikipedia.org',
+              ),
+              const SizedBox(height: 8),
+              _buildAttributionItem(
+                context,
+                'OpenStreetMap',
+                'Map data © OpenStreetMap contributors, ODbL',
+                'https://openstreetmap.org',
+              ),
+              const SizedBox(height: 8),
+              _buildAttributionItem(
+                context,
+                'Wikidata',
+                'Data available under CC0 1.0',
+                'https://wikidata.org',
+              ),
+              const SizedBox(height: 8),
+              _buildAttributionItem(
+                context,
+                'Nominatim',
+                'Geocoding service by OpenStreetMap',
+                'https://nominatim.org',
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildAttributionItem(
+    BuildContext context,
+    String name,
+    String description,
+    String url,
+  ) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text('•  ', style: TextStyle(fontWeight: FontWeight.bold)),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                name,
+                style: const TextStyle(fontWeight: FontWeight.w500),
+              ),
+              Text(
+                description,
+                style: TextStyle(
+                  fontSize: 12,
+                  color: Colors.grey[600],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
   }
 }
 
