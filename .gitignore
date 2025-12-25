@@ -96,3 +96,7 @@ coverage/
 # Exceptions (keep spec-kitty files)
 !.github/
 !.kittify/
+
+# Keys
+*.jks
+key.properties
