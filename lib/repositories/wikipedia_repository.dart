@@ -77,6 +77,22 @@ abstract class WikipediaRepository {
   /// ```
   Future<WikipediaContent> fetchFullArticle(String title);
 
+  /// Sets the language code for Wikipedia API requests.
+  ///
+  /// The [languageCode] should be a valid ISO 639-1 language code
+  /// (e.g., 'en' for English, 'de' for German, 'fr' for French).
+  ///
+  /// This affects which language version of Wikipedia is queried.
+  /// For example, setting 'de' will query de.wikipedia.org instead of
+  /// en.wikipedia.org.
+  ///
+  /// Example:
+  /// ```dart
+  /// repository.setLanguageCode('de'); // Use German Wikipedia
+  /// final content = await repository.fetchSummary('Berlin');
+  /// ```
+  void setLanguageCode(String languageCode);
+
   /// Releases resources used by this repository.
   ///
   /// Call this method when the repository is no longer needed to close

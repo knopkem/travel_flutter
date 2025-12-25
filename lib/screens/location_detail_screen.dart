@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../models/models.dart';
 import '../providers/providers.dart';
+import '../utils/country_language_map.dart';
 import '../widgets/wikipedia_content_widget.dart';
 import '../widgets/poi_list_widget.dart';
 import 'wikipedia_article_screen.dart';
@@ -64,6 +65,18 @@ class _LocationDetailScreenState extends State<LocationDetailScreen> {
       context,
       listen: false,
     );
+    final settingsProvider = Provider.of<SettingsProvider>(
+      context,
+      listen: false,
+    );
+    
+    // Set language code based on "Use Local Content" setting
+    final useLocalContent = settingsProvider.useLocalContent;
+    final country = widget.location.country;
+    final languageCode = useLocalContent
+        ? CountryLanguageMap.getLanguageCode(country)
+        : 'en';
+    wikipediaProvider.setLanguageCode(languageCode);
 
     // Fetch Wikipedia content (errors handled in provider)
     try {

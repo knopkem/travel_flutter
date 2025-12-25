@@ -38,8 +38,11 @@ class WikipediaProvider extends ChangeNotifier {
   /// Repository for Wikipedia API calls
   final WikipediaRepository _repository;
 
-  /// Cache of loaded content indexed by article title
+  /// Cache of loaded content indexed by "lang:title" key
   final Map<String, WikipediaContent> _content = {};
+
+  /// Current language code for Wikipedia API requests
+  String _languageCode = 'en';
 
   /// Loading state for async operations
   bool _isLoading = false;
@@ -55,7 +58,7 @@ class WikipediaProvider extends ChangeNotifier {
 
   // Getters
 
-  /// Map of all cached Wikipedia content indexed by article title.
+  /// Map of all cached Wikipedia content indexed by "lang:title" key.
   ///
   /// Use [getContent] for safer access to individual articles.
   Map<String, WikipediaContent> get content => _content;
@@ -65,6 +68,12 @@ class WikipediaProvider extends ChangeNotifier {
 
   /// Error message from the last failed operation, or null if no error.
   String? get errorMessage => _errorMessage;
+
+  /// Current language code being used for API requests.
+  String get languageCode => _languageCode;
+
+  /// Generate cache key from language and title
+  String _cacheKey(String title) => '$_languageCode:$title';
 
   // Methods
 
@@ -86,8 +95,9 @@ class WikipediaProvider extends ChangeNotifier {
   /// // content contains summary preview for Paris
   /// ```
   Future<void> fetchContent(String title) async {
+    final key = _cacheKey(title);
     // Return immediately if already cached (summary or full)
-    if (_content.containsKey(title)) {
+    if (_content.containsKey(key)) {
       return;
     }
 
@@ -97,10 +107,11 @@ class WikipediaProvider extends ChangeNotifier {
 
     try {
       final wikiContent = await _repository.fetchSummary(title);
-      _content[title] = wikiContent;
+      _content[key] = wikiContent;
       _errorMessage = null;
     } catch (e) {
-      debugPrint('WikipediaProvider: Failed to fetch content for "$title": $e');
+      debugPrint(
+          'WikipediaProvider: Failed to fetch content for "$title" ($_languageCode): $e');
       _errorMessage = 'Unable to load content. Please check your connection.';
     } finally {
       _isLoading = false;
@@ -129,8 +140,9 @@ class WikipediaProvider extends ChangeNotifier {
   /// print('Article has ${content?.sections?.length ?? 0} sections');
   /// ```
   Future<void> fetchFullArticle(String title) async {
+    final key = _cacheKey(title);
     // Return immediately if full article already cached
-    final existing = _content[title];
+    final existing = _content[key];
     if (existing?.isFullArticle ?? false) {
       return;
     }
@@ -141,11 +153,11 @@ class WikipediaProvider extends ChangeNotifier {
 
     try {
       final fullArticle = await _repository.fetchFullArticle(title);
-      _content[title] = fullArticle;
+      _content[key] = fullArticle;
       _errorMessage = null;
     } catch (e) {
       debugPrint(
-        'WikipediaProvider: Failed to fetch full article for "$title": $e',
+        'WikipediaProvider: Failed to fetch full article for "$title" ($_languageCode): $e',
       );
       _errorMessage = 'Unable to load full article. Please try again later.';
     } finally {
@@ -167,7 +179,26 @@ class WikipediaProvider extends ChangeNotifier {
   /// }
   /// ```
   WikipediaContent? getContent(String title) {
-    return _content[title];
+    return _content[_cacheKey(title)];
+  }
+
+  /// Sets the language code for Wikipedia API requests.
+  ///
+  /// The [languageCode] should be a valid ISO 639-1 language code
+  /// (e.g., 'en' for English, 'de' for German, 'fr' for French).
+  ///
+  /// This affects which language version of Wikipedia is queried.
+  /// Should be called before fetching content when using local language
+  /// content is enabled.
+  ///
+  /// Example:
+  /// ```dart
+  /// provider.setLanguageCode('de');
+  /// await provider.fetchContent('Dresden');
+  /// ```
+  void setLanguageCode(String languageCode) {
+    _languageCode = languageCode;
+    _repository.setLanguageCode(languageCode);
   }
 
   /// Clears all cached Wikipedia content.

@@ -39,7 +39,7 @@ import 'wikipedia_repository.dart';
 /// messages for common failures (404, network issues, timeouts).
 class RestWikipediaRepository implements WikipediaRepository {
   final http.Client _client;
-  final String _baseUrl = 'https://en.wikipedia.org/api/rest_v1';
+  String _languageCode = 'en';
 
   /// Creates a new Wikipedia REST API repository.
   ///
@@ -47,6 +47,14 @@ class RestWikipediaRepository implements WikipediaRepository {
   /// If not provided, a default HTTP client will be created.
   RestWikipediaRepository({http.Client? client})
       : _client = client ?? http.Client();
+
+  /// Get the base URL with current language code
+  String get _baseUrl => 'https://$_languageCode.wikipedia.org/api/rest_v1';
+
+  /// Set the language code for API requests (e.g., 'de' for German)
+  void setLanguageCode(String languageCode) {
+    _languageCode = languageCode;
+  }
 
   @override
   Future<WikipediaContent> fetchSummary(String title) async {

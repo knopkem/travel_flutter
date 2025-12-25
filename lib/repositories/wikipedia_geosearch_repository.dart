@@ -12,12 +12,20 @@ import 'poi_repository.dart';
 /// articles with geographic coordinates within a specified radius.
 class WikipediaGeosearchRepository implements POIRepository {
   final http.Client _client;
-  static const String _baseUrl = 'https://en.wikipedia.org/w/api.php';
+  String _languageCode = 'en';
   static const int _resultLimit = 50;
   static const Duration _timeout = Duration(seconds: 15);
 
+  /// Get the base URL with current language code
+  String get _baseUrl => 'https://$_languageCode.wikipedia.org/w/api.php';
+
   WikipediaGeosearchRepository({http.Client? client})
       : _client = client ?? http.Client();
+
+  /// Set the language code for API requests (e.g., 'de' for German)
+  void setLanguageCode(String languageCode) {
+    _languageCode = languageCode;
+  }
 
   @override
   Future<List<POI>> fetchNearbyPOIs(

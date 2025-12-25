@@ -15,8 +15,10 @@ class SettingsService {
   static const String _aiRequestDateKey = 'ai_request_date';
   static const String _openaiModelKey = 'openai_model';
   static const String _aiBatchSizeKey = 'ai_batch_size';
+  static const String _useLocalContentKey = 'use_local_content';
   static const String defaultOpenAIModel = 'gpt-4o-mini';
   static const int defaultAIBatchSize = 500;
+  static const bool defaultUseLocalContent = false;
 
   final FlutterSecureStorage _secureStorage = const FlutterSecureStorage();
 
@@ -326,6 +328,26 @@ class SettingsService {
       return prefs.getInt(_aiBatchSizeKey) ?? defaultAIBatchSize;
     } catch (e) {
       return defaultAIBatchSize;
+    }
+  }
+
+  /// Save use local content setting
+  Future<bool> saveUseLocalContent(bool useLocal) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      return await prefs.setBool(_useLocalContentKey, useLocal);
+    } catch (e) {
+      return false;
+    }
+  }
+
+  /// Load use local content setting
+  Future<bool> loadUseLocalContent() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      return prefs.getBool(_useLocalContentKey) ?? defaultUseLocalContent;
+    } catch (e) {
+      return defaultUseLocalContent;
     }
   }
 }

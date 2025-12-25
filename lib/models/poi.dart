@@ -14,6 +14,8 @@ class POI {
   final List<POISource> sources;
   final String? description;
   final String? wikipediaTitle;
+  final String?
+      wikipediaLang; // Language code from Wikipedia tag (e.g., 'de', 'fr')
   final String? wikidataId;
   final String? imageUrl;
   final String? website;
@@ -31,6 +33,7 @@ class POI {
     required this.sources,
     this.description,
     this.wikipediaTitle,
+    this.wikipediaLang,
     this.wikidataId,
     this.imageUrl,
     this.website,
@@ -96,6 +99,9 @@ class POI {
       lon,
     );
 
+    final wikipediaTag = tags['wikipedia'] as String?;
+    final wikipediaInfo = _extractWikipediaInfo(wikipediaTag);
+
     return POI(
       id: _generateId(name, lat, lon),
       name: name,
@@ -105,7 +111,8 @@ class POI {
       longitude: lon,
       distanceFromCity: distanceFromCity,
       sources: [POISource.overpass],
-      wikipediaTitle: _extractWikipediaTitle(tags['wikipedia'] as String?),
+      wikipediaTitle: wikipediaInfo?.title,
+      wikipediaLang: wikipediaInfo?.lang,
       wikidataId: tags['wikidata'] as String?,
       website: tags['website'] as String?,
       openingHours: tags['opening_hours'] as String?,
@@ -131,6 +138,9 @@ class POI {
       coord['lon']!,
     );
 
+    final wikipediaUrl = binding['wikipedia']?['value'] as String?;
+    final wikipediaInfo = _extractWikipediaInfoFromUrl(wikipediaUrl);
+
     return POI(
       id: _generateId(name, coord['lat']!, coord['lon']!),
       name: name,
@@ -140,9 +150,8 @@ class POI {
       longitude: coord['lon']!,
       distanceFromCity: distanceFromCity,
       sources: [POISource.wikidata],
-      wikipediaTitle: _extractWikipediaTitleFromUrl(
-        binding['wikipedia']?['value'] as String?,
-      ),
+      wikipediaTitle: wikipediaInfo?.title,
+      wikipediaLang: wikipediaInfo?.lang,
       wikidataId: wikidataId,
       notabilityScore: _calculateNotabilityFromWikidata(binding),
       discoveredAt: DateTime.now(),
@@ -182,6 +191,7 @@ class POI {
       sources: allSources,
       description: _pickBest(duplicates.map((p) => p.description)),
       wikipediaTitle: _pickBest(duplicates.map((p) => p.wikipediaTitle)),
+      wikipediaLang: _pickBest(duplicates.map((p) => p.wikipediaLang)),
       wikidataId: _pickBest(duplicates.map((p) => p.wikidataId)),
       imageUrl: _pickBest(duplicates.map((p) => p.imageUrl)),
       website: _pickBest(duplicates.map((p) => p.website)),
@@ -268,18 +278,30 @@ class POI {
     return score.clamp(0, 100);
   }
 
-  /// Extract Wikipedia title from wikipedia tag (format: "en:Title")
-  static String? _extractWikipediaTitle(String? wikipedia) {
+  /// Extract Wikipedia info from wikipedia tag (format: "lang:Title")
+  /// Returns a record with lang and title, or null if parsing fails
+  static ({String lang, String title})? _extractWikipediaInfo(
+      String? wikipedia) {
     if (wikipedia == null) return null;
     final parts = wikipedia.split(':');
-    return parts.length > 1 ? parts[1] : null;
+    if (parts.length < 2) return null;
+    final lang = parts[0].toLowerCase();
+    final title = parts.sublist(1).join(':'); // Handle titles with colons
+    return (lang: lang, title: title);
   }
 
-  /// Extract Wikipedia title from full URL
-  static String? _extractWikipediaTitleFromUrl(String? url) {
+  /// Extract Wikipedia info from full URL (e.g., https://de.wikipedia.org/wiki/Title)
+  /// Returns a record with lang and title, or null if parsing fails
+  static ({String lang, String title})? _extractWikipediaInfoFromUrl(
+      String? url) {
     if (url == null) return null;
+    // URL format: https://XX.wikipedia.org/wiki/Title
+    final langMatch =
+        RegExp(r'https?://([a-z]{2,})\.wikipedia\.org/').firstMatch(url);
+    if (langMatch == null) return null;
+    final lang = langMatch.group(1)!;
     final title = url.split('/').last;
-    return Uri.decodeComponent(title.replaceAll('_', ' '));
+    return (lang: lang, title: Uri.decodeComponent(title.replaceAll('_', ' ')));
   }
 
   /// Extract Wikidata ID from entity URI

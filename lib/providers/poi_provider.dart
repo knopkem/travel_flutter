@@ -4,6 +4,7 @@ import '../models/poi.dart';
 import '../models/poi_source.dart';
 import '../models/poi_type.dart';
 import '../repositories/repositories.dart';
+import '../utils/country_language_map.dart';
 import '../utils/deduplication_utils.dart';
 import '../utils/settings_service.dart';
 import 'settings_provider.dart';
@@ -121,6 +122,16 @@ class POIProvider extends ChangeNotifier {
     notifyListeners();
 
     try {
+      // Determine language code for API calls
+      final useLocalContent = _settingsProvider?.useLocalContent ?? false;
+      final languageCode = useLocalContent
+          ? CountryLanguageMap.getLanguageCode(city.country)
+          : 'en';
+
+      // Configure all repositories with the determined language
+      _wikipediaRepo.setLanguageCode(languageCode);
+      _wikidataRepo.setLanguageCode(languageCode);
+
       // Phase 1: Wikipedia Geosearch (fast)
       _isLoadingPhase1 = true;
       notifyListeners();

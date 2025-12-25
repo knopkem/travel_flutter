@@ -14,8 +14,14 @@ class WikidataRepository implements POIRepository {
   static const String _baseUrl = 'https://query.wikidata.org/sparql';
   static const int _resultLimit = 100;
   static const Duration _timeout = Duration(seconds: 30);
+  String _languageCode = 'en';
 
   WikidataRepository({http.Client? client}) : _client = client ?? http.Client();
+
+  /// Set the language code for API requests (e.g., 'de' for German)
+  void setLanguageCode(String languageCode) {
+    _languageCode = languageCode;
+  }
 
   @override
   Future<List<POI>> fetchNearbyPOIs(
@@ -206,13 +212,13 @@ WHERE {
   
   OPTIONAL {
     ?wikipedia schema:about ?place;
-               schema:isPartOf <https://en.wikipedia.org/>;
+               schema:isPartOf <https://$_languageCode.wikipedia.org/>;
                schema:name ?wikipediaTitle.
   }
   
   OPTIONAL {
     ?place schema:description ?description.
-    FILTER(LANG(?description) = "en")
+    FILTER(LANG(?description) = "$_languageCode")
   }
   
   OPTIONAL { ?place wdt:P571 ?inception. }
@@ -222,10 +228,10 @@ WHERE {
   OPTIONAL {
     ?place wdt:P1435 ?heritage.
     ?heritage rdfs:label ?heritageStatus.
-    FILTER(LANG(?heritageStatus) = "en")
+    FILTER(LANG(?heritageStatus) = "$_languageCode")
   }
   
-  SERVICE wikibase:label { bd:serviceParam wikibase:language "en". }
+  SERVICE wikibase:label { bd:serviceParam wikibase:language "$_languageCode". }
 }
 LIMIT $_resultLimit
 ''';

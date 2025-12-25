@@ -148,6 +148,23 @@ class SettingsScreen extends StatelessWidget {
                 );
               }).toList(),
               const SizedBox(height: 8),
+              Divider(color: Colors.grey[300]),
+              const SizedBox(height: 8),
+              SwitchListTile(
+                title: const Text('Use Local Content'),
+                subtitle: Text(
+                  'Fetch content in the location\'s language (e.g., German for German cities)',
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: Colors.grey[600],
+                  ),
+                ),
+                value: settingsProvider.useLocalContent,
+                onChanged: (value) {
+                  settingsProvider.updateUseLocalContent(value);
+                },
+              ),
+              const SizedBox(height: 8),
               Row(
                 mainAxisAlignment: MainAxisAlignment.end,
                 children: [

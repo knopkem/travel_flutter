@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../models/poi.dart';
 import '../providers/providers.dart';
+import '../utils/country_language_map.dart';
 import 'settings_screen.dart';
 
 /// POI detail screen showing comprehensive information
@@ -32,10 +33,40 @@ class _POIDetailScreenState extends State<POIDetailScreen> {
     // Fetch additional details if available
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (widget.poi.wikipediaTitle != null) {
-        Provider.of<WikipediaProvider>(
+        // Determine language code based on settings
+        final settingsProvider = Provider.of<SettingsProvider>(
           context,
           listen: false,
-        ).fetchContent(widget.poi.wikipediaTitle!);
+        );
+        final locationProvider = Provider.of<LocationProvider>(
+          context,
+          listen: false,
+        );
+        final wikipediaProvider = Provider.of<WikipediaProvider>(
+          context,
+          listen: false,
+        );
+
+        // Determine language code based on "Use Local Content" setting:
+        // - If OFF: Always use English (even if article doesn't exist)
+        // - If ON: Use POI's explicit language, or fall back to country's language
+        final useLocalContent = settingsProvider.useLocalContent;
+        String languageCode;
+        if (useLocalContent) {
+          // Use POI's explicit language if available, else country's language
+          if (widget.poi.wikipediaLang != null) {
+            languageCode = widget.poi.wikipediaLang!;
+          } else {
+            final country = locationProvider.selectedCity?.country;
+            languageCode = CountryLanguageMap.getLanguageCode(country);
+          }
+        } else {
+          // Always use English when "Use Local Content" is disabled
+          languageCode = 'en';
+        }
+        wikipediaProvider.setLanguageCode(languageCode);
+
+        wikipediaProvider.fetchContent(widget.poi.wikipediaTitle!);
       }
     });
   }

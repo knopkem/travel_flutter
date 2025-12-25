@@ -18,6 +18,7 @@ class SettingsProvider extends ChangeNotifier {
   bool _isLoading = true;
   String _openaiModel = SettingsService.defaultOpenAIModel;
   int _aiBatchSize = SettingsService.defaultAIBatchSize;
+  bool _useLocalContent = SettingsService.defaultUseLocalContent;
 
   SettingsProvider({
     SettingsService? settingsService,
@@ -80,6 +81,9 @@ class SettingsProvider extends ChangeNotifier {
   /// Get the AI batch size
   int get aiBatchSize => _aiBatchSize;
 
+  /// Whether to use local content based on location country
+  bool get useLocalContent => _useLocalContent;
+
   /// Whether settings are currently being loaded
   bool get isLoading => _isLoading;
 
@@ -90,6 +94,7 @@ class SettingsProvider extends ChangeNotifier {
     _openaiApiKey = await _settingsService.loadOpenAIApiKey();
     _openaiModel = await _settingsService.loadOpenAIModel();
     _aiBatchSize = await _settingsService.loadAIBatchSize();
+    _useLocalContent = await _settingsService.loadUseLocalContent();
     _isLoading = true;
     notifyListeners();
 
@@ -208,6 +213,13 @@ class SettingsProvider extends ChangeNotifier {
   Future<void> updateAIBatchSize(int batchSize) async {
     await _settingsService.saveAIBatchSize(batchSize);
     _aiBatchSize = batchSize;
+    notifyListeners();
+  }
+
+  /// Update use local content setting
+  Future<void> updateUseLocalContent(bool useLocal) async {
+    await _settingsService.saveUseLocalContent(useLocal);
+    _useLocalContent = useLocal;
     notifyListeners();
   }
 }
