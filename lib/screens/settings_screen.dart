@@ -627,7 +627,7 @@ class SettingsScreen extends StatelessWidget {
       children: [
         ListTile(
           leading: const Icon(Icons.travel_explore),
-          title: const Text('TravelPal'),
+          title: const Text('LocationPal'),
           subtitle: const Text('Version 1.0.0'),
         ),
         const Divider(),
@@ -639,9 +639,9 @@ class SettingsScreen extends StatelessWidget {
           onTap: () {
             showLicensePage(
               context: context,
-              applicationName: 'TravelPal',
+              applicationName: 'LocationPal',
               applicationVersion: '1.0.0',
-              applicationLegalese: '© 2025 TravelPal',
+              applicationLegalese: '© 2025 LocationPal',
             );
           },
         ),

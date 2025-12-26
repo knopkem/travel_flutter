@@ -1,4 +1,4 @@
-package com.example.travel_flutter_app
+package com.locationpal.app
 
 import io.flutter.embedding.android.FlutterActivity
 

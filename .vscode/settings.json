@@ -9,5 +9,6 @@
     "chat.tools.terminal.autoApprove": {
         ".kittify/scripts/bash/": true,
         ".kittify/scripts/ps/": true
-    }
+    },
+    "java.configuration.updateBuildConfiguration": "interactive"
 }

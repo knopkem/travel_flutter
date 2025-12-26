@@ -1,4 +1,4 @@
-# TravelPal - Location Search & Wikipedia Browser
+# LocationPal - Location Search & Wikipedia Browser
 
 A Flutter mobile application that enables users to search for geographic locations using OpenStreetMap's Nominatim service and view relevant Wikipedia content for selected locations.
 

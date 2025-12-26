@@ -1,6 +1,6 @@
 {
-    "name": "TravelPal",
-    "short_name": "TravelPal",
+    "name": "LocationPal",
+    "short_name": "LocationPal",
     "start_url": ".",
     "display": "standalone",
     "background_color": "#0175C2",
