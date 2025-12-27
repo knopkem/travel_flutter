@@ -34,8 +34,9 @@ class AIGuidanceProvider extends ChangeNotifier {
   /// Check if a POI matches the current guidance filter
   bool isPoiMatchingGuidance(POI poi) {
     if (!hasActiveGuidance) return true; // No filter active, show all
-    if (_noMatchesFound || _error != null)
+    if (_noMatchesFound || _error != null) {
       return true; // Show all on error or no matches
+    }
     return _filteredPoiIds.contains(poi.id);
   }
 

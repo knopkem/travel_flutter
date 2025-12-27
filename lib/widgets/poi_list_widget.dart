@@ -33,7 +33,7 @@ class POIListWidget extends StatefulWidget {
 }
 
 class _POIListWidgetState extends State<POIListWidget> {
-  Set<POIType> _selectedFilters = {};
+  final Set<POIType> _selectedFilters = {};
   int _currentPage = 1;
   static const int _itemsPerPage = 25;
   bool _hasShownToast = false;

@@ -39,8 +39,14 @@ import '../repositories/repositories.dart';
 ///   .searchLocations('Berlin');
 /// ```
 class LocationProvider extends ChangeNotifier {
-  /// Repository for geocoding API calls
-  final GeocodingRepository _repository;
+  /// Primary repository for geocoding API calls (Google Places when available)
+  GeocodingRepository _primaryRepository;
+
+  /// Fallback repository for geocoding (Nominatim when Google Places unavailable)
+  final GeocodingRepository _fallbackRepository;
+
+  /// Current Google Places API key (nullable)
+  String? _googlePlacesApiKey;
 
   /// Current search suggestions (temporary, cleared on new search)
   List<LocationSuggestion> _suggestions = [];
@@ -58,11 +64,11 @@ class LocationProvider extends ChangeNotifier {
   /// Error message from GPS operations (shown in GPS button state)
   String? _gpsError;
 
-  /// Creates a [LocationProvider] with the specified repository.
+  /// Creates a [LocationProvider] with primary and fallback repositories.
   ///
-  /// The repository is typically injected via dependency injection
-  /// (e.g., from MultiProvider setup in main.dart).
-  LocationProvider(this._repository);
+  /// [primaryRepository] is typically Google Places Autocomplete (when API key available)
+  /// [fallbackRepository] is typically Nominatim (free, no API key needed)
+  LocationProvider(this._primaryRepository, this._fallbackRepository);
 
   // Getters
 
@@ -77,6 +83,20 @@ class LocationProvider extends ChangeNotifier {
   /// Persists during the app session. Returns null if no city is selected.
   /// A new city selection replaces the previous one.
   Location? get selectedCity => _selectedCity;
+
+  /// Updates the Google Places API key for location search
+  void updateGooglePlacesApiKey(String? apiKey,
+      {void Function()? onRequestMade}) {
+    _googlePlacesApiKey = apiKey;
+    // Update the primary repository with the new API key if it's a Google Places repository
+    if (_primaryRepository is GooglePlacesAutocompleteRepository &&
+        apiKey != null &&
+        apiKey.isNotEmpty) {
+      _primaryRepository =
+          (_primaryRepository as GooglePlacesAutocompleteRepository)
+              .withApiKey(apiKey);
+    }
+  }
 
   /// Whether a city is currently selected.
   bool get hasSelectedCity => _selectedCity != null;
@@ -93,6 +113,10 @@ class LocationProvider extends ChangeNotifier {
   // Methods
 
   /// Searches for locations matching the query.
+  ///
+  /// Uses Google Places Autocomplete if API key is available, otherwise falls
+  /// back to Nominatim (free service). Automatically handles fallback if
+  /// primary repository fails.
   ///
   /// Clears previous suggestions and error state before searching.
   /// Updates [isLoading], [suggestions], and [errorMessage] accordingly.
@@ -118,10 +142,26 @@ class LocationProvider extends ChangeNotifier {
     notifyListeners();
 
     try {
-      _suggestions = await _repository.searchLocations(query);
-      _errorMessage = null;
+      // Try primary repository (Google Places) if API key is available
+      if (_googlePlacesApiKey != null && _googlePlacesApiKey!.isNotEmpty) {
+        try {
+          _suggestions = await _primaryRepository.searchLocations(query);
+          _errorMessage = null;
+        } catch (e) {
+          debugPrint(
+              'LocationProvider: Primary repository failed, trying fallback: $e');
+          // Fall back to Nominatim on error
+          _suggestions = await _fallbackRepository.searchLocations(query);
+          _errorMessage = null;
+        }
+      } else {
+        // Use fallback repository (Nominatim) when no API key
+        _suggestions = await _fallbackRepository.searchLocations(query);
+        _errorMessage = null;
+      }
     } catch (e) {
-      debugPrint('LocationProvider: Search failed for query "$query": $e');
+      debugPrint(
+          'LocationProvider: All repositories failed for query "$query": $e');
       _suggestions = [];
       _errorMessage = 'Failed to search locations: $e';
     } finally {
@@ -259,25 +299,28 @@ class LocationProvider extends ChangeNotifier {
       // Check if location services are enabled
       final serviceEnabled = await Geolocator.isLocationServiceEnabled();
       if (!serviceEnabled) {
-        throw Exception('Location services are disabled. Please enable them in settings.');
+        throw Exception(
+            'Location services are disabled. Please enable them in settings.');
       }
 
       // Check permission status
       LocationPermission permission = await Geolocator.checkPermission();
-      
+
       // Show explanation dialog if permission was never requested
       if (permission == LocationPermission.denied) {
         if (context.mounted) {
           final userAccepted = await showLocationPermissionDialog(context);
           if (!userAccepted) {
-            throw Exception('Location permission is required to use this feature.');
+            throw Exception(
+                'Location permission is required to use this feature.');
           }
         }
-        
+
         // Request permission
         permission = await Geolocator.requestPermission();
         if (permission == LocationPermission.denied) {
-          throw Exception('Location permission denied. Tap the GPS button to try again.');
+          throw Exception(
+              'Location permission denied. Tap the GPS button to try again.');
         }
       }
 
@@ -296,10 +339,19 @@ class LocationProvider extends ChangeNotifier {
       debugPrint('GPS position: ${position.latitude}, ${position.longitude}');
 
       // Attempt reverse geocoding to get location name
-      final LocationSuggestion? suggestion = await _repository.reverseGeocode(
-        position.latitude,
-        position.longitude,
-      );
+      // Always use Nominatim for reverse geocoding since:
+      // 1. It's free and doesn't require API keys
+      // 2. Google Geocoding API is separate from Places API and requires separate enablement
+      // 3. Reverse geocoding is infrequent (only for GPS location detection)
+      LocationSuggestion? suggestion;
+      try {
+        suggestion = await _fallbackRepository.reverseGeocode(
+          position.latitude,
+          position.longitude,
+        );
+      } catch (e) {
+        debugPrint('Reverse geocode failed: $e');
+      }
 
       // Create location object
       Location location;
@@ -319,10 +371,9 @@ class LocationProvider extends ChangeNotifier {
       // Set as selected city (this will trigger POI fetch in UI)
       _selectedCity = location;
       _gpsError = null;
-
     } catch (e) {
       debugPrint('LocationProvider: GPS fetch failed: $e');
-      
+
       // Store user-friendly error message for GPS button
       if (e.toString().contains('Location services are disabled')) {
         _gpsError = 'GPS is turned off';
@@ -333,7 +384,7 @@ class LocationProvider extends ChangeNotifier {
       } else {
         _gpsError = 'Could not get location';
       }
-      
+
       _errorMessage = e.toString().replaceAll('Exception: ', '');
     } finally {
       _isLoading = false;

@@ -17,27 +17,63 @@ void main() async {
   runApp(
     MultiProvider(
       providers: [
-        ChangeNotifierProvider(
-          create: (_) => LocationProvider(
-            NominatimGeocodingRepository(),
-          ),
+        // SettingsProvider must come first as it's used by other providers
+        ChangeNotifierProvider.value(
+          value: settingsProvider,
+        ),
+        ChangeNotifierProxyProvider<SettingsProvider, LocationProvider>(
+          create: (context) {
+            final settings = context.read<SettingsProvider>();
+            return LocationProvider(
+              GooglePlacesAutocompleteRepository(
+                apiKey: settings.googlePlacesApiKey,
+                onRequestMade: settings.incrementGooglePlacesRequestCount,
+              ),
+              NominatimGeocodingRepository(),
+            );
+          },
+          update: (context, settings, locationProvider) {
+            locationProvider?.updateGooglePlacesApiKey(
+              settings.googlePlacesApiKey,
+              onRequestMade: settings.incrementGooglePlacesRequestCount,
+            );
+            return locationProvider ??
+                LocationProvider(
+                  GooglePlacesAutocompleteRepository(
+                    apiKey: settings.googlePlacesApiKey,
+                    onRequestMade: settings.incrementGooglePlacesRequestCount,
+                  ),
+                  NominatimGeocodingRepository(),
+                );
+          },
         ),
         ChangeNotifierProvider(
           create: (_) => WikipediaProvider(
             RestWikipediaRepository(),
           ),
         ),
-        ChangeNotifierProvider.value(
-          value: settingsProvider,
-        ),
         ChangeNotifierProvider(
           create: (_) => MapNavigationProvider(),
         ),
         ChangeNotifierProxyProvider<SettingsProvider, POIProvider>(
-          create: (_) => POIProvider(),
+          create: (context) {
+            final settings = context.read<SettingsProvider>();
+            return POIProvider(
+              googlePlacesRepo: GooglePlacesRepository(
+                apiKey: settings.googlePlacesApiKey,
+                onRequestMade: settings.incrementGooglePlacesRequestCount,
+              ),
+            );
+          },
           update: (_, settings, poiProvider) {
             poiProvider?.updateSettings(settings);
-            return poiProvider ?? POIProvider();
+            return poiProvider ??
+                POIProvider(
+                  googlePlacesRepo: GooglePlacesRepository(
+                    apiKey: settings.googlePlacesApiKey,
+                    onRequestMade: settings.incrementGooglePlacesRequestCount,
+                  ),
+                );
           },
         ),
         ChangeNotifierProvider(

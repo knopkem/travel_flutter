@@ -12,19 +12,20 @@ import 'poi_repository.dart';
 class GooglePlacesRepository implements POIRepository {
   final http.Client _client;
   final String? _apiKey;
-  static const String _baseUrl =
-      'https://maps.googleapis.com/maps/api/place/nearbysearch/json';
-  static const String _detailsUrl =
-      'https://maps.googleapis.com/maps/api/place/details/json';
+  final void Function()? onRequestMade;
+  // New Places API (v1) endpoints
+  static const String _searchUrl =
+      'https://places.googleapis.com/v1/places:searchNearby';
+  static const String _detailsUrl = 'https://places.googleapis.com/v1/places';
   static const Duration _timeout = Duration(seconds: 15);
 
-  GooglePlacesRepository({http.Client? client, String? apiKey})
+  GooglePlacesRepository({http.Client? client, String? apiKey, this.onRequestMade})
       : _client = client ?? http.Client(),
         _apiKey = apiKey;
 
   /// Update the API key
   GooglePlacesRepository withApiKey(String apiKey) {
-    return GooglePlacesRepository(client: _client, apiKey: apiKey);
+    return GooglePlacesRepository(client: _client, apiKey: apiKey, onRequestMade: onRequestMade);
   }
 
   @override
@@ -57,17 +58,38 @@ class GooglePlacesRepository implements POIRepository {
       final allPOIs = <POI>[];
 
       // Fetch POIs for each relevant Google place type
-      final placeTypes = _getGooglePlaceTypes(enabledTypes);
+      final placeTypes = _getNewApiPlaceTypes(enabledTypes);
 
       for (final placeType in placeTypes) {
-        final uri = Uri.parse(_baseUrl).replace(queryParameters: {
-          'location': '${city.latitude},${city.longitude}',
-          'radius': clampedRadius.toString(),
-          'type': placeType,
-          'key': _apiKey!,
-        });
+        // Track API request
+        onRequestMade?.call();
 
-        final response = await _client.get(uri).timeout(_timeout);
+        // Use new Places API (v1) with POST and JSON body
+        final response = await _client
+            .post(
+              Uri.parse(_searchUrl),
+              headers: {
+                'Content-Type': 'application/json',
+                'X-Goog-Api-Key': _apiKey!,
+                'X-Goog-FieldMask':
+                    'places.id,places.displayName,places.formattedAddress,places.location,places.types,places.rating,places.userRatingCount,places.priceLevel,places.currentOpeningHours,places.photos',
+              },
+              body: json.encode({
+                'locationRestriction': {
+                  'circle': {
+                    'center': {
+                      'latitude': city.latitude,
+                      'longitude': city.longitude,
+                    },
+                    'radius': clampedRadius.toDouble(),
+                  },
+                },
+                'includedTypes': [placeType],
+                'maxResultCount': 20,
+                'languageCode': 'en',
+              }),
+            )
+            .timeout(_timeout);
 
         if (response.statusCode != 200) {
           throw Exception(
@@ -75,27 +97,12 @@ class GooglePlacesRepository implements POIRepository {
         }
 
         final data = json.decode(response.body) as Map<String, dynamic>;
-        final status = data['status'] as String?;
+        final places = data['places'] as List<dynamic>? ?? [];
 
-        if (status == 'REQUEST_DENIED') {
-          throw Exception(
-              'Google Places API key is invalid or has insufficient permissions');
-        }
-
-        if (status == 'OVER_QUERY_LIMIT') {
-          throw Exception('Google Places API quota exceeded');
-        }
-
-        if (status != 'OK' && status != 'ZERO_RESULTS') {
-          throw Exception('Google Places API error: $status');
-        }
-
-        final results = data['results'] as List<dynamic>? ?? [];
-
-        for (final result in results) {
+        for (final place in places) {
           try {
             final poi = POI.fromGooglePlaces(
-              result as Map<String, dynamic>,
+              place as Map<String, dynamic>,
               city,
               apiKey: _apiKey,
             );
@@ -139,8 +146,8 @@ class GooglePlacesRepository implements POIRepository {
     return true;
   }
 
-  /// Map POITypes to Google Places API types
-  List<String> _getGooglePlaceTypes(Set<POIType>? enabledTypes) {
+  /// Map POITypes to new Google Places API (v1) types
+  List<String> _getNewApiPlaceTypes(Set<POIType>? enabledTypes) {
     final types = <String>[];
 
     // If no filter, use a broad set of tourist-relevant types
@@ -154,9 +161,11 @@ class GooglePlacesRepository implements POIRepository {
         case POIType.monument:
         case POIType.historicSite:
           types.add('tourist_attraction');
+          types.add('historical_landmark');
           break;
         case POIType.park:
           types.add('park');
+          types.add('national_park');
           break;
         case POIType.religiousSite:
           types.add('church');
@@ -196,14 +205,21 @@ class GooglePlacesRepository implements POIRepository {
     }
 
     try {
-      final uri = Uri.parse(_detailsUrl).replace(queryParameters: {
-        'place_id': placeId,
-        'fields':
-            'rating,user_ratings_total,reviews,formatted_address,formatted_phone_number,price_level,opening_hours,website',
-        'key': _apiKey!,
-      });
+      // Track API request
+      onRequestMade?.call();
 
-      final response = await _client.get(uri).timeout(_timeout);
+      // Use new Places API (v1) with field mask
+      final uri = Uri.parse('$_detailsUrl/$placeId');
+
+      final response = await _client.get(
+        uri,
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Goog-Api-Key': _apiKey!,
+          'X-Goog-FieldMask':
+              'id,displayName,formattedAddress,internationalPhoneNumber,rating,userRatingCount,priceLevel,currentOpeningHours,websiteUri',
+        },
+      ).timeout(_timeout);
 
       if (response.statusCode != 200) {
         throw Exception(
@@ -211,18 +227,17 @@ class GooglePlacesRepository implements POIRepository {
       }
 
       final data = json.decode(response.body) as Map<String, dynamic>;
-      final status = data['status'] as String?;
 
-      if (status == 'REQUEST_DENIED') {
-        throw Exception(
-            'Google Places API key is invalid or has insufficient permissions');
-      }
-
-      if (status == 'OK' && data['result'] != null) {
-        return data['result'] as Map<String, dynamic>;
-      }
-
-      return null;
+      // Convert new API format to match expected format
+      return {
+        'rating': data['rating'],
+        'user_ratings_total': data['userRatingCount'],
+        'formatted_address': data['formattedAddress'],
+        'formatted_phone_number': data['internationalPhoneNumber'],
+        'price_level': data['priceLevel'],
+        'opening_hours': data['currentOpeningHours'],
+        'website': data['websiteUri'],
+      };
     } catch (e) {
       rethrow;
     }

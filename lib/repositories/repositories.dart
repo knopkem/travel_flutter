@@ -9,6 +9,7 @@
 /// Available repositories:
 /// - [GeocodingRepository]: Interface for location search
 /// - [NominatimGeocodingRepository]: Nominatim API implementation
+/// - [GooglePlacesAutocompleteRepository]: Google Places Autocomplete implementation
 /// - [WikipediaRepository]: Interface for Wikipedia content
 /// - [RestWikipediaRepository]: Wikipedia REST API implementation
 /// - [POIRepository]: Interface for POI discovery
@@ -20,6 +21,7 @@ library;
 
 export 'geocoding_repository.dart';
 export 'nominatim_geocoding_repository.dart';
+export 'google_places_autocomplete_repository.dart';
 export 'wikipedia_repository.dart';
 export 'rest_wikipedia_repository.dart';
 export 'poi_repository.dart';

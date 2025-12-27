@@ -17,7 +17,7 @@ class POIProvider extends ChangeNotifier {
   final WikipediaGeosearchRepository _wikipediaRepo;
   final OverpassRepository _overpassRepo;
   final WikidataRepository _wikidataRepo;
-  final GooglePlacesRepository _googlePlacesRepo;
+  GooglePlacesRepository _googlePlacesRepo;
 
   List<POI> _pois = [];
   bool _isLoading = false;
@@ -27,7 +27,7 @@ class POIProvider extends ChangeNotifier {
   String? _currentCityId;
   SettingsProvider? _settingsProvider;
   int _successfulSources = 0;
-  int _totalSources = 3; // Wikipedia, Overpass, Wikidata
+  final int _totalSources = 3; // Wikipedia, Overpass, Wikidata
   Set<POIType> _selectedFilters = {}; // Active POI type filters
   int? _tempSearchDistance; // Temporary distance override from UI slider
 
@@ -56,6 +56,13 @@ class POIProvider extends ChangeNotifier {
   /// Update settings provider reference
   void updateSettings(SettingsProvider settingsProvider) {
     _settingsProvider = settingsProvider;
+    // Recreate Google Places repository with callback when settings change
+    if (_settingsProvider != null) {
+      final apiKey = _settingsProvider!.googlePlacesApiKey;
+      if (apiKey != null && apiKey.isNotEmpty) {
+        _googlePlacesRepo = _googlePlacesRepo.withApiKey(apiKey);
+      }
+    }
   }
 
   List<POI> get pois => _pois.take(_displayLimit).toList();

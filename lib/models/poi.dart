@@ -174,17 +174,19 @@ class POI {
     );
   }
 
-  /// Create POI from Google Places API response
+  /// Create POI from Google Places API response (New API v1)
   factory POI.fromGooglePlaces(
     Map<String, dynamic> result,
     Location city, {
     String? apiKey,
   }) {
-    final geometry = result['geometry'] as Map<String, dynamic>;
-    final location = geometry['location'] as Map<String, dynamic>;
-    final lat = (location['lat'] as num).toDouble();
-    final lng = (location['lng'] as num).toDouble();
-    final name = result['name'] as String;
+    // New API uses 'location' directly with 'latitude' and 'longitude'
+    final location = result['location'] as Map<String, dynamic>;
+    final lat = (location['latitude'] as num).toDouble();
+    final lng = (location['longitude'] as num).toDouble();
+    final name = result['displayName'] is Map
+        ? (result['displayName'] as Map<String, dynamic>)['text'] as String
+        : result['displayName'] as String;
 
     final distanceFromCity = calculateDistance(
       city.latitude,
@@ -201,16 +203,18 @@ class POI {
       longitude: lng,
       distanceFromCity: distanceFromCity,
       sources: [POISource.googlePlaces],
-      description: result['vicinity'] as String?,
+      description: result['formattedAddress'] as String?,
       imageUrl: _extractGooglePhotoUrl(result, apiKey),
       notabilityScore: _calculateGoogleNotability(result),
       discoveredAt: DateTime.now(),
-      placeId: result['place_id'] as String?,
+      placeId: result['id'] as String?,
       rating: (result['rating'] as num?)?.toDouble(),
-      userRatingsTotal: result['user_ratings_total'] as int?,
-      priceLevel: result['price_level'] as int?,
-      isOpenNow: (result['opening_hours'] as Map<String, dynamic>?)?['open_now']
-          as bool?,
+      userRatingsTotal: result['userRatingCount'] as int?,
+      priceLevel: result['priceLevel'] != null
+          ? _parsePriceLevel(result['priceLevel'] as String)
+          : null,
+      isOpenNow: (result['currentOpeningHours']
+          as Map<String, dynamic>?)?['openNow'] as bool?,
     );
   }
 
@@ -353,7 +357,7 @@ class POI {
     return POIType.other;
   }
 
-  /// Extract photo URL from Google Places result (if available)
+  /// Extract photo URL from Google Places result (New API v1)
   static String? _extractGooglePhotoUrl(
       Map<String, dynamic> result, String? apiKey) {
     if (apiKey == null || apiKey.isEmpty) return null;
@@ -361,15 +365,36 @@ class POI {
     final photos = result['photos'] as List<dynamic>?;
     if (photos == null || photos.isEmpty) return null;
 
-    final photoReference = photos[0]['photo_reference'] as String?;
-    if (photoReference == null) return null;
+    final photoName = photos[0]['name'] as String?;
+    if (photoName == null) return null;
 
-    // Generate Google Places Photo API URL
-    return 'https://maps.googleapis.com/maps/api/place/photo?'
-        'photoreference=$photoReference&maxwidth=800&key=$apiKey';
+    // New API uses photo resource name with Places API (New)
+    // Format: places/{placeId}/photos/{photoReference}/media
+    return 'https://places.googleapis.com/v1/$photoName/media?'
+        'maxHeightPx=800&maxWidthPx=800&key=$apiKey';
   }
 
-  /// Calculate notability score from Google Places data
+  /// Parse price level from new API string format to int
+  /// PRICE_LEVEL_UNSPECIFIED, PRICE_LEVEL_FREE, PRICE_LEVEL_INEXPENSIVE,
+  /// PRICE_LEVEL_MODERATE, PRICE_LEVEL_EXPENSIVE, PRICE_LEVEL_VERY_EXPENSIVE
+  static int? _parsePriceLevel(String priceLevel) {
+    switch (priceLevel) {
+      case 'PRICE_LEVEL_FREE':
+        return 0;
+      case 'PRICE_LEVEL_INEXPENSIVE':
+        return 1;
+      case 'PRICE_LEVEL_MODERATE':
+        return 2;
+      case 'PRICE_LEVEL_EXPENSIVE':
+        return 3;
+      case 'PRICE_LEVEL_VERY_EXPENSIVE':
+        return 4;
+      default:
+        return null;
+    }
+  }
+
+  /// Calculate notability score from Google Places data (New API v1)
   static int _calculateGoogleNotability(Map<String, dynamic> result) {
     int score = 50; // Base score
 
@@ -379,8 +404,8 @@ class POI {
       score += (rating * 5).round(); // Up to +25 for 5-star rating
     }
 
-    // More reviews = more notable
-    final reviewCount = result['user_ratings_total'] as int?;
+    // More reviews = more notable (userRatingCount in new API)
+    final reviewCount = result['userRatingCount'] as int?;
     if (reviewCount != null) {
       if (reviewCount > 10000) {
         score += 25;

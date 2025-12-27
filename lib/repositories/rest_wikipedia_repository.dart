@@ -52,6 +52,7 @@ class RestWikipediaRepository implements WikipediaRepository {
   String get _baseUrl => 'https://$_languageCode.wikipedia.org/api/rest_v1';
 
   /// Set the language code for API requests (e.g., 'de' for German)
+  @override
   void setLanguageCode(String languageCode) {
     _languageCode = languageCode;
   }

@@ -216,24 +216,22 @@ class _LocationDetailScreenState extends State<LocationDetailScreen> {
                     ),
                     onLoadFullArticle: () async {
                       if (widget.location.name != null) {
-                        // Fetch full article first
-                        await Provider.of<WikipediaProvider>(
+                        final wikiProvider = Provider.of<WikipediaProvider>(
                           context,
                           listen: false,
-                        ).fetchFullArticle(widget.location.name!);
+                        );
+                        final navigator = Navigator.of(context);
+                        // Fetch full article first
+                        await wikiProvider.fetchFullArticle(widget.location.name!);
 
                         // Get the updated content with full article
                         if (mounted) {
-                          final fullContent = Provider.of<WikipediaProvider>(
-                            context,
-                            listen: false,
-                          ).getContent(widget.location.name!);
+                          final fullContent = wikiProvider.getContent(widget.location.name!);
 
                           if (fullContent != null &&
                               fullContent.isFullArticle) {
                             // Navigate to dedicated full article screen
-                            Navigator.push(
-                              context,
+                            navigator.push(
                               MaterialPageRoute(
                                 builder: (context) => WikipediaArticleScreen(
                                   content: fullContent,
