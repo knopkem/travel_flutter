@@ -463,15 +463,15 @@ class SettingsScreen extends StatelessWidget {
                     child: Slider(
                       value: settingsProvider.poiSearchDistance.toDouble(),
                       min: 1000,
-                      max: 10000,
-                      divisions: 9,
+                      max: 50000,
+                      divisions: 49,
                       label: '$distanceKm km',
                       onChanged: (value) {
                         settingsProvider.updatePoiDistance(value.round());
                       },
                     ),
                   ),
-                  const Text('10 km'),
+                  const Text('50 km'),
                 ],
               ),
               Padding(
@@ -772,12 +772,20 @@ class _AIGuidanceSettingsState extends State<_AIGuidanceSettings> {
     });
 
     try {
-      await widget.settingsProvider.updateOpenAIApiKey(apiKey);
-      setState(() {
-        _isValid = true;
-        _validationMessage = 'API key validated and saved';
-        _apiKeyController.clear();
-      });
+      final isValid = await widget.settingsProvider.updateOpenAIApiKey(apiKey);
+      if (isValid) {
+        setState(() {
+          _isValid = true;
+          _validationMessage = 'API key validated and saved';
+          _apiKeyController.clear();
+        });
+      } else {
+        setState(() {
+          _isValid = false;
+          _validationMessage =
+              'Invalid API key. Please check your key and try again.';
+        });
+      }
     } catch (e) {
       setState(() {
         _isValid = false;
@@ -865,55 +873,6 @@ class _AIGuidanceSettingsState extends State<_AIGuidanceSettings> {
                     ),
                   ),
                 ],
-              ),
-              const SizedBox(height: 16),
-              Row(
-                children: [
-                  Text(
-                    'Batch Size:',
-                    style: Theme.of(context).textTheme.titleSmall,
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: DropdownButtonFormField<int>(
-                      value: [25, 50, 100, 150, 500, 1000]
-                              .contains(widget.settingsProvider.aiBatchSize)
-                          ? widget.settingsProvider.aiBatchSize
-                          : 500,
-                      decoration: const InputDecoration(
-                        border: OutlineInputBorder(),
-                        contentPadding:
-                            EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                      ),
-                      items: const [
-                        DropdownMenuItem(
-                            value: 25, child: Text('25 (fastest)')),
-                        DropdownMenuItem(value: 50, child: Text('50')),
-                        DropdownMenuItem(value: 100, child: Text('100')),
-                        DropdownMenuItem(value: 150, child: Text('150')),
-                        DropdownMenuItem(value: 500, child: Text('500')),
-                        DropdownMenuItem(
-                            value: 1000, child: Text('1000 (slowest)')),
-                      ],
-                      onChanged: (value) {
-                        if (value != null) {
-                          Future.microtask(() {
-                            widget.settingsProvider.updateAIBatchSize(value);
-                          });
-                        }
-                      },
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 8),
-              Text(
-                'POIs per API request. Smaller = faster but more requests.',
-                style: TextStyle(
-                  fontSize: 11,
-                  color: Colors.grey[600],
-                  fontStyle: FontStyle.italic,
-                ),
               ),
               const SizedBox(height: 16),
               if (_isValid)

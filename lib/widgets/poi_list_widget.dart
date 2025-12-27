@@ -441,8 +441,8 @@ class _POIListWidgetState extends State<POIListWidget> {
           Slider(
             value: currentDistance.toDouble(),
             min: 1000,
-            max: 10000,
-            divisions: 9,
+            max: 50000,
+            divisions: 49,
             label: '${distanceKm.toStringAsFixed(1)} km',
             onChanged: (value) {
               setState(() {

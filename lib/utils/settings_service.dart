@@ -37,7 +37,7 @@ class SettingsService {
   /// Default POI search distance in meters (5km)
   static const int defaultPoiDistance = 5000;
   static const int minPoiDistance = 1000; // 1km
-  static const int maxPoiDistance = 10000; // 10km
+  static const int maxPoiDistance = 50000; // 50km
 
   /// Default POI providers (all enabled by default)
   static final Map<POISource, bool> defaultPoiProvidersEnabled = {
