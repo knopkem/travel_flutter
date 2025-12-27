@@ -432,6 +432,13 @@ class POIProvider extends ChangeNotifier {
 
   /// Merge POI with Place Details API response
   POI _mergePOIWithDetails(POI poi, Map<String, dynamic> details) {
+    // Use editorial summary as description if available, otherwise keep original
+    String? description = poi.description;
+    final editorialSummary = details['editorial_summary'] as String?;
+    if (editorialSummary != null && editorialSummary.isNotEmpty) {
+      description = editorialSummary;
+    }
+
     return POI(
       id: poi.id,
       name: poi.name,
@@ -440,7 +447,7 @@ class POIProvider extends ChangeNotifier {
       longitude: poi.longitude,
       distanceFromCity: poi.distanceFromCity,
       sources: poi.sources,
-      description: poi.description,
+      description: description,
       wikipediaTitle: poi.wikipediaTitle,
       wikipediaLang: poi.wikipediaLang,
       wikidataId: poi.wikidataId,
@@ -457,7 +464,7 @@ class POIProvider extends ChangeNotifier {
       formattedPhoneNumber: details['formatted_phone_number'] as String?,
       priceLevel: details['price_level'] as int? ?? poi.priceLevel,
       isOpenNow: (details['opening_hours']
-              as Map<String, dynamic>?)?['open_now'] as bool? ??
+              as Map<String, dynamic>?)?['openNow'] as bool? ??
           poi.isOpenNow,
     );
   }

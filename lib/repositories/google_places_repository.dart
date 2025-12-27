@@ -72,7 +72,7 @@ class GooglePlacesRepository implements POIRepository {
                 'Content-Type': 'application/json',
                 'X-Goog-Api-Key': _apiKey!,
                 'X-Goog-FieldMask':
-                    'places.id,places.displayName,places.formattedAddress,places.location,places.types,places.rating,places.userRatingCount,places.priceLevel,places.currentOpeningHours,places.photos',
+                    'places.id,places.displayName,places.formattedAddress,places.location,places.types,places.rating,places.userRatingCount,places.priceLevel,places.currentOpeningHours,places.photos,places.editorialSummary',
               },
               body: json.encode({
                 'locationRestriction': {
@@ -217,7 +217,7 @@ class GooglePlacesRepository implements POIRepository {
           'Content-Type': 'application/json',
           'X-Goog-Api-Key': _apiKey!,
           'X-Goog-FieldMask':
-              'id,displayName,formattedAddress,internationalPhoneNumber,rating,userRatingCount,priceLevel,currentOpeningHours,websiteUri',
+              'id,displayName,formattedAddress,internationalPhoneNumber,rating,userRatingCount,priceLevel,currentOpeningHours,websiteUri,editorialSummary',
         },
       ).timeout(_timeout);
 
@@ -228,6 +228,13 @@ class GooglePlacesRepository implements POIRepository {
 
       final data = json.decode(response.body) as Map<String, dynamic>;
 
+      // Extract editorial summary text
+      String? editorialSummary;
+      final summary = data['editorialSummary'] as Map<String, dynamic>?;
+      if (summary != null && summary['text'] != null) {
+        editorialSummary = summary['text'] as String;
+      }
+
       // Convert new API format to match expected format
       return {
         'rating': data['rating'],
@@ -237,6 +244,7 @@ class GooglePlacesRepository implements POIRepository {
         'price_level': data['priceLevel'],
         'opening_hours': data['currentOpeningHours'],
         'website': data['websiteUri'],
+        'editorial_summary': editorialSummary,
       };
     } catch (e) {
       rethrow;

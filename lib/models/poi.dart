@@ -195,6 +195,15 @@ class POI {
       lng,
     );
 
+    // Extract editorial summary if available, fallback to address
+    String? description;
+    final editorialSummary = result['editorialSummary'] as Map<String, dynamic>?;
+    if (editorialSummary != null && editorialSummary['text'] != null) {
+      description = editorialSummary['text'] as String;
+    } else {
+      description = result['formattedAddress'] as String?;
+    }
+
     return POI(
       id: _generateId(name, lat, lng),
       name: name,
@@ -203,7 +212,8 @@ class POI {
       longitude: lng,
       distanceFromCity: distanceFromCity,
       sources: [POISource.googlePlaces],
-      description: result['formattedAddress'] as String?,
+      description: description,
+      formattedAddress: result['formattedAddress'] as String?,
       imageUrl: _extractGooglePhotoUrl(result, apiKey),
       notabilityScore: _calculateGoogleNotability(result),
       discoveredAt: DateTime.now(),
