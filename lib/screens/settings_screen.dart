@@ -27,6 +27,7 @@ class SettingsScreen extends StatelessWidget {
           return ListView(
             children: [
               _buildAIGuidanceSection(context, settingsProvider),
+              _buildGooglePlacesSection(context, settingsProvider),
               _buildProvidersSection(context, settingsProvider),
               _buildPoiTypesSection(context, settingsProvider),
               _buildInterestsSection(context, settingsProvider),
@@ -102,20 +103,23 @@ class SettingsScreen extends StatelessWidget {
                   margin: const EdgeInsets.symmetric(vertical: 4),
                   child: SwitchListTile(
                     value: isEnabled,
-                    onChanged: (value) async {
-                      // Check if this is the last enabled provider being turned off
-                      if (!value && enabledCount == 1 && isEnabled) {
-                        final confirmed =
-                            await _showDisableAllProvidersDialog(context);
-                        if (confirmed == true) {
-                          await settingsProvider.updateProviderEnabled(
-                              source, value);
-                        }
-                      } else {
-                        await settingsProvider.updateProviderEnabled(
-                            source, value);
-                      }
-                    },
+                    onChanged: (source.requiresApiKey &&
+                            !settingsProvider.hasValidGooglePlacesKey)
+                        ? null
+                        : (value) async {
+                            // Check if this is the last enabled provider being turned off
+                            if (!value && enabledCount == 1 && isEnabled) {
+                              final confirmed =
+                                  await _showDisableAllProvidersDialog(context);
+                              if (confirmed == true) {
+                                await settingsProvider.updateProviderEnabled(
+                                    source, value);
+                              }
+                            } else {
+                              await settingsProvider.updateProviderEnabled(
+                                  source, value);
+                            }
+                          },
                     title: Row(
                       children: [
                         Icon(
@@ -135,12 +139,27 @@ class SettingsScreen extends StatelessWidget {
                         ),
                       ],
                     ),
-                    subtitle: Text(
-                      _getProviderDescription(source),
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: Colors.grey[600],
-                      ),
+                    subtitle: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          _getProviderDescription(source),
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: Colors.grey[600],
+                          ),
+                        ),
+                        if (source.requiresApiKey &&
+                            !settingsProvider.hasValidGooglePlacesKey)
+                          Text(
+                            'Configure API key below to enable',
+                            style: TextStyle(
+                              fontSize: 11,
+                              color: Colors.orange[700],
+                              fontStyle: FontStyle.italic,
+                            ),
+                          ),
+                      ],
                     ),
                   ),
                 );
@@ -293,6 +312,13 @@ class SettingsScreen extends StatelessWidget {
     SettingsProvider settingsProvider,
   ) {
     return _AIGuidanceSettings(settingsProvider: settingsProvider);
+  }
+
+  Widget _buildGooglePlacesSection(
+    BuildContext context,
+    SettingsProvider settingsProvider,
+  ) {
+    return _GooglePlacesSettings(settingsProvider: settingsProvider);
   }
 
   Widget _buildInterestsSection(
@@ -599,6 +625,8 @@ class SettingsScreen extends StatelessWidget {
         return Icons.map;
       case POISource.wikidata:
         return Icons.storage;
+      case POISource.googlePlaces:
+        return Icons.place;
     }
   }
 
@@ -610,6 +638,8 @@ class SettingsScreen extends StatelessWidget {
         return 'Tourist attractions from OpenStreetMap';
       case POISource.wikidata:
         return 'Structured knowledge base';
+      case POISource.googlePlaces:
+        return 'Rich place data (requires API key)';
     }
   }
 
@@ -1039,4 +1069,289 @@ class _OpenAIModels {
       priceIndicator: r'$$$$',
     ),
   ];
+}
+
+class _GooglePlacesSettings extends StatefulWidget {
+  final SettingsProvider settingsProvider;
+
+  const _GooglePlacesSettings({required this.settingsProvider});
+
+  @override
+  State<_GooglePlacesSettings> createState() => _GooglePlacesSettingsState();
+}
+
+class _GooglePlacesSettingsState extends State<_GooglePlacesSettings> {
+  final TextEditingController _apiKeyController = TextEditingController();
+  bool _isValidating = false;
+  String? _validationMessage;
+  bool _isValid = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _isValid = widget.settingsProvider.hasValidGooglePlacesKey;
+    if (_isValid) {
+      _validationMessage = 'API key configured';
+    }
+  }
+
+  @override
+  void dispose() {
+    _apiKeyController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _validateAndSave() async {
+    final apiKey = _apiKeyController.text.trim();
+    if (apiKey.isEmpty) {
+      setState(() {
+        _validationMessage = 'Please enter an API key';
+        _isValid = false;
+      });
+      return;
+    }
+
+    setState(() {
+      _isValidating = true;
+      _validationMessage = null;
+    });
+
+    try {
+      final isValid =
+          await widget.settingsProvider.updateGooglePlacesApiKey(apiKey);
+      if (isValid) {
+        setState(() {
+          _isValid = true;
+          _validationMessage =
+              'API key saved! Other POI providers have been auto-disabled (you can re-enable them if needed).';
+          _apiKeyController.clear();
+        });
+        
+        // Show snackbar for better visibility
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text(
+                'Google Places enabled. Other providers auto-disabled.',
+              ),
+              backgroundColor: Colors.green,
+              duration: Duration(seconds: 3),
+            ),
+          );
+        }
+      } else {
+        setState(() {
+          _isValid = false;
+          _validationMessage =
+              'Invalid API key format. Keys should start with "AIza" and be 30-50 characters.';
+        });
+      }
+    } catch (e) {
+      setState(() {
+        _isValid = false;
+        _validationMessage = 'Validation error: $e';
+      });
+    } finally {
+      setState(() {
+        _isValidating = false;
+      });
+    }
+  }
+
+  Future<void> _removeKey() async {
+    await widget.settingsProvider.removeGooglePlacesApiKey();
+    setState(() {
+      _isValid = false;
+      _validationMessage = null;
+      _apiKeyController.clear();
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final requestCount = widget.settingsProvider.googlePlacesRequestCount;
+
+    return ExpansionTile(
+      initiallyExpanded: false,
+      leading: Icon(
+        Icons.place,
+        color: _isValid ? Colors.green : null,
+      ),
+      title: const Text(
+        'Google Places',
+        style: TextStyle(
+          fontSize: 18,
+          fontWeight: FontWeight.bold,
+        ),
+      ),
+      subtitle: Text(_isValid
+          ? 'API key configured - Premium POI data'
+          : 'Configure API key for rich place data'),
+      children: [
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text(
+                'Google Places provides rich POI data including ratings, reviews, and photos.',
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      color: Colors.grey[600],
+                    ),
+              ),
+              const SizedBox(height: 8),
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.orange.shade50,
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: Colors.orange.shade200),
+                ),
+                child: Row(
+                  children: [
+                    Icon(Icons.paid, color: Colors.orange.shade700, size: 20),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        'This is a paid API. Google provides \$200/month free credit. Monitor usage in Google Cloud Console.',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Colors.orange.shade800,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 12),
+              if (_isValid) ...[
+                Card(
+                  color: Colors.green.shade50,
+                  child: Padding(
+                    padding: const EdgeInsets.all(12.0),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Icon(Icons.check_circle,
+                                color: Colors.green.shade700),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                _validationMessage ?? 'API key configured',
+                                style: TextStyle(color: Colors.green.shade700),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          'Requests this month: $requestCount',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: Colors.grey[600],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 8),
+              ] else ...[
+                TextField(
+                  controller: _apiKeyController,
+                  obscureText: true,
+                  decoration: const InputDecoration(
+                    labelText: 'Google Places API Key',
+                    hintText: 'AIza...',
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                if (_validationMessage != null)
+                  Card(
+                    color: _isValid ? Colors.green.shade50 : Colors.red.shade50,
+                    child: Padding(
+                      padding: const EdgeInsets.all(12.0),
+                      child: Row(
+                        children: [
+                          Icon(
+                            _isValid ? Icons.check_circle : Icons.error,
+                            color: _isValid
+                                ? Colors.green.shade700
+                                : Colors.red.shade700,
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              _validationMessage!,
+                              style: TextStyle(
+                                color: _isValid
+                                    ? Colors.green.shade700
+                                    : Colors.red.shade700,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                const SizedBox(height: 8),
+              ],
+              Row(
+                children: [
+                  if (_isValid)
+                    Expanded(
+                      child: ElevatedButton.icon(
+                        onPressed: _removeKey,
+                        icon: const Icon(Icons.delete),
+                        label: const Text('Remove Key'),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.red.shade100,
+                          foregroundColor: Colors.red.shade900,
+                        ),
+                      ),
+                    )
+                  else
+                    Expanded(
+                      child: ElevatedButton.icon(
+                        onPressed: _isValidating ? null : _validateAndSave,
+                        icon: _isValidating
+                            ? const SizedBox(
+                                width: 16,
+                                height: 16,
+                                child:
+                                    CircularProgressIndicator(strokeWidth: 2),
+                              )
+                            : const Icon(Icons.check),
+                        label: Text(
+                          _isValidating ? 'Validating...' : 'Validate & Save',
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              Row(
+                children: [
+                  Icon(Icons.info_outline, size: 16, color: Colors.grey[600]),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: Text(
+                      'Get your API key from console.cloud.google.com and enable Places API',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: Colors.grey[600],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
 }

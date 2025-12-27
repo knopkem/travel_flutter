@@ -23,6 +23,15 @@ class POI {
   final int notabilityScore;
   final DateTime discoveredAt;
 
+  // Google Places specific fields
+  final String? placeId; // Google Places place_id for fetching details
+  final double? rating; // Average rating (1-5)
+  final int? userRatingsTotal; // Number of reviews
+  final String? formattedAddress; // Full formatted address
+  final String? formattedPhoneNumber; // Phone number
+  final int? priceLevel; // 0-4 (0=free, 4=expensive)
+  final bool? isOpenNow; // Current open/closed status
+
   POI({
     required this.id,
     required this.name,
@@ -40,6 +49,13 @@ class POI {
     this.openingHours,
     required this.notabilityScore,
     required this.discoveredAt,
+    this.placeId,
+    this.rating,
+    this.userRatingsTotal,
+    this.formattedAddress,
+    this.formattedPhoneNumber,
+    this.priceLevel,
+    this.isOpenNow,
   }) {
     if (latitude < -90 || latitude > 90) {
       throw ArgumentError('Latitude must be between -90 and 90');
@@ -158,6 +174,46 @@ class POI {
     );
   }
 
+  /// Create POI from Google Places API response
+  factory POI.fromGooglePlaces(
+    Map<String, dynamic> result,
+    Location city, {
+    String? apiKey,
+  }) {
+    final geometry = result['geometry'] as Map<String, dynamic>;
+    final location = geometry['location'] as Map<String, dynamic>;
+    final lat = (location['lat'] as num).toDouble();
+    final lng = (location['lng'] as num).toDouble();
+    final name = result['name'] as String;
+
+    final distanceFromCity = calculateDistance(
+      city.latitude,
+      city.longitude,
+      lat,
+      lng,
+    );
+
+    return POI(
+      id: _generateId(name, lat, lng),
+      name: name,
+      type: _mapGooglePlaceType(result['types'] as List<dynamic>?),
+      latitude: lat,
+      longitude: lng,
+      distanceFromCity: distanceFromCity,
+      sources: [POISource.googlePlaces],
+      description: result['vicinity'] as String?,
+      imageUrl: _extractGooglePhotoUrl(result, apiKey),
+      notabilityScore: _calculateGoogleNotability(result),
+      discoveredAt: DateTime.now(),
+      placeId: result['place_id'] as String?,
+      rating: (result['rating'] as num?)?.toDouble(),
+      userRatingsTotal: result['user_ratings_total'] as int?,
+      priceLevel: result['price_level'] as int?,
+      isOpenNow: (result['opening_hours'] as Map<String, dynamic>?)?['open_now']
+          as bool?,
+    );
+  }
+
   /// Merge duplicate POIs from multiple sources
   static POI merge(List<POI> duplicates) {
     if (duplicates.isEmpty) {
@@ -202,6 +258,23 @@ class POI {
       discoveredAt: duplicates
           .map((p) => p.discoveredAt)
           .reduce((a, b) => a.isBefore(b) ? a : b),
+      placeId: _pickBest(duplicates.map((p) => p.placeId)),
+      rating: duplicates
+          .map((p) => p.rating)
+          .where((r) => r != null)
+          .fold<double?>(null, (max, r) => max == null || r! > max ? r : max),
+      userRatingsTotal: duplicates
+          .map((p) => p.userRatingsTotal)
+          .where((t) => t != null)
+          .fold<int?>(null, (sum, t) => (sum ?? 0) + t!),
+      formattedAddress: _pickBest(duplicates.map((p) => p.formattedAddress)),
+      formattedPhoneNumber:
+          _pickBest(duplicates.map((p) => p.formattedPhoneNumber)),
+      priceLevel: _pickBest(duplicates.map((p) => p.priceLevel)),
+      isOpenNow: duplicates
+          .map((p) => p.isOpenNow)
+          .where((o) => o != null)
+          .firstOrNull,
     );
   }
 
@@ -255,6 +328,71 @@ class POI {
     if (tags['wikipedia'] != null) score += 15;
     if (tags['website'] != null) score += 5;
     if (tags['unesco'] != null) score += 30;
+    return score.clamp(0, 100);
+  }
+
+  /// Map Google Places types to POIType
+  static POIType _mapGooglePlaceType(List<dynamic>? types) {
+    if (types == null || types.isEmpty) return POIType.other;
+
+    final typeSet = types.map((t) => t.toString()).toSet();
+
+    if (typeSet.contains('museum')) return POIType.museum;
+    if (typeSet.contains('church') ||
+        typeSet.contains('mosque') ||
+        typeSet.contains('synagogue') ||
+        typeSet.contains('hindu_temple') ||
+        typeSet.contains('place_of_worship')) {
+      return POIType.religiousSite;
+    }
+    if (typeSet.contains('park')) return POIType.park;
+    if (typeSet.contains('tourist_attraction')) {
+      return POIType.touristAttraction;
+    }
+
+    return POIType.other;
+  }
+
+  /// Extract photo URL from Google Places result (if available)
+  static String? _extractGooglePhotoUrl(
+      Map<String, dynamic> result, String? apiKey) {
+    if (apiKey == null || apiKey.isEmpty) return null;
+
+    final photos = result['photos'] as List<dynamic>?;
+    if (photos == null || photos.isEmpty) return null;
+
+    final photoReference = photos[0]['photo_reference'] as String?;
+    if (photoReference == null) return null;
+
+    // Generate Google Places Photo API URL
+    return 'https://maps.googleapis.com/maps/api/place/photo?'
+        'photoreference=$photoReference&maxwidth=800&key=$apiKey';
+  }
+
+  /// Calculate notability score from Google Places data
+  static int _calculateGoogleNotability(Map<String, dynamic> result) {
+    int score = 50; // Base score
+
+    // Higher rating = more notable
+    final rating = result['rating'] as num?;
+    if (rating != null) {
+      score += (rating * 5).round(); // Up to +25 for 5-star rating
+    }
+
+    // More reviews = more notable
+    final reviewCount = result['user_ratings_total'] as int?;
+    if (reviewCount != null) {
+      if (reviewCount > 10000) {
+        score += 25;
+      } else if (reviewCount > 1000) {
+        score += 15;
+      } else if (reviewCount > 100) {
+        score += 10;
+      } else if (reviewCount > 10) {
+        score += 5;
+      }
+    }
+
     return score.clamp(0, 100);
   }
 

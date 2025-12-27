@@ -15,6 +15,7 @@
 /// - [WikipediaGeosearchRepository]: Wikipedia Geosearch API implementation
 /// - [OverpassRepository]: OpenStreetMap Overpass API implementation
 /// - [WikidataRepository]: Wikidata SPARQL API implementation
+/// - [GooglePlacesRepository]: Google Places API implementation
 library;
 
 export 'geocoding_repository.dart';
@@ -25,3 +26,4 @@ export 'poi_repository.dart';
 export 'wikipedia_geosearch_repository.dart';
 export 'overpass_repository.dart';
 export 'wikidata_repository.dart';
+export 'google_places_repository.dart';

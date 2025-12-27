@@ -20,6 +20,13 @@ class SettingsService {
   static const int defaultAIBatchSize = 500;
   static const bool defaultUseLocalContent = false;
 
+  // Secure storage keys for Google Places API
+  static const String _googlePlacesApiKeyKey = 'google_places_api_key';
+  static const String _googlePlacesRequestCountKey =
+      'google_places_request_count';
+  static const String _googlePlacesRequestDateKey =
+      'google_places_request_date';
+
   final FlutterSecureStorage _secureStorage = const FlutterSecureStorage();
 
   /// Default POI type order (prioritized by user preference)
@@ -39,11 +46,12 @@ class SettingsService {
   static const int minPoiDistance = 1000; // 1km
   static const int maxPoiDistance = 50000; // 50km
 
-  /// Default POI providers (all enabled by default)
+  /// Default POI providers (all enabled by default, except those requiring API key)
   static final Map<POISource, bool> defaultPoiProvidersEnabled = {
     POISource.wikipediaGeosearch: true,
     POISource.overpass: true,
     POISource.wikidata: true,
+    POISource.googlePlaces: false, // Disabled until API key is configured
   };
 
   /// Load POI type order with enabled state from persistent storage
@@ -282,6 +290,77 @@ class SettingsService {
       if (date.year != now.year ||
           date.month != now.month ||
           date.day != now.day) {
+        return (0, now);
+      }
+
+      return (count, date);
+    } catch (e) {
+      return (0, DateTime.now());
+    }
+  }
+
+  /// Save Google Places API key to secure storage
+  Future<bool> saveGooglePlacesApiKey(String apiKey) async {
+    try {
+      await _secureStorage.write(key: _googlePlacesApiKeyKey, value: apiKey);
+      return true;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  /// Load Google Places API key from secure storage
+  Future<String?> loadGooglePlacesApiKey() async {
+    try {
+      return await _secureStorage.read(key: _googlePlacesApiKeyKey);
+    } catch (e) {
+      return null;
+    }
+  }
+
+  /// Delete Google Places API key from secure storage
+  Future<bool> deleteGooglePlacesApiKey() async {
+    try {
+      await _secureStorage.delete(key: _googlePlacesApiKeyKey);
+      return true;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  /// Save Google Places request count and date
+  Future<bool> saveGooglePlacesRequestCount(int count, DateTime date) async {
+    try {
+      await _secureStorage.write(
+          key: _googlePlacesRequestCountKey, value: count.toString());
+      await _secureStorage.write(
+          key: _googlePlacesRequestDateKey, value: date.toIso8601String());
+      return true;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  /// Load Google Places request count and date
+  /// Returns (count, date) tuple, or (0, today) if not found
+  /// Resets count monthly (Google billing cycle)
+  Future<(int, DateTime)> loadGooglePlacesRequestCount() async {
+    try {
+      final countStr =
+          await _secureStorage.read(key: _googlePlacesRequestCountKey);
+      final dateStr =
+          await _secureStorage.read(key: _googlePlacesRequestDateKey);
+
+      if (countStr == null || dateStr == null) {
+        return (0, DateTime.now());
+      }
+
+      final count = int.tryParse(countStr) ?? 0;
+      final date = DateTime.tryParse(dateStr) ?? DateTime.now();
+
+      // Reset count if it's a new month (Google billing is monthly)
+      final now = DateTime.now();
+      if (date.year != now.year || date.month != now.month) {
         return (0, now);
       }
 

@@ -3,6 +3,7 @@ import '../models/poi_type.dart';
 import '../models/poi_source.dart';
 import '../utils/settings_service.dart';
 import '../services/openai_service.dart';
+import '../repositories/google_places_repository.dart';
 
 /// Provider for managing user settings
 ///
@@ -19,6 +20,8 @@ class SettingsProvider extends ChangeNotifier {
   String _openaiModel = SettingsService.defaultOpenAIModel;
   int _aiBatchSize = SettingsService.defaultAIBatchSize;
   bool _useLocalContent = SettingsService.defaultUseLocalContent;
+  String? _googlePlacesApiKey;
+  int _googlePlacesRequestCount = 0;
 
   SettingsProvider({
     SettingsService? settingsService,
@@ -81,6 +84,16 @@ class SettingsProvider extends ChangeNotifier {
   /// Get the AI batch size
   int get aiBatchSize => _aiBatchSize;
 
+  /// Check if Google Places API key is configured
+  bool get hasValidGooglePlacesKey =>
+      _googlePlacesApiKey != null && _googlePlacesApiKey!.isNotEmpty;
+
+  /// Get the Google Places API key
+  String? get googlePlacesApiKey => _googlePlacesApiKey;
+
+  /// Get the Google Places monthly request count
+  int get googlePlacesRequestCount => _googlePlacesRequestCount;
+
   /// Whether to use local content based on location country
   bool get useLocalContent => _useLocalContent;
 
@@ -95,6 +108,9 @@ class SettingsProvider extends ChangeNotifier {
     _openaiModel = await _settingsService.loadOpenAIModel();
     _aiBatchSize = await _settingsService.loadAIBatchSize();
     _useLocalContent = await _settingsService.loadUseLocalContent();
+    _googlePlacesApiKey = await _settingsService.loadGooglePlacesApiKey();
+    final gpCount = await _settingsService.loadGooglePlacesRequestCount();
+    _googlePlacesRequestCount = gpCount.$1;
     _isLoading = true;
     notifyListeners();
 
@@ -220,6 +236,58 @@ class SettingsProvider extends ChangeNotifier {
   Future<void> updateUseLocalContent(bool useLocal) async {
     await _settingsService.saveUseLocalContent(useLocal);
     _useLocalContent = useLocal;
+    notifyListeners();
+  }
+
+  /// Update Google Places API key after validation
+  Future<bool> updateGooglePlacesApiKey(String apiKey) async {
+    try {
+      // Validate the API key first
+      final isValid = await GooglePlacesRepository.validateApiKey(apiKey);
+      if (!isValid) {
+        return false;
+      }
+
+      // Save the valid key
+      final saved = await _settingsService.saveGooglePlacesApiKey(apiKey);
+      if (saved) {
+        _googlePlacesApiKey = apiKey;
+        
+        // Auto-disable other providers when Google Places is enabled
+        // (users can still re-enable them if desired)
+        _poiProvidersEnabled[POISource.wikipediaGeosearch] = false;
+        _poiProvidersEnabled[POISource.overpass] = false;
+        _poiProvidersEnabled[POISource.wikidata] = false;
+        _poiProvidersEnabled[POISource.googlePlaces] = true;
+        
+        await _settingsService.savePoiProvidersEnabled(_poiProvidersEnabled);
+        notifyListeners();
+        return true;
+      }
+      return false;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  /// Remove Google Places API key
+  Future<bool> removeGooglePlacesApiKey() async {
+    final deleted = await _settingsService.deleteGooglePlacesApiKey();
+    if (deleted) {
+      _googlePlacesApiKey = null;
+      // Disable Google Places when key is removed
+      await updateProviderEnabled(POISource.googlePlaces, false);
+      notifyListeners();
+      return true;
+    }
+    return false;
+  }
+
+  /// Increment Google Places request count
+  Future<void> incrementGooglePlacesRequestCount() async {
+    _googlePlacesRequestCount++;
+    await _settingsService.saveGooglePlacesRequestCount(
+        _googlePlacesRequestCount, DateTime.now());
     notifyListeners();
   }
 }

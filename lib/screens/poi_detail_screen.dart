@@ -27,11 +27,15 @@ class POIDetailScreen extends StatefulWidget {
 }
 
 class _POIDetailScreenState extends State<POIDetailScreen> {
+  POI? _enrichedPOI; // POI with fetched place details
+
   @override
   void initState() {
     super.initState();
     // Fetch additional details if available
     WidgetsBinding.instance.addPostFrameCallback((_) {
+      _fetchDetails();
+
       if (widget.poi.wikipediaTitle != null) {
         // Determine language code based on settings
         final settingsProvider = Provider.of<SettingsProvider>(
@@ -71,6 +75,37 @@ class _POIDetailScreenState extends State<POIDetailScreen> {
     });
   }
 
+  /// Fetch place details if this is a Google Places POI
+  Future<void> _fetchDetails() async {
+    if (widget.poi.placeId == null) return;
+
+    try {
+      final settingsProvider = Provider.of<SettingsProvider>(
+        context,
+        listen: false,
+      );
+      final poiProvider = Provider.of<POIProvider>(
+        context,
+        listen: false,
+      );
+
+      final apiKey = settingsProvider.googlePlacesApiKey;
+      if (apiKey != null && apiKey.isNotEmpty) {
+        final enriched =
+            await poiProvider.fetchPlaceDetails(widget.poi, apiKey);
+        if (mounted) {
+          setState(() {
+            _enrichedPOI = enriched;
+          });
+        }
+      }
+    } catch (e) {
+      // Silently fail - user still sees basic POI info
+    }
+  }
+
+  POI get _currentPOI => _enrichedPOI ?? widget.poi;
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -82,11 +117,13 @@ class _POIDetailScreenState extends State<POIDetailScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 _buildHeader(context),
+                if (_currentPOI.rating != null || _currentPOI.isOpenNow != null)
+                  _buildRatingAndStatus(context),
                 _buildActionButtons(context),
                 const Divider(height: 1),
-                if (widget.poi.wikipediaTitle != null)
+                if (_currentPOI.wikipediaTitle != null)
                   _buildWikipediaContent(context),
-                if (widget.poi.description != null) _buildDescription(context),
+                if (_currentPOI.description != null) _buildDescription(context),
                 _buildMetadata(context),
                 _buildSourceAttribution(context),
                 const SizedBox(height: 32),
@@ -118,7 +155,7 @@ class _POIDetailScreenState extends State<POIDetailScreen> {
       ],
       flexibleSpace: FlexibleSpaceBar(
         title: Text(
-          widget.poi.name,
+          _currentPOI.name,
           style: const TextStyle(
             fontSize: 16,
             fontWeight: FontWeight.bold,
@@ -131,23 +168,7 @@ class _POIDetailScreenState extends State<POIDetailScreen> {
             ],
           ),
         ),
-        background: Consumer<WikipediaProvider>(
-          builder: (context, provider, child) {
-            if (widget.poi.wikipediaTitle != null) {
-              final content = provider.getContent(widget.poi.wikipediaTitle!);
-              if (content?.thumbnailUrl != null) {
-                return Image.network(
-                  content!.thumbnailUrl!,
-                  fit: BoxFit.cover,
-                  errorBuilder: (context, error, stackTrace) {
-                    return _buildPlaceholderImage();
-                  },
-                );
-              }
-            }
-            return _buildPlaceholderImage();
-          },
-        ),
+        background: _buildHeaderImage(),
       ),
     );
   }
@@ -161,6 +182,42 @@ class _POIDetailScreenState extends State<POIDetailScreen> {
         color: Colors.grey[500],
       ),
     );
+  }
+
+  /// Build header image with priority: poi.imageUrl > Wikipedia thumbnail > placeholder
+  Widget _buildHeaderImage() {
+    // Priority 1: Use poi.imageUrl if available (from Google Places)
+    if (_currentPOI.imageUrl != null) {
+      return Image.network(
+        _currentPOI.imageUrl!,
+        fit: BoxFit.cover,
+        errorBuilder: (context, error, stackTrace) {
+          return _buildPlaceholderImage();
+        },
+      );
+    }
+
+    // Priority 2: Use Wikipedia thumbnail if available
+    if (_currentPOI.wikipediaTitle != null) {
+      return Consumer<WikipediaProvider>(
+        builder: (context, provider, child) {
+          final content = provider.getContent(_currentPOI.wikipediaTitle!);
+          if (content?.thumbnailUrl != null) {
+            return Image.network(
+              content!.thumbnailUrl!,
+              fit: BoxFit.cover,
+              errorBuilder: (context, error, stackTrace) {
+                return _buildPlaceholderImage();
+              },
+            );
+          }
+          return _buildPlaceholderImage();
+        },
+      );
+    }
+
+    // Priority 3: Use placeholder
+    return _buildPlaceholderImage();
   }
 
   Widget _buildHeader(BuildContext context) {
@@ -179,7 +236,7 @@ class _POIDetailScreenState extends State<POIDetailScreen> {
                   borderRadius: BorderRadius.circular(16),
                 ),
                 child: Text(
-                  widget.poi.type.displayName,
+                  _currentPOI.type.displayName,
                   style: TextStyle(
                     color: Colors.blue[700],
                     fontWeight: FontWeight.w600,
@@ -195,7 +252,7 @@ class _POIDetailScreenState extends State<POIDetailScreen> {
               ),
               const SizedBox(width: 4),
               Text(
-                _formatDistance(widget.poi.distanceFromCity),
+                _formatDistance(_currentPOI.distanceFromCity),
                 style: TextStyle(
                   color: Colors.grey[600],
                   fontSize: 14,
@@ -213,7 +270,7 @@ class _POIDetailScreenState extends State<POIDetailScreen> {
               ),
               const SizedBox(width: 6),
               Text(
-                'Notability Score: ${widget.poi.notabilityScore}/100',
+                'Notability Score: ${_currentPOI.notabilityScore}/100',
                 style: TextStyle(
                   color: Colors.grey[700],
                   fontSize: 14,
@@ -222,6 +279,103 @@ class _POIDetailScreenState extends State<POIDetailScreen> {
               ),
             ],
           ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildRatingAndStatus(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+      padding: const EdgeInsets.all(16.0),
+      decoration: BoxDecoration(
+        color: Colors.blue[50],
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Row(
+        children: [
+          if (_currentPOI.rating != null) ...[
+            Expanded(
+              child: Row(
+                children: [
+                  Icon(Icons.star, color: Colors.amber[700], size: 24),
+                  const SizedBox(width: 8),
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        _currentPOI.rating!.toStringAsFixed(1),
+                        style: const TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      if (_currentPOI.userRatingsTotal != null)
+                        Text(
+                          '${_currentPOI.userRatingsTotal} reviews',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: Colors.grey[700],
+                          ),
+                        ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ],
+          if (_currentPOI.isOpenNow != null) ...[
+            if (_currentPOI.rating != null)
+              Container(
+                height: 40,
+                width: 1,
+                color: Colors.grey[300],
+                margin: const EdgeInsets.symmetric(horizontal: 16),
+              ),
+            Expanded(
+              child: Row(
+                children: [
+                  Icon(
+                    _currentPOI.isOpenNow! ? Icons.check_circle : Icons.cancel,
+                    color: _currentPOI.isOpenNow! ? Colors.green : Colors.red,
+                    size: 24,
+                  ),
+                  const SizedBox(width: 8),
+                  Text(
+                    _currentPOI.isOpenNow! ? 'Open Now' : 'Closed',
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                      color: _currentPOI.isOpenNow!
+                          ? Colors.green[700]
+                          : Colors.red[700],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+          if (_currentPOI.priceLevel != null) ...[
+            if (_currentPOI.rating != null || _currentPOI.isOpenNow != null)
+              Container(
+                height: 40,
+                width: 1,
+                color: Colors.grey[300],
+                margin: const EdgeInsets.symmetric(horizontal: 16),
+              ),
+            Row(
+              children: List.generate(
+                4,
+                (index) => Icon(
+                  Icons.attach_money,
+                  size: 18,
+                  color: index < _currentPOI.priceLevel!
+                      ? Colors.green[700]
+                      : Colors.grey[300],
+                ),
+              ),
+            ),
+          ],
         ],
       ),
     );
@@ -316,7 +470,7 @@ class _POIDetailScreenState extends State<POIDetailScreen> {
           ),
           const SizedBox(height: 12),
           Text(
-            widget.poi.description!,
+            _currentPOI.description!,
             style: Theme.of(context).textTheme.bodyLarge?.copyWith(
                   height: 1.6,
                 ),
@@ -327,9 +481,11 @@ class _POIDetailScreenState extends State<POIDetailScreen> {
   }
 
   Widget _buildMetadata(BuildContext context) {
-    final hasMetadata = widget.poi.website != null ||
-        widget.poi.openingHours != null ||
-        widget.poi.wikidataId != null;
+    final hasMetadata = _currentPOI.website != null ||
+        _currentPOI.openingHours != null ||
+        _currentPOI.wikidataId != null ||
+        _currentPOI.formattedAddress != null ||
+        _currentPOI.formattedPhoneNumber != null;
 
     if (!hasMetadata) return const SizedBox.shrink();
 
@@ -345,30 +501,49 @@ class _POIDetailScreenState extends State<POIDetailScreen> {
                 ),
           ),
           const SizedBox(height: 12),
-          if (widget.poi.openingHours != null) ...[
+          if (_currentPOI.formattedAddress != null) ...[
+            _buildMetadataRow(
+              context,
+              Icons.location_on,
+              'Address',
+              _currentPOI.formattedAddress!,
+            ),
+            const SizedBox(height: 12),
+          ],
+          if (_currentPOI.formattedPhoneNumber != null) ...[
+            _buildMetadataLink(
+              context,
+              Icons.phone,
+              'Phone',
+              'tel:${_currentPOI.formattedPhoneNumber!}',
+              displayText: _currentPOI.formattedPhoneNumber!,
+            ),
+            const SizedBox(height: 12),
+          ],
+          if (_currentPOI.openingHours != null) ...[
             _buildMetadataRow(
               context,
               Icons.access_time,
               'Opening Hours',
-              widget.poi.openingHours!,
+              _currentPOI.openingHours!,
             ),
             const SizedBox(height: 12),
           ],
-          if (widget.poi.website != null) ...[
+          if (_currentPOI.website != null) ...[
             _buildMetadataLink(
               context,
               Icons.language,
               'Website',
-              widget.poi.website!,
+              _currentPOI.website!,
             ),
             const SizedBox(height: 12),
           ],
-          if (widget.poi.wikidataId != null) ...[
+          if (_currentPOI.wikidataId != null) ...[
             _buildMetadataRow(
               context,
               Icons.storage,
               'Wikidata ID',
-              widget.poi.wikidataId!,
+              _currentPOI.wikidataId!,
             ),
           ],
         ],
@@ -410,7 +585,8 @@ class _POIDetailScreenState extends State<POIDetailScreen> {
   }
 
   Widget _buildMetadataLink(
-      BuildContext context, IconData icon, String label, String url) {
+      BuildContext context, IconData icon, String label, String url,
+      {String? displayText}) {
     return InkWell(
       onTap: () => _launchUrl(url),
       child: Row(
@@ -432,7 +608,7 @@ class _POIDetailScreenState extends State<POIDetailScreen> {
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  url,
+                  displayText ?? url,
                   style: TextStyle(
                     fontSize: 15,
                     color: Colors.blue[700],
@@ -472,7 +648,7 @@ class _POIDetailScreenState extends State<POIDetailScreen> {
             spacing: 16,
             runSpacing: 8,
             children: [
-              for (final source in widget.poi.sources)
+              for (final source in _currentPOI.sources)
                 Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
@@ -551,8 +727,8 @@ class _POIDetailScreenState extends State<POIDetailScreen> {
 
   /// Open native routing app with directions to POI
   Future<void> _getDirections() async {
-    final lat = widget.poi.latitude;
-    final lng = widget.poi.longitude;
+    final lat = _currentPOI.latitude;
+    final lng = _currentPOI.longitude;
     // Use platform-agnostic geo: URI scheme that works on both iOS and Android
     final url = 'geo:0,0?q=$lat,$lng';
     final uri = Uri.parse(url);

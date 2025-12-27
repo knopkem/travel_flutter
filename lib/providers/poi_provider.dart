@@ -17,6 +17,7 @@ class POIProvider extends ChangeNotifier {
   final WikipediaGeosearchRepository _wikipediaRepo;
   final OverpassRepository _overpassRepo;
   final WikidataRepository _wikidataRepo;
+  final GooglePlacesRepository _googlePlacesRepo;
 
   List<POI> _pois = [];
   bool _isLoading = false;
@@ -33,6 +34,10 @@ class POIProvider extends ChangeNotifier {
   // In-memory cache: cityId -> POI list
   final Map<String, List<POI>> _cache = {};
   final List<String> _cacheKeys = []; // For LRU eviction
+
+  // Place details cache: placeId -> details map
+  final Map<String, Map<String, dynamic>> _detailsCache = {};
+
   static const int _maxCacheEntries = 10;
   static const int _displayLimit = 25;
   static const int _maxRetries = 3;
@@ -42,9 +47,11 @@ class POIProvider extends ChangeNotifier {
     WikipediaGeosearchRepository? wikipediaRepo,
     OverpassRepository? overpassRepo,
     WikidataRepository? wikidataRepo,
+    GooglePlacesRepository? googlePlacesRepo,
   })  : _wikipediaRepo = wikipediaRepo ?? WikipediaGeosearchRepository(),
         _overpassRepo = overpassRepo ?? OverpassRepository(),
-        _wikidataRepo = wikidataRepo ?? WikidataRepository();
+        _wikidataRepo = wikidataRepo ?? WikidataRepository(),
+        _googlePlacesRepo = googlePlacesRepo ?? GooglePlacesRepository();
 
   /// Update settings provider reference
   void updateSettings(SettingsProvider settingsProvider) {
@@ -185,6 +192,21 @@ class POIProvider extends ChangeNotifier {
         sourceNames.add('wikidata');
       }
 
+      if (enabledSources.contains(POISource.googlePlaces)) {
+        final googleApiKey = _settingsProvider?.googlePlacesApiKey;
+        if (googleApiKey != null && googleApiKey.isNotEmpty) {
+          futures.add(_fetchWithRetry(
+            (dist) => _googlePlacesRepo
+                .withApiKey(googleApiKey)
+                .fetchNearbyPOIs(city,
+                    radiusMeters: dist, enabledTypes: enabledTypes),
+            'Google Places',
+            distance,
+          ));
+          sourceNames.add('googlePlaces');
+        }
+      }
+
       final results = await Future.wait(futures);
 
       // Check if city changed during fetch
@@ -192,6 +214,7 @@ class POIProvider extends ChangeNotifier {
 
       List<POI> overpassPOIs = [];
       List<POI> wikidataPOIs = [];
+      List<POI> googlePlacesPOIs = [];
 
       for (int i = 0; i < results.length; i++) {
         if (results[i].isNotEmpty) _successfulSources++;
@@ -199,11 +222,14 @@ class POIProvider extends ChangeNotifier {
           overpassPOIs = results[i];
         } else if (sourceNames[i] == 'wikidata') {
           wikidataPOIs = results[i];
+        } else if (sourceNames[i] == 'googlePlaces') {
+          googlePlacesPOIs = results[i];
         }
       }
 
       // Merge all sources with deduplication
-      _pois = _sortAndDeduplicate([wikipediaPOIs, overpassPOIs, wikidataPOIs]);
+      _pois = _sortAndDeduplicate(
+          [wikipediaPOIs, overpassPOIs, wikidataPOIs, googlePlacesPOIs]);
       _isLoadingPhase2 = false;
       _isLoading = false;
 
@@ -361,6 +387,72 @@ class POIProvider extends ChangeNotifier {
   void updateSearchDistance(int? distanceMeters) {
     _tempSearchDistance = distanceMeters;
     notifyListeners();
+  }
+
+  /// Fetch detailed information for a Google Places POI
+  ///
+  /// Returns an enriched POI with additional details like reviews, ratings,
+  /// phone number, and formatted address. Uses cache to avoid redundant API calls.
+  Future<POI?> fetchPlaceDetails(POI poi, String apiKey) async {
+    // Only fetch details for Google Places POIs
+    if (poi.placeId == null) {
+      return poi;
+    }
+
+    // Check cache first
+    if (_detailsCache.containsKey(poi.placeId)) {
+      return _mergePOIWithDetails(poi, _detailsCache[poi.placeId]!);
+    }
+
+    try {
+      final repository = _googlePlacesRepo.withApiKey(apiKey);
+      final details = await repository.fetchPlaceDetails(poi.placeId!);
+
+      if (details != null) {
+        // Cache the details
+        _detailsCache[poi.placeId!] = details;
+
+        // Merge with existing POI
+        return _mergePOIWithDetails(poi, details);
+      }
+
+      return poi;
+    } catch (e) {
+      debugPrint('Error fetching place details: $e');
+      return poi;
+    }
+  }
+
+  /// Merge POI with Place Details API response
+  POI _mergePOIWithDetails(POI poi, Map<String, dynamic> details) {
+    return POI(
+      id: poi.id,
+      name: poi.name,
+      type: poi.type,
+      latitude: poi.latitude,
+      longitude: poi.longitude,
+      distanceFromCity: poi.distanceFromCity,
+      sources: poi.sources,
+      description: poi.description,
+      wikipediaTitle: poi.wikipediaTitle,
+      wikipediaLang: poi.wikipediaLang,
+      wikidataId: poi.wikidataId,
+      imageUrl: poi.imageUrl,
+      website: details['website'] as String? ?? poi.website,
+      openingHours: poi.openingHours,
+      notabilityScore: poi.notabilityScore,
+      discoveredAt: poi.discoveredAt,
+      placeId: poi.placeId,
+      rating: (details['rating'] as num?)?.toDouble() ?? poi.rating,
+      userRatingsTotal:
+          details['user_ratings_total'] as int? ?? poi.userRatingsTotal,
+      formattedAddress: details['formatted_address'] as String?,
+      formattedPhoneNumber: details['formatted_phone_number'] as String?,
+      priceLevel: details['price_level'] as int? ?? poi.priceLevel,
+      isOpenNow: (details['opening_hours']
+              as Map<String, dynamic>?)?['open_now'] as bool? ??
+          poi.isOpenNow,
+    );
   }
 
   @override
