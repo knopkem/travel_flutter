@@ -10,6 +10,7 @@ class SettingsService {
   static const String _poiDistanceKey = 'poi_search_distance';
   static const String _poiProvidersEnabledKey = 'poi_providers_enabled';
   static const String _defaultPoiCategoryKey = 'default_poi_category';
+  static const String _backgroundLocationEnabledKey = 'background_location_enabled';
 
   // Secure storage keys for OpenAI API
   static const String _openaiApiKeyKey = 'openai_api_key';
@@ -468,6 +469,26 @@ class SettingsService {
       return prefs.getBool(_useLocalContentKey) ?? defaultUseLocalContent;
     } catch (e) {
       return defaultUseLocalContent;
+    }
+  }
+
+  /// Save background location enabled setting
+  Future<bool> saveBackgroundLocationEnabled(bool enabled) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      return await prefs.setBool(_backgroundLocationEnabledKey, enabled);
+    } catch (e) {
+      return false;
+    }
+  }
+
+  /// Load background location enabled setting
+  Future<bool> loadBackgroundLocationEnabled() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      return prefs.getBool(_backgroundLocationEnabledKey) ?? true; // Default enabled
+    } catch (e) {
+      return true;
     }
   }
 }

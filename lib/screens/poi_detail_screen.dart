@@ -4,7 +4,12 @@ import 'package:url_launcher/url_launcher.dart';
 import '../models/poi.dart';
 import '../models/poi_category.dart';
 import '../providers/providers.dart';
+import '../providers/reminder_provider.dart';
 import '../utils/country_language_map.dart';
+import '../utils/brand_matcher.dart';
+import '../utils/permission_dialog_helper.dart';
+import '../services/location_monitor_service.dart';
+import '../services/notification_service.dart';
 import 'settings_screen.dart';
 
 /// POI detail screen showing comprehensive information
@@ -29,6 +34,8 @@ class POIDetailScreen extends StatefulWidget {
 
 class _POIDetailScreenState extends State<POIDetailScreen> {
   POI? _enrichedPOI; // POI with fetched place details
+  bool _isReminderExpanded = false;
+  final TextEditingController _newItemController = TextEditingController();
 
   @override
   void initState() {
@@ -121,6 +128,8 @@ class _POIDetailScreenState extends State<POIDetailScreen> {
                 if (_currentPOI.rating != null || _currentPOI.isOpenNow != null)
                   _buildRatingAndStatus(context),
                 _buildActionButtons(context),
+                if (_currentPOI.type.category == POICategory.commercial)
+                  _buildReminderSection(context),
                 const Divider(height: 1),
                 if (_currentPOI.wikipediaTitle != null)
                   _buildWikipediaContent(context),
@@ -431,6 +440,302 @@ class _POIDetailScreenState extends State<POIDetailScreen> {
         ],
       ),
     );
+  }
+
+  Widget _buildReminderSection(BuildContext context) {
+    return Consumer<ReminderProvider>(
+      builder: (context, reminderProvider, child) {
+        final brandName = BrandMatcher.extractBrand(_currentPOI.name);
+        if (brandName == null) return const SizedBox.shrink();
+
+        final reminder = reminderProvider.getReminderForBrand(brandName);
+        final hasReminder = reminder != null;
+
+        return Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+          child: Card(
+            elevation: 2,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                if (!hasReminder)
+                  // Add reminder button
+                  ListTile(
+                    leading: const Icon(Icons.shopping_cart, color: Colors.blue),
+                    title: const Text('Add Shopping Reminder'),
+                    subtitle: Text('Get notified at any $brandName store'),
+                    trailing: const Icon(Icons.add),
+                    onTap: () => _createReminder(context, brandName),
+                  )
+                else
+                  // Reminder card
+                  Column(
+                    children: [
+                      ListTile(
+                        leading: Icon(
+                          Icons.shopping_cart,
+                          color: Colors.green[700],
+                        ),
+                        title: Text('Shopping List for $brandName'),
+                        subtitle: Text(
+                          '${reminder.items.where((i) => !i.isChecked).length} items',
+                        ),
+                        trailing: IconButton(
+                          icon: Icon(
+                            _isReminderExpanded
+                                ? Icons.expand_less
+                                : Icons.expand_more,
+                          ),
+                          onPressed: () {
+                            setState(() {
+                              _isReminderExpanded = !_isReminderExpanded;
+                            });
+                          },
+                        ),
+                      ),
+                      if (_isReminderExpanded) ...[
+                        const Divider(height: 1),
+                        Padding(
+                          padding: const EdgeInsets.all(16.0),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              // Shopping list
+                              ListView.builder(
+                                shrinkWrap: true,
+                                physics: const NeverScrollableScrollPhysics(),
+                                itemCount: reminder.items.length,
+                                itemBuilder: (context, index) {
+                                  final item = reminder.items[index];
+                                  return CheckboxListTile(
+                                    value: item.isChecked,
+                                    onChanged: (checked) async {
+                                      final success =
+                                          await reminderProvider.toggleItem(
+                                        reminder.id,
+                                        item.id,
+                                      );
+                                      if (success && mounted) {
+                                        // Check if all items are now checked
+                                        if (checked == true &&
+                                            reminder.items.length == 1) {
+                                          PermissionDialogHelper
+                                              .showReminderAutoRemovedMessage(
+                                            context,
+                                            brandName,
+                                          );
+                                        }
+                                      }
+                                    },
+                                    title: Text(
+                                      item.text,
+                                      style: TextStyle(
+                                        decoration: item.isChecked
+                                            ? TextDecoration.lineThrough
+                                            : null,
+                                      ),
+                                    ),
+                                    secondary: IconButton(
+                                      icon: const Icon(Icons.delete_outline,
+                                          size: 20),
+                                      onPressed: () =>
+                                          reminderProvider.removeItem(
+                                        reminder.id,
+                                        item.id,
+                                      ),
+                                    ),
+                                    contentPadding: EdgeInsets.zero,
+                                  );
+                                },
+                              ),
+                              const SizedBox(height: 8),
+                              // Add new item
+                              Row(
+                                children: [
+                                  Expanded(
+                                    child: TextField(
+                                      controller: _newItemController,
+                                      decoration: const InputDecoration(
+                                        hintText: 'Add item...',
+                                        border: OutlineInputBorder(),
+                                        contentPadding: EdgeInsets.symmetric(
+                                          horizontal: 12,
+                                          vertical: 8,
+                                        ),
+                                      ),
+                                      onSubmitted: (text) {
+                                        if (text.trim().isNotEmpty) {
+                                          reminderProvider.addItem(
+                                            reminder.id,
+                                            text.trim(),
+                                          );
+                                          _newItemController.clear();
+                                        }
+                                      },
+                                    ),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  IconButton(
+                                    icon: const Icon(Icons.add_circle),
+                                    color: Colors.blue,
+                                    onPressed: () {
+                                      final text = _newItemController.text.trim();
+                                      if (text.isNotEmpty) {
+                                        reminderProvider.addItem(
+                                          reminder.id,
+                                          text,
+                                        );
+                                        _newItemController.clear();
+                                      }
+                                    },
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 12),
+                              // Remove reminder button
+                              SizedBox(
+                                width: double.infinity,
+                                child: OutlinedButton.icon(
+                                  onPressed: () async {
+                                    final confirm = await showDialog<bool>(
+                                      context: context,
+                                      builder: (context) => AlertDialog(
+                                        title: const Text('Remove Reminder?'),
+                                        content: Text(
+                                          'Remove shopping reminder for $brandName?',
+                                        ),
+                                        actions: [
+                                          TextButton(
+                                            onPressed: () =>
+                                                Navigator.pop(context, false),
+                                            child: const Text('Cancel'),
+                                          ),
+                                          ElevatedButton(
+                                            onPressed: () =>
+                                                Navigator.pop(context, true),
+                                            child: const Text('Remove'),
+                                          ),
+                                        ],
+                                      ),
+                                    );
+
+                                    if (confirm == true && mounted) {
+                                      final success =
+                                          await reminderProvider.removeReminder(
+                                        reminder.id,
+                                      );
+                                      if (success && mounted) {
+                                        PermissionDialogHelper
+                                            .showReminderRemovedMessage(
+                                          context,
+                                          brandName,
+                                        );
+                                        setState(() {
+                                          _isReminderExpanded = false;
+                                        });
+                                      }
+                                    }
+                                  },
+                                  icon: const Icon(Icons.delete),
+                                  label: const Text('Remove Reminder'),
+                                  style: OutlinedButton.styleFrom(
+                                    foregroundColor: Colors.red,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Future<void> _createReminder(BuildContext context, String brandName) async {
+    final reminderProvider = Provider.of<ReminderProvider>(
+      context,
+      listen: false,
+    );
+    
+    final settingsProvider = Provider.of<SettingsProvider>(
+      context,
+      listen: false,
+    );
+
+    // Check if this is the first reminder
+    final isFirstReminder = !reminderProvider.hasReminders;
+
+    if (isFirstReminder) {
+      // Show permission rationale dialogs
+      final allowedBg = await PermissionDialogHelper
+          .showBackgroundLocationRationale(context);
+      if (!allowedBg) return;
+
+      final allowedNotif =
+          await PermissionDialogHelper.showNotificationRationale(context);
+      if (!allowedNotif) return;
+
+      // Request actual permissions
+      final locationService = LocationMonitorService();
+      final locationGranted = await locationService.requestBackgroundPermission();
+      
+      if (!locationGranted) {
+        if (mounted) {
+          PermissionDialogHelper.showError(
+            context,
+            'Background location permission is required for reminders',
+          );
+        }
+        return;
+      }
+
+      final notificationService = NotificationService();
+      final notifGranted = await notificationService.requestPermission();
+      
+      if (!notifGranted) {
+        if (mounted) {
+          PermissionDialogHelper.showError(
+            context,
+            'Notification permission is required for reminders',
+          );
+        }
+        return;
+      }
+    }
+
+    // Show dialog to add initial shopping items
+    final items = await showDialog<List<String>>(
+      context: context,
+      builder: (context) => _ShoppingListDialog(brandName: brandName),
+    );
+
+    if (items == null || items.isEmpty) return;
+
+    // Create the reminder
+    final success = await reminderProvider.addReminder(_currentPOI, items);
+    
+    if (success && mounted) {
+      PermissionDialogHelper.showReminderCreatedMessage(context, brandName);
+      setState(() {
+        _isReminderExpanded = true;
+      });
+      
+      // Enable background location monitoring in settings
+      if (isFirstReminder) {
+        await settingsProvider.updateBackgroundLocationEnabled(true);
+      }
+    } else if (mounted) {
+      PermissionDialogHelper.showError(
+        context,
+        reminderProvider.error ?? 'Failed to create reminder',
+      );
+    }
   }
 
   Widget _buildWikipediaContent(BuildContext context) {
@@ -777,5 +1082,120 @@ class _POIDetailScreenState extends State<POIDetailScreen> {
     // Navigate to map filtered by this POI's name
     mapNavProvider.navigateToMapWithFilter(widget.poi.name);
     Navigator.pop(context); // Return to previous screen
+  }
+}
+
+/// Dialog for creating initial shopping list
+class _ShoppingListDialog extends StatefulWidget {
+  final String brandName;
+
+  const _ShoppingListDialog({required this.brandName});
+
+  @override
+  State<_ShoppingListDialog> createState() => _ShoppingListDialogState();
+}
+
+class _ShoppingListDialogState extends State<_ShoppingListDialog> {
+  final List<String> _items = [];
+  final TextEditingController _controller = TextEditingController();
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void _addItem() {
+    final text = _controller.text.trim();
+    if (text.isNotEmpty) {
+      setState(() {
+        _items.add(text);
+      });
+      _controller.clear();
+    }
+  }
+
+  void _removeItem(int index) {
+    setState(() {
+      _items.removeAt(index);
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: Text('Shopping List for ${widget.brandName}'),
+      content: SizedBox(
+        width: double.maxFinite,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // Add item field
+            Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: _controller,
+                    decoration: const InputDecoration(
+                      hintText: 'Add item...',
+                      border: OutlineInputBorder(),
+                    ),
+                    onSubmitted: (_) => _addItem(),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                IconButton(
+                  icon: const Icon(Icons.add_circle),
+                  color: Colors.blue,
+                  onPressed: _addItem,
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            // Items list
+            if (_items.isNotEmpty)
+              Flexible(
+                child: ListView.builder(
+                  shrinkWrap: true,
+                  itemCount: _items.length,
+                  itemBuilder: (context, index) {
+                    return ListTile(
+                      title: Text(_items[index]),
+                      trailing: IconButton(
+                        icon: const Icon(Icons.delete_outline),
+                        onPressed: () => _removeItem(index),
+                      ),
+                      contentPadding: EdgeInsets.zero,
+                    );
+                  },
+                ),
+              )
+            else
+              const Padding(
+                padding: EdgeInsets.all(16.0),
+                child: Text(
+                  'Add items to your shopping list',
+                  style: TextStyle(
+                    color: Colors.grey,
+                    fontStyle: FontStyle.italic,
+                  ),
+                ),
+              ),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('Cancel'),
+        ),
+        ElevatedButton(
+          onPressed: _items.isEmpty
+              ? null
+              : () => Navigator.pop(context, _items),
+          child: const Text('Create Reminder'),
+        ),
+      ],
+    );
   }
 }

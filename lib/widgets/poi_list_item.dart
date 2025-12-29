@@ -1,102 +1,109 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import '../models/poi.dart';
 import '../models/poi_type.dart';
+import '../providers/reminder_provider.dart';
+import '../utils/brand_matcher.dart';
 
 /// Individual POI list item widget
 ///
 /// Displays a single POI with:
-/// - Type icon on the left
+/// - Type icon on the left (with shopping cart badge if tagged)
 /// - POI name (bold)
 /// - Distance from city (gray text)
-/// - Action buttons for map and directions
 class POIListItem extends StatelessWidget {
   final POI poi;
   final VoidCallback? onTap;
-  final VoidCallback? onShowOnMap;
-  final VoidCallback? onGetDirections;
 
   const POIListItem({
     super.key,
     required this.poi,
     this.onTap,
-    this.onShowOnMap,
-    this.onGetDirections,
   });
 
   @override
   Widget build(BuildContext context) {
-    return Semantics(
-      label:
-          '${poi.name}, ${poi.type.displayName}, ${_formatDistance(poi.distanceFromCity)} away',
-      hint: 'Tap to view details',
-      button: true,
-      child: Card(
-        margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-        child: ListTile(
-          leading: CircleAvatar(
-            backgroundColor: _getTypeColor(poi.type),
-            child: Icon(_getTypeIcon(poi.type), color: Colors.white, size: 20),
-          ),
-          title: Text(
-            poi.name,
-            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-          ),
-          subtitle: Row(
-            children: [
-              Icon(Icons.location_on, size: 14, color: Colors.grey[600]),
-              const SizedBox(width: 4),
-              Text(
-                _formatDistance(poi.distanceFromCity),
-                style: TextStyle(color: Colors.grey[600], fontSize: 13),
-              ),
-              const SizedBox(width: 12),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                decoration: BoxDecoration(
-                  color: Colors.blue[50],
-                  borderRadius: BorderRadius.circular(4),
-                ),
-                child: Text(
-                  poi.type.displayName,
-                  style: TextStyle(
-                    color: Colors.blue[700],
-                    fontSize: 11,
-                    fontWeight: FontWeight.w500,
+    return Consumer<ReminderProvider>(
+      builder: (context, reminderProvider, child) {
+        final brandName = BrandMatcher.extractBrand(poi.name);
+        final hasReminder = brandName != null &&
+            reminderProvider.hasReminderForBrand(brandName);
+
+        return Semantics(
+          label:
+              '${poi.name}, ${poi.type.displayName}, ${_formatDistance(poi.distanceFromCity)} away',
+          hint: 'Tap to view details',
+          button: true,
+          child: Card(
+            margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+            child: ListTile(
+              leading: Stack(
+                clipBehavior: Clip.none,
+                children: [
+                  CircleAvatar(
+                    backgroundColor: _getTypeColor(poi.type),
+                    child: Icon(_getTypeIcon(poi.type),
+                        color: Colors.white, size: 20),
                   ),
-                ),
+                  if (hasReminder)
+                    Positioned(
+                      right: -4,
+                      top: -4,
+                      child: Container(
+                        padding: const EdgeInsets.all(2),
+                        decoration: BoxDecoration(
+                          color: Colors.green[700],
+                          shape: BoxShape.circle,
+                          border: Border.all(color: Colors.white, width: 2),
+                        ),
+                        child: const Icon(
+                          Icons.shopping_cart,
+                          size: 14,
+                          color: Colors.white,
+                        ),
+                      ),
+                    ),
+                ],
               ),
-            ],
+              title: Text(
+                poi.name,
+                style:
+                    const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+              subtitle: Row(
+                children: [
+                  Icon(Icons.location_on, size: 14, color: Colors.grey[600]),
+                  const SizedBox(width: 4),
+                  Text(
+                    _formatDistance(poi.distanceFromCity),
+                    style: TextStyle(color: Colors.grey[600], fontSize: 13),
+                  ),
+                  const SizedBox(width: 12),
+                  Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: Colors.blue[50],
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                    child: Text(
+                      poi.type.displayName,
+                      style: TextStyle(
+                        color: Colors.blue[700],
+                        fontSize: 11,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              onTap: onTap,
+            ),
           ),
-          trailing: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              IconButton(
-                icon: const Icon(Icons.map_outlined, size: 20),
-                onPressed: onShowOnMap,
-                tooltip: 'Show on map',
-                padding: EdgeInsets.zero,
-                constraints: const BoxConstraints(
-                  minWidth: 36,
-                  minHeight: 36,
-                ),
-              ),
-              IconButton(
-                icon: const Icon(Icons.directions, size: 20),
-                onPressed: onGetDirections,
-                tooltip: 'Get directions',
-                padding: EdgeInsets.zero,
-                constraints: const BoxConstraints(
-                  minWidth: 36,
-                  minHeight: 36,
-                ),
-              ),
-            ],
-          ),
-          onTap: onTap,
-        ),
-      ),
+        );
+      },
     );
   }
 

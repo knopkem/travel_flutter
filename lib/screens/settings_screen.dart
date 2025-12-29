@@ -4,6 +4,7 @@ import '../models/poi_category.dart';
 import '../models/poi_type.dart';
 import '../models/poi_source.dart';
 import '../providers/settings_provider.dart';
+import '../providers/reminder_provider.dart';
 
 /// Settings screen for customizing app preferences
 ///
@@ -30,6 +31,7 @@ class SettingsScreen extends StatelessWidget {
               _buildAIGuidanceSection(context, settingsProvider),
               _buildGooglePlacesSection(context, settingsProvider),
               _buildProvidersSection(context, settingsProvider),
+              _buildRemindersSection(context, settingsProvider),
               _buildPoiTypesSection(context, settingsProvider),
               _buildInterestsSection(context, settingsProvider),
               _buildDistanceSection(context, settingsProvider),
@@ -242,6 +244,112 @@ class SettingsScreen extends StatelessWidget {
           ),
         ),
       ],
+    );
+  }
+
+  Widget _buildRemindersSection(
+    BuildContext context,
+    SettingsProvider settingsProvider,
+  ) {
+    return Consumer<ReminderProvider>(
+      builder: (context, reminderProvider, child) {
+        final hasReminders = reminderProvider.hasReminders;
+        
+        return ExpansionTile(
+          initiallyExpanded: hasReminders,
+          leading: const Icon(Icons.shopping_cart),
+          title: const Text(
+            'Shopping Reminders',
+            style: TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          subtitle: hasReminders
+              ? Text('${reminderProvider.reminders.length} active reminders')
+              : const Text('No active reminders'),
+          children: [
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  if (hasReminders) ...[
+                    SwitchListTile(
+                      title: const Text('Background Location'),
+                      subtitle: Text(
+                        'Check your location periodically to send reminders when near tagged stores',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Colors.grey[600],
+                        ),
+                      ),
+                      value: settingsProvider.backgroundLocationEnabled,
+                      onChanged: (value) async {
+                        await settingsProvider.updateBackgroundLocationEnabled(value);
+                        if (context.mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text(
+                                value
+                                    ? 'Background location enabled'
+                                    : 'Background location disabled',
+                              ),
+                              backgroundColor: value ? Colors.green : null,
+                            ),
+                          );
+                        }
+                      },
+                    ),
+                    const SizedBox(height: 8),
+                    Divider(color: Colors.grey[300]),
+                    const SizedBox(height: 8),
+                    ListTile(
+                      leading: const Icon(Icons.list_alt),
+                      title: const Text('Manage Shopping Reminders'),
+                      subtitle: const Text('View and edit all your shopping lists'),
+                      trailing: const Icon(Icons.chevron_right),
+                      onTap: () {
+                        // TODO: Navigate to reminders overview screen (Phase 2)
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text('Reminders overview coming soon!'),
+                            duration: Duration(seconds: 2),
+                          ),
+                        );
+                      },
+                    ),
+                  ] else ...[
+                    Padding(
+                      padding: const EdgeInsets.all(12),
+                      child: Text(
+                        'Tag commercial POIs (stores, restaurants, etc.) with shopping lists. '
+                        'You\'ll receive notifications when you\'re near any location of the tagged brand.',
+                        style: TextStyle(
+                          fontSize: 14,
+                          color: Colors.grey[700],
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    ListTile(
+                      leading: Icon(Icons.info_outline, color: Colors.blue[700]),
+                      title: const Text('How to create a reminder'),
+                      subtitle: const Text(
+                        '1. Find a commercial POI (e.g., supermarket)\n'
+                        '2. Tap to view details\n'
+                        '3. Tap "Add Shopping Reminder"\n'
+                        '4. Add items to your list',
+                      ),
+                      dense: true,
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ],
+        );
+      },
     );
   }
 

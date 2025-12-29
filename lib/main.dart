@@ -1,10 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'providers/providers.dart';
+import 'providers/reminder_provider.dart';
 import 'repositories/repositories.dart';
 import 'screens/tab_navigation_screen.dart';
 import 'services/openai_service.dart';
+import 'services/notification_service.dart';
 import 'utils/settings_service.dart';
+
+// Global navigator key for deep linking from notifications
+final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -13,6 +18,17 @@ void main() async {
   final settingsService = SettingsService();
   final settingsProvider = SettingsProvider(settingsService: settingsService);
   await settingsProvider.initialize();
+
+  // Initialize notification service with deep linking
+  final notificationService = NotificationService();
+  await notificationService.initialize(
+    onNotificationTapped: (poiId) {
+      // Navigate to POI detail screen
+      // This will be handled by the navigator in TabNavigationScreen
+      print('Notification tapped for POI: $poiId');
+      // TODO: Implement deep link navigation
+    },
+  );
 
   runApp(
     MultiProvider(
@@ -83,6 +99,9 @@ void main() async {
             settingsProvider: settingsProvider,
           ),
         ),
+        ChangeNotifierProvider(
+          create: (_) => ReminderProvider()..initialize(),
+        ),
       ],
       child: const MyApp(),
     ),
@@ -96,6 +115,7 @@ class MyApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'LocationPal',
+      navigatorKey: navigatorKey,
       theme: ThemeData(
         colorScheme: ColorScheme.fromSeed(seedColor: Colors.blue),
         useMaterial3: true,

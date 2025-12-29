@@ -48,6 +48,12 @@
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>This app needs your location to discover nearby attractions automatically</string>
 	<key>NSLocationAlwaysUsageDescription</key>
-	<string>This app needs your location to discover nearby attractions automatically</string>
+	<string>This app needs background location access to remind you about your shopping lists when you're near tagged stores</string>
+	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
+	<string>This app needs background location access to remind you about your shopping lists when you're near tagged stores</string>
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>location</string>
+	</array>
 </dict>
 </plist>

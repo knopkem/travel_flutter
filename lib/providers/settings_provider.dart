@@ -24,6 +24,7 @@ class SettingsProvider extends ChangeNotifier {
   String? _googlePlacesApiKey;
   int _googlePlacesRequestCount = 0;
   POICategory _defaultPoiCategory = POICategory.attraction;
+  bool _backgroundLocationEnabled = true;
 
   SettingsProvider({
     SettingsService? settingsService,
@@ -102,6 +103,9 @@ class SettingsProvider extends ChangeNotifier {
   /// Default POI category to display on startup
   POICategory get defaultPoiCategory => _defaultPoiCategory;
 
+  /// Whether background location monitoring is enabled for reminders
+  bool get backgroundLocationEnabled => _backgroundLocationEnabled;
+
   /// Whether settings are currently being loaded
   bool get isLoading => _isLoading;
 
@@ -117,6 +121,8 @@ class SettingsProvider extends ChangeNotifier {
     final gpCount = await _settingsService.loadGooglePlacesRequestCount();
     _googlePlacesRequestCount = gpCount.$1;
     _defaultPoiCategory = await _settingsService.loadDefaultPoiCategory();
+    _backgroundLocationEnabled =
+        await _settingsService.loadBackgroundLocationEnabled();
     _isLoading = true;
     notifyListeners();
 
@@ -301,6 +307,13 @@ class SettingsProvider extends ChangeNotifier {
     _googlePlacesRequestCount++;
     await _settingsService.saveGooglePlacesRequestCount(
         _googlePlacesRequestCount, DateTime.now());
+    notifyListeners();
+  }
+
+  /// Update background location enabled setting
+  Future<void> updateBackgroundLocationEnabled(bool enabled) async {
+    await _settingsService.saveBackgroundLocationEnabled(enabled);
+    _backgroundLocationEnabled = enabled;
     notifyListeners();
   }
 }

@@ -1,13 +1,11 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:url_launcher/url_launcher.dart';
 import '../models/location.dart';
 import '../models/poi.dart';
 import '../models/poi_category.dart';
 import '../models/poi_type.dart';
 import '../providers/poi_provider.dart';
-import '../providers/map_navigation_provider.dart';
 import '../providers/settings_provider.dart';
 import '../providers/ai_guidance_provider.dart';
 import '../screens/poi_detail_screen.dart';
@@ -264,8 +262,6 @@ class _POIListWidgetState extends State<POIListWidget>
                         ),
                       );
                     },
-                    onShowOnMap: () => _showPoiOnMap(context, poi),
-                    onGetDirections: () => _getDirectionsToPoi(poi),
                   );
                 },
               ),
@@ -1128,37 +1124,6 @@ class _POIListWidgetState extends State<POIListWidget>
         ),
       ),
     );
-  }
-
-  /// Show POI on map by switching to map tab and centering
-  void _showPoiOnMap(BuildContext context, POI poi) {
-    final mapNavProvider = Provider.of<MapNavigationProvider>(
-      context,
-      listen: false,
-    );
-    mapNavProvider.navigateToPoiOnMap(poi);
-  }
-
-  /// Open native routing app with directions to POI
-  Future<void> _getDirectionsToPoi(POI poi) async {
-    final lat = poi.latitude;
-    final lng = poi.longitude;
-    // Use platform-agnostic geo: URI scheme that works on both iOS and Android
-    final url = 'geo:0,0?q=$lat,$lng';
-    final uri = Uri.parse(url);
-    try {
-      if (await canLaunchUrl(uri)) {
-        await launchUrl(uri, mode: LaunchMode.externalApplication);
-      } else {
-        // Fallback to Google Maps web URL if geo: scheme is not supported
-        final fallbackUrl =
-            'https://www.google.com/maps/dir/?api=1&destination=$lat,$lng&travelmode=walking';
-        final fallbackUri = Uri.parse(fallbackUrl);
-        await launchUrl(fallbackUri, mode: LaunchMode.externalApplication);
-      }
-    } catch (e) {
-      debugPrint('Error launching directions: $e');
-    }
   }
 
   void _showIncompleteSourcesToast(BuildContext context, POIProvider provider) {
