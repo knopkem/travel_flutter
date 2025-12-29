@@ -91,7 +91,10 @@ class _LocationDetailScreenState extends State<LocationDetailScreen> {
 
     // Fetch POIs (errors handled in provider)
     try {
-      await poiProvider.discoverPOIs(widget.location);
+      // Fetch POIs for the default category from settings
+      final defaultCategory = settingsProvider.defaultPoiCategory;
+      poiProvider.setCategory(defaultCategory);
+      await poiProvider.discoverPOIs(widget.location, category: defaultCategory);
     } catch (e) {
       // Error already handled by provider, just log
       debugPrint('POI discovery failed: $e');

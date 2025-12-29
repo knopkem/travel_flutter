@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../models/poi_category.dart';
 import '../models/poi_type.dart';
 import '../models/poi_source.dart';
 import '../providers/settings_provider.dart';
@@ -179,6 +180,41 @@ class SettingsScreen extends StatelessWidget {
                 value: settingsProvider.useLocalContent,
                 onChanged: (value) {
                   settingsProvider.updateUseLocalContent(value);
+                },
+              ),
+              const SizedBox(height: 8),
+              Divider(color: Colors.grey[300]),
+              const SizedBox(height: 8),
+              ListTile(
+                title: const Text('Default POI Category'),
+                subtitle: Text(
+                  'Choose which category of points of interest to show by default',
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: Colors.grey[600],
+                  ),
+                ),
+              ),
+              RadioListTile<POICategory>(
+                title: const Text('Attractions'),
+                subtitle: const Text('Museums, monuments, viewpoints'),
+                value: POICategory.attraction,
+                groupValue: settingsProvider.defaultPoiCategory,
+                onChanged: (POICategory? value) {
+                  if (value != null) {
+                    settingsProvider.updateDefaultPoiCategory(value);
+                  }
+                },
+              ),
+              RadioListTile<POICategory>(
+                title: const Text('Commercial'),
+                subtitle: const Text('Restaurants, shops, services'),
+                value: POICategory.commercial,
+                groupValue: settingsProvider.defaultPoiCategory,
+                onChanged: (POICategory? value) {
+                  if (value != null) {
+                    settingsProvider.updateDefaultPoiCategory(value);
+                  }
                 },
               ),
               const SizedBox(height: 8),
@@ -591,6 +627,26 @@ class SettingsScreen extends StatelessWidget {
         return Icons.attractions;
       case POIType.historicSite:
         return Icons.castle;
+      case POIType.restaurant:
+        return Icons.restaurant;
+      case POIType.cafe:
+        return Icons.local_cafe;
+      case POIType.bakery:
+        return Icons.bakery_dining;
+      case POIType.supermarket:
+        return Icons.shopping_cart;
+      case POIType.hardwareStore:
+        return Icons.hardware;
+      case POIType.pharmacy:
+        return Icons.local_pharmacy;
+      case POIType.gasStation:
+        return Icons.local_gas_station;
+      case POIType.hotel:
+        return Icons.hotel;
+      case POIType.bar:
+        return Icons.local_bar;
+      case POIType.fastFood:
+        return Icons.fastfood;
       case POIType.other:
         return Icons.place;
     }
@@ -612,6 +668,26 @@ class SettingsScreen extends StatelessWidget {
         return 'Tourist Attraction';
       case POIType.historicSite:
         return 'Historic Site';
+      case POIType.restaurant:
+        return 'Restaurant';
+      case POIType.cafe:
+        return 'Café';
+      case POIType.bakery:
+        return 'Bakery';
+      case POIType.supermarket:
+        return 'Supermarket';
+      case POIType.hardwareStore:
+        return 'Hardware Store';
+      case POIType.pharmacy:
+        return 'Pharmacy';
+      case POIType.gasStation:
+        return 'Gas Station';
+      case POIType.hotel:
+        return 'Hotel';
+      case POIType.bar:
+        return 'Bar';
+      case POIType.fastFood:
+        return 'Fast Food';
       case POIType.other:
         return 'Other';
     }

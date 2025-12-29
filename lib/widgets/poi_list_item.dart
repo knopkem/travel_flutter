@@ -124,6 +124,26 @@ class POIListItem extends StatelessWidget {
         return Icons.history_edu;
       case POIType.touristAttraction:
         return Icons.star;
+      case POIType.restaurant:
+        return Icons.restaurant;
+      case POIType.cafe:
+        return Icons.local_cafe;
+      case POIType.bakery:
+        return Icons.bakery_dining;
+      case POIType.supermarket:
+        return Icons.shopping_cart;
+      case POIType.hardwareStore:
+        return Icons.hardware;
+      case POIType.pharmacy:
+        return Icons.local_pharmacy;
+      case POIType.gasStation:
+        return Icons.local_gas_station;
+      case POIType.hotel:
+        return Icons.hotel;
+      case POIType.bar:
+        return Icons.local_bar;
+      case POIType.fastFood:
+        return Icons.fastfood;
       case POIType.other:
         return Icons.location_city;
     }
@@ -145,6 +165,26 @@ class POIListItem extends StatelessWidget {
         return Colors.brown;
       case POIType.touristAttraction:
         return Colors.orange;
+      case POIType.restaurant:
+        return Colors.red;
+      case POIType.cafe:
+        return Colors.brown[300]!;
+      case POIType.bakery:
+        return Colors.orange[300]!;
+      case POIType.supermarket:
+        return Colors.blue[700]!;
+      case POIType.hardwareStore:
+        return Colors.deepOrange;
+      case POIType.pharmacy:
+        return Colors.green[700]!;
+      case POIType.gasStation:
+        return Colors.yellow[700]!;
+      case POIType.hotel:
+        return Colors.indigo[300]!;
+      case POIType.bar:
+        return Colors.purple[700]!;
+      case POIType.fastFood:
+        return Colors.red[700]!;
       case POIType.other:
         return Colors.grey;
     }

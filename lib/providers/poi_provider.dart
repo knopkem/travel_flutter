@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 import '../models/location.dart';
 import '../models/poi.dart';
+import '../models/poi_category.dart';
 import '../models/poi_source.dart';
 import '../models/poi_type.dart';
 import '../repositories/repositories.dart';
@@ -30,8 +31,10 @@ class POIProvider extends ChangeNotifier {
   final int _totalSources = 3; // Wikipedia, Overpass, Wikidata
   Set<POIType> _selectedFilters = {}; // Active POI type filters
   int? _tempSearchDistance; // Temporary distance override from UI slider
+  POICategory _currentCategory = POICategory.attraction; // Current active category
+  String _searchQuery = ''; // Search query for filtering POIs by name
 
-  // In-memory cache: cityId -> POI list
+  // In-memory cache: "cityId_category" -> POI list
   final Map<String, List<POI>> _cache = {};
   final List<String> _cacheKeys = []; // For LRU eviction
 
@@ -73,6 +76,8 @@ class POIProvider extends ChangeNotifier {
   }
 
   Set<POIType> get selectedFilters => Set.unmodifiable(_selectedFilters);
+  POICategory get currentCategory => _currentCategory;
+  String get searchQuery => _searchQuery;
   bool get isLoading => _isLoading;
   bool get isLoadingPhase1 => _isLoadingPhase1;
   bool get isLoadingPhase2 => _isLoadingPhase2;
@@ -85,12 +90,21 @@ class POIProvider extends ChangeNotifier {
   bool get allProvidersDisabled =>
       _settingsProvider?.allProvidersDisabled ?? false;
 
+  /// Set the current POI category (attractions or commercial)
+  void setCategory(POICategory category) {
+    _currentCategory = category;
+    notifyListeners();
+  }
+
   /// Discover POIs for a city with progressive loading
   ///
-  /// Phase 1: Fast Wikipedia Geosearch (~2s)
-  /// Phase 2: Parallel Overpass + Wikidata (~3s)
-  Future<void> discoverPOIs(Location city, {bool forceRefresh = false}) async {
+  /// Phase 1: Fast Wikipedia Geosearch (~2s) - only for attractions
+  /// Phase 2: Parallel Overpass + Wikidata (~3s) - Wikidata only for attractions
+  Future<void> discoverPOIs(Location city,
+      {bool forceRefresh = false, POICategory? category}) async {
     final cityId = city.id;
+    final targetCategory = category ?? _currentCategory;
+    final cacheKey = '${cityId}_${targetCategory.name}';
 
     // Check if all providers are disabled
     if (_settingsProvider?.allProvidersDisabled ?? false) {
@@ -103,25 +117,39 @@ class POIProvider extends ChangeNotifier {
       return;
     }
 
-    // Check if all POI types are disabled
-    if (_settingsProvider?.allPoiTypesDisabled ?? false) {
+    // Get enabled types for this category
+    final enabledTypes = (_settingsProvider?.enabledPoiTypes ?? POIType.values)
+        .where((type) => type.category == targetCategory)
+        .toSet();
+
+    // Check if all POI types for this category are disabled
+    if (enabledTypes.isEmpty) {
       _pois = [];
       _currentCityId = cityId;
-      _error = 'Please enable at least one POI type in settings';
+      _error =
+          'Please enable at least one ${targetCategory.displayName} type in settings';
       _isLoading = false;
       _successfulSources = 0;
       notifyListeners();
       return;
     }
 
-    // Get enabled sources
-    final enabledSources =
-        _settingsProvider?.enabledPoiSources ?? POISource.values;
+    // Get enabled sources (skip Wikipedia/Wikidata for commercial)
+    Set<POISource> enabledSources =
+        _settingsProvider?.enabledPoiSources.toSet() ?? POISource.values.toSet();
+    if (targetCategory == POICategory.commercial) {
+      enabledSources = enabledSources
+          .where((source) =>
+              source != POISource.wikipediaGeosearch &&
+              source != POISource.wikidata)
+          .toSet();
+    }
 
     // Check cache first (unless force refresh)
-    if (!forceRefresh && _cache.containsKey(cityId)) {
-      _pois = _cache[cityId]!;
+    if (!forceRefresh && _cache.containsKey(cacheKey)) {
+      _pois = _cache[cacheKey]!;
       _currentCityId = cityId;
+      _currentCategory = targetCategory;
       _error = null;
       notifyListeners();
       return;
@@ -129,6 +157,7 @@ class POIProvider extends ChangeNotifier {
 
     // Cancel any in-flight requests
     _currentCityId = cityId;
+    _currentCategory = targetCategory;
     _isLoading = true;
     _error = null;
     _pois = [];
@@ -146,16 +175,16 @@ class POIProvider extends ChangeNotifier {
       _wikipediaRepo.setLanguageCode(languageCode);
       _wikidataRepo.setLanguageCode(languageCode);
 
-      // Phase 1: Wikipedia Geosearch (fast)
+      // Phase 1: Wikipedia Geosearch (fast) - only for attractions
       _isLoadingPhase1 = true;
       notifyListeners();
 
       final distance =
           _tempSearchDistance ?? _settingsProvider?.poiSearchDistance ?? 5000;
-      final enabledTypes = _settingsProvider?.enabledPoiTypes.toSet();
 
       List<POI> wikipediaPOIs = [];
-      if (enabledSources.contains(POISource.wikipediaGeosearch)) {
+      if (targetCategory == POICategory.attraction &&
+          enabledSources.contains(POISource.wikipediaGeosearch)) {
         wikipediaPOIs = await _fetchWithRetry(
           (dist) => _wikipediaRepo.fetchNearbyPOIs(city,
               radiusMeters: dist, enabledTypes: enabledTypes),
@@ -189,7 +218,9 @@ class POIProvider extends ChangeNotifier {
         sourceNames.add('overpass');
       }
 
-      if (enabledSources.contains(POISource.wikidata)) {
+      // Wikidata only for attractions
+      if (targetCategory == POICategory.attraction &&
+          enabledSources.contains(POISource.wikidata)) {
         futures.add(_fetchWithRetry(
           (dist) => _wikidataRepo.fetchNearbyPOIs(city,
               radiusMeters: dist, enabledTypes: enabledTypes),
@@ -241,7 +272,7 @@ class POIProvider extends ChangeNotifier {
       _isLoading = false;
 
       // Cache the results
-      _updateCache(cityId, _pois);
+      _updateCache(cacheKey, _pois);
 
       notifyListeners();
     } catch (e) {
@@ -337,15 +368,15 @@ class POIProvider extends ChangeNotifier {
   }
 
   /// Update cache with LRU eviction
-  void _updateCache(String cityId, List<POI> pois) {
+  void _updateCache(String cacheKey, List<POI> pois) {
     // Remove if already exists
-    if (_cache.containsKey(cityId)) {
-      _cacheKeys.remove(cityId);
+    if (_cache.containsKey(cacheKey)) {
+      _cacheKeys.remove(cacheKey);
     }
 
     // Add to cache
-    _cache[cityId] = pois;
-    _cacheKeys.add(cityId);
+    _cache[cacheKey] = pois;
+    _cacheKeys.add(cacheKey);
 
     // Evict oldest if cache is full
     if (_cacheKeys.length > _maxCacheEntries) {
@@ -355,8 +386,9 @@ class POIProvider extends ChangeNotifier {
   }
 
   /// Retry POI discovery after error
-  Future<void> retry(Location city) async {
-    await discoverPOIs(city, forceRefresh: true);
+  Future<void> retry(Location city, {POICategory? category}) async {
+    await discoverPOIs(city,
+        forceRefresh: true, category: category ?? _currentCategory);
   }
 
   /// Clear all POIs and reset state
@@ -368,6 +400,7 @@ class POIProvider extends ChangeNotifier {
     _error = null;
     _currentCityId = null;
     _selectedFilters.clear();
+    _searchQuery = '';
     notifyListeners();
   }
 
@@ -383,9 +416,16 @@ class POIProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Update search query for filtering POIs by name
+  void updateSearchQuery(String query) {
+    _searchQuery = query;
+    notifyListeners();
+  }
+
   /// Clear all filters
   void clearFilters() {
     _selectedFilters.clear();
+    _searchQuery = '';
     notifyListeners();
   }
 

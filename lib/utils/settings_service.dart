@@ -1,5 +1,6 @@
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import '../models/poi_category.dart';
 import '../models/poi_type.dart';
 import '../models/poi_source.dart';
 
@@ -8,6 +9,7 @@ class SettingsService {
   static const String _poiOrderKey = 'poi_type_order';
   static const String _poiDistanceKey = 'poi_search_distance';
   static const String _poiProvidersEnabledKey = 'poi_providers_enabled';
+  static const String _defaultPoiCategoryKey = 'default_poi_category';
 
   // Secure storage keys for OpenAI API
   static const String _openaiApiKeyKey = 'openai_api_key';
@@ -31,6 +33,7 @@ class SettingsService {
 
   /// Default POI type order (prioritized by user preference)
   static final List<POIType> defaultPoiOrder = [
+    // Attractions
     POIType.touristAttraction,
     POIType.museum,
     POIType.historicSite,
@@ -39,6 +42,17 @@ class SettingsService {
     POIType.religiousSite,
     POIType.park,
     POIType.other,
+    // Commercial
+    POIType.restaurant,
+    POIType.cafe,
+    POIType.bakery,
+    POIType.supermarket,
+    POIType.hardwareStore,
+    POIType.pharmacy,
+    POIType.gasStation,
+    POIType.hotel,
+    POIType.bar,
+    POIType.fastFood,
   ];
 
   /// Default POI search distance in meters (5km)
@@ -164,6 +178,33 @@ class SettingsService {
     try {
       final prefs = await SharedPreferences.getInstance();
       return await prefs.remove(_poiDistanceKey);
+    } catch (e) {
+      return false;
+    }
+  }
+
+  /// Load default POI category from persistent storage
+  Future<POICategory> loadDefaultPoiCategory() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final categoryString = prefs.getString(_defaultPoiCategoryKey);
+      if (categoryString == null) {
+        return POICategory.attraction; // Default to attractions
+      }
+      return POICategory.values.firstWhere(
+        (c) => c.name == categoryString,
+        orElse: () => POICategory.attraction,
+      );
+    } catch (e) {
+      return POICategory.attraction;
+    }
+  }
+
+  /// Save default POI category to persistent storage
+  Future<bool> saveDefaultPoiCategory(POICategory category) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      return await prefs.setString(_defaultPoiCategoryKey, category.name);
     } catch (e) {
       return false;
     }

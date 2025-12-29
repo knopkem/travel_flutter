@@ -13,6 +13,7 @@
 /// - [ArticleSection]: Section within a Wikipedia article
 /// - [POI]: Point of Interest with coordinates and metadata
 /// - [POIType]: Categorical types for POIs
+/// - [POICategory]: Categories for grouping POI types
 /// - [POISource]: API sources for POI data
 library;
 
@@ -22,4 +23,5 @@ export 'wikipedia_content.dart';
 export 'article_section.dart';
 export 'poi.dart';
 export 'poi_type.dart';
+export 'poi_category.dart';
 export 'poi_source.dart';

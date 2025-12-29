@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../models/poi.dart';
+import '../models/poi_category.dart';
 import '../providers/providers.dart';
 import '../utils/country_language_map.dart';
 import 'settings_screen.dart';
@@ -382,31 +383,51 @@ class _POIDetailScreenState extends State<POIDetailScreen> {
   }
 
   Widget _buildActionButtons(BuildContext context) {
+    final isCommercial = _currentPOI.type.category == POICategory.commercial;
+
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0),
-      child: Row(
+      child: Column(
         children: [
-          Expanded(
-            child: OutlinedButton.icon(
-              onPressed: () => _showOnMap(context),
-              icon: const Icon(Icons.map_outlined),
-              label: const Text('Show on Map'),
-              style: OutlinedButton.styleFrom(
-                padding: const EdgeInsets.symmetric(vertical: 12.0),
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: () => _showOnMap(context),
+                  icon: const Icon(Icons.map_outlined),
+                  label: const Text('Show on Map'),
+                  style: OutlinedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(vertical: 12.0),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: ElevatedButton.icon(
+                  onPressed: () => _getDirections(),
+                  icon: const Icon(Icons.directions),
+                  label: const Text('Get Directions'),
+                  style: ElevatedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(vertical: 12.0),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          if (isCommercial) ...[
+            const SizedBox(height: 12),
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton.icon(
+                onPressed: () => _showAllLocations(context),
+                icon: const Icon(Icons.store_mall_directory),
+                label: const Text('Show all locations'),
+                style: OutlinedButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(vertical: 12.0),
+                ),
               ),
             ),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: ElevatedButton.icon(
-              onPressed: () => _getDirections(),
-              icon: const Icon(Icons.directions),
-              label: const Text('Get Directions'),
-              style: ElevatedButton.styleFrom(
-                padding: const EdgeInsets.symmetric(vertical: 12.0),
-              ),
-            ),
-          ),
+          ],
         ],
       ),
     );
@@ -745,5 +766,16 @@ class _POIDetailScreenState extends State<POIDetailScreen> {
     } catch (e) {
       debugPrint('Error launching directions: $e');
     }
+  }
+
+  /// Show all locations matching this POI's name on the map
+  void _showAllLocations(BuildContext context) {
+    final mapNavProvider = Provider.of<MapNavigationProvider>(
+      context,
+      listen: false,
+    );
+    // Navigate to map filtered by this POI's name
+    mapNavProvider.navigateToMapWithFilter(widget.poi.name);
+    Navigator.pop(context); // Return to previous screen
   }
 }

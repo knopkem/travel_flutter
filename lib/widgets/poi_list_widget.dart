@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../models/location.dart';
 import '../models/poi.dart';
+import '../models/poi_category.dart';
 import '../models/poi_type.dart';
 import '../providers/poi_provider.dart';
 import '../providers/map_navigation_provider.dart';
@@ -15,6 +16,7 @@ import 'poi_list_item.dart';
 /// POI list widget with progressive loading, filtering, and pagination
 ///
 /// Displays discovered POIs with:
+/// - Category tabs (Attractions/Commercial)
 /// - Type filter dropdown
 /// - Pagination (25 items per page)
 /// - Loading states for both phases
@@ -32,7 +34,8 @@ class POIListWidget extends StatefulWidget {
   State<POIListWidget> createState() => _POIListWidgetState();
 }
 
-class _POIListWidgetState extends State<POIListWidget> {
+class _POIListWidgetState extends State<POIListWidget>
+    with SingleTickerProviderStateMixin {
   final Set<POIType> _selectedFilters = {};
   int _currentPage = 1;
   static const int _itemsPerPage = 25;
@@ -41,10 +44,59 @@ class _POIListWidgetState extends State<POIListWidget> {
   Timer? _distanceDebounceTimer;
   int?
       _tempDistance; // Temporary distance override, null means use settings default
+  late TabController _tabController;
+  POICategory _currentCategory = POICategory.attraction;
+  final TextEditingController _searchController = TextEditingController();
+  String _searchQuery = '';
+
+  @override
+  void initState() {
+    super.initState();
+    _tabController = TabController(length: 2, vsync: this);
+    _tabController.addListener(_onTabChanged);
+
+    // Set initial category from settings after first frame
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final settingsProvider =
+          Provider.of<SettingsProvider>(context, listen: false);
+      final defaultCategory = settingsProvider.defaultPoiCategory;
+      setState(() {
+        _currentCategory = defaultCategory;
+        _tabController.index =
+            defaultCategory == POICategory.attraction ? 0 : 1;
+      });
+    });
+  }
+
+  void _onTabChanged() {
+    if (!_tabController.indexIsChanging) {
+      final newCategory = _tabController.index == 0
+          ? POICategory.attraction
+          : POICategory.commercial;
+
+      if (newCategory != _currentCategory) {
+        setState(() {
+          _currentCategory = newCategory;
+          _currentPage = 1;
+          _selectedFilters.clear();
+          _searchQuery = '';
+          _searchController.clear();
+        });
+
+        // Update provider and fetch POIs for new category
+        final poiProvider = Provider.of<POIProvider>(context, listen: false);
+        poiProvider.setCategory(newCategory);
+        poiProvider.discoverPOIs(widget.city, category: newCategory);
+      }
+    }
+  }
 
   @override
   void dispose() {
     _distanceDebounceTimer?.cancel();
+    _tabController.removeListener(_onTabChanged);
+    _tabController.dispose();
+    _searchController.dispose();
     super.dispose();
   }
 
@@ -59,9 +111,13 @@ class _POIListWidgetState extends State<POIListWidget> {
         _hasShownToast = false;
         _lastCityId = widget.city.id;
         _tempDistance = null; // Reset distance override
+        _searchQuery = '';
+        _searchController.clear();
       });
-      // Clear filters in provider
-      Provider.of<POIProvider>(context, listen: false).clearFilters();
+      // Clear filters in provider and fetch POIs for current category
+      final poiProvider = Provider.of<POIProvider>(context, listen: false);
+      poiProvider.clearFilters();
+      poiProvider.discoverPOIs(widget.city, category: _currentCategory);
     }
   }
 
@@ -79,6 +135,14 @@ class _POIListWidgetState extends State<POIListWidget> {
       debugPrint('POIListWidget: After AI guidance filter: ${allPois.length}');
     }
 
+    // Apply search query with fuzzy matching
+    if (_searchQuery.isNotEmpty) {
+      allPois = allPois.where((poi) {
+        return _fuzzyMatch(poi.name.toLowerCase(), _searchQuery.toLowerCase());
+      }).toList();
+      debugPrint('POIListWidget: After search filter: ${allPois.length}');
+    }
+
     // Then apply type filter
     if (_selectedFilters.isEmpty) {
       return allPois;
@@ -87,6 +151,24 @@ class _POIListWidgetState extends State<POIListWidget> {
         allPois.where((poi) => _selectedFilters.contains(poi.type)).toList();
     debugPrint('POIListWidget: Filtered POIs count: ${filtered.length}');
     return filtered;
+  }
+
+  /// Fuzzy match algorithm - returns true if query characters appear in order in text
+  bool _fuzzyMatch(String text, String query) {
+    if (query.isEmpty) return true;
+    if (text.isEmpty) return false;
+
+    int queryIndex = 0;
+    int textIndex = 0;
+
+    while (queryIndex < query.length && textIndex < text.length) {
+      if (query[queryIndex] == text[textIndex]) {
+        queryIndex++;
+      }
+      textIndex++;
+    }
+
+    return queryIndex == query.length;
   }
 
   List<POI> _getPaginatedPOIs(List<POI> pois) {
@@ -150,10 +232,14 @@ class _POIListWidgetState extends State<POIListWidget> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             _buildHeader(context, provider, filteredPOIs.length),
+            const SizedBox(height: 16),
+            _buildCategoryTabs(context),
             const SizedBox(height: 8),
             _buildAIGuidanceField(context),
             const SizedBox(height: 8),
             _buildFilterDropdown(context, provider),
+            const SizedBox(height: 8),
+            _buildSearchField(context),
             const SizedBox(height: 8),
             _buildDistanceSlider(context),
             const SizedBox(height: 8),
@@ -202,10 +288,12 @@ class _POIListWidgetState extends State<POIListWidget> {
   Widget _buildHeader(
       BuildContext context, POIProvider provider, int filteredCount) {
     final count = provider.allPois.length;
+    final categoryTitle =
+        'Nearby ${_currentCategory == POICategory.attraction ? "Attractions" : "Commercial POIs"}';
 
     return Semantics(
       label:
-          'Nearby Attractions section, showing $filteredCount of $count places',
+          '$categoryTitle section, showing $filteredCount of $count places',
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 16),
         child: Column(
@@ -215,13 +303,15 @@ class _POIListWidgetState extends State<POIListWidget> {
             Row(
               children: [
                 Icon(
-                  Icons.place,
+                  _currentCategory == POICategory.attraction
+                      ? Icons.place
+                      : Icons.store,
                   size: 20,
                   color: Theme.of(context).colorScheme.primary,
                 ),
                 const SizedBox(width: 8),
                 Text(
-                  'Nearby Attractions',
+                  categoryTitle,
                   style: Theme.of(context).textTheme.titleLarge?.copyWith(
                         fontWeight: FontWeight.bold,
                       ),
@@ -292,12 +382,77 @@ class _POIListWidgetState extends State<POIListWidget> {
                       ? null
                       : () {
                           provider.discoverPOIs(widget.city,
-                              forceRefresh: true);
+                              forceRefresh: true, category: _currentCategory);
                         },
                   tooltip: 'Refresh POIs',
                   visualDensity: VisualDensity.compact,
                 ),
               ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildCategoryTabs(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      child: Container(
+        height: 48,
+        decoration: BoxDecoration(
+          color: Colors.grey[100],
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: Colors.grey[300]!, width: 1),
+        ),
+        child: TabBar(
+          controller: _tabController,
+          indicator: BoxDecoration(
+            color: Theme.of(context).colorScheme.primary,
+            borderRadius: BorderRadius.circular(10),
+            boxShadow: [
+              BoxShadow(
+                color: Theme.of(context).colorScheme.primary.withOpacity(0.3),
+                blurRadius: 4,
+                offset: const Offset(0, 2),
+              ),
+            ],
+          ),
+          indicatorSize: TabBarIndicatorSize.tab,
+          labelColor: Colors.white,
+          unselectedLabelColor: Colors.grey[700],
+          labelStyle: const TextStyle(
+            fontSize: 15,
+            fontWeight: FontWeight.w600,
+          ),
+          unselectedLabelStyle: const TextStyle(
+            fontSize: 15,
+            fontWeight: FontWeight.w500,
+          ),
+          dividerColor: Colors.transparent,
+          overlayColor: MaterialStateProperty.all(Colors.transparent),
+          splashFactory: NoSplash.splashFactory,
+          padding: const EdgeInsets.all(4),
+          tabs: [
+            Tab(
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.place, size: 18),
+                  const SizedBox(width: 6),
+                  Text('Attractions'),
+                ],
+              ),
+            ),
+            Tab(
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.store, size: 18),
+                  const SizedBox(width: 6),
+                  Text('Commercial'),
+                ],
+              ),
             ),
           ],
         ),
@@ -402,6 +557,61 @@ class _POIListWidgetState extends State<POIListWidget> {
             }).toList(),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildSearchField(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      child: TextField(
+        controller: _searchController,
+        decoration: InputDecoration(
+          hintText: 'Search POIs by name...',
+          prefixIcon: Icon(Icons.search, color: Colors.grey[600]),
+          suffixIcon: _searchQuery.isNotEmpty
+              ? IconButton(
+                  icon: Icon(Icons.clear, color: Colors.grey[600]),
+                  onPressed: () {
+                    setState(() {
+                      _searchController.clear();
+                      _searchQuery = '';
+                      _currentPage = 1;
+                    });
+                  },
+                )
+              : null,
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(12),
+            borderSide: BorderSide(color: Colors.grey[300]!),
+          ),
+          enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(12),
+            borderSide: BorderSide(color: Colors.grey[300]!),
+          ),
+          focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(12),
+            borderSide: BorderSide(
+              color: Theme.of(context).colorScheme.primary,
+              width: 2,
+            ),
+          ),
+          filled: true,
+          fillColor: Colors.grey[50],
+          contentPadding: const EdgeInsets.symmetric(
+            horizontal: 16,
+            vertical: 12,
+          ),
+        ),
+        onChanged: (value) {
+          setState(() {
+            _searchQuery = value;
+            _currentPage = 1; // Reset to first page when searching
+          });
+          // Update provider with search query
+          final poiProvider = Provider.of<POIProvider>(context, listen: false);
+          poiProvider.updateSearchQuery(value);
+        },
       ),
     );
   }
@@ -607,6 +817,26 @@ class _POIListWidgetState extends State<POIListWidget> {
         return Icons.attractions;
       case POIType.historicSite:
         return Icons.castle;
+      case POIType.restaurant:
+        return Icons.restaurant;
+      case POIType.cafe:
+        return Icons.local_cafe;
+      case POIType.bakery:
+        return Icons.bakery_dining;
+      case POIType.supermarket:
+        return Icons.shopping_cart;
+      case POIType.hardwareStore:
+        return Icons.hardware;
+      case POIType.pharmacy:
+        return Icons.local_pharmacy;
+      case POIType.gasStation:
+        return Icons.local_gas_station;
+      case POIType.hotel:
+        return Icons.hotel;
+      case POIType.bar:
+        return Icons.local_bar;
+      case POIType.fastFood:
+        return Icons.fastfood;
       case POIType.other:
         return Icons.place;
     }
@@ -628,6 +858,26 @@ class _POIListWidgetState extends State<POIListWidget> {
         return 'Tourist Attraction';
       case POIType.historicSite:
         return 'Historic Site';
+      case POIType.restaurant:
+        return 'Restaurant';
+      case POIType.cafe:
+        return 'Café';
+      case POIType.bakery:
+        return 'Bakery';
+      case POIType.supermarket:
+        return 'Supermarket';
+      case POIType.hardwareStore:
+        return 'Hardware Store';
+      case POIType.pharmacy:
+        return 'Pharmacy';
+      case POIType.gasStation:
+        return 'Gas Station';
+      case POIType.hotel:
+        return 'Hotel';
+      case POIType.bar:
+        return 'Bar';
+      case POIType.fastFood:
+        return 'Fast Food';
       case POIType.other:
         return 'Other';
     }

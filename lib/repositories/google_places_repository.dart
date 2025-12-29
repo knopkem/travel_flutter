@@ -179,6 +179,41 @@ class GooglePlacesRepository implements POIRepository {
         case POIType.touristAttraction:
           types.add('tourist_attraction');
           break;
+        case POIType.restaurant:
+          types.add('restaurant');
+          break;
+        case POIType.cafe:
+          types.add('cafe');
+          break;
+        case POIType.bakery:
+          types.add('bakery');
+          break;
+        case POIType.supermarket:
+          types.add('supermarket');
+          break;
+        case POIType.hardwareStore:
+          types.add('hardware_store');
+          types.add('home_goods_store');
+          break;
+        case POIType.pharmacy:
+          types.add('pharmacy');
+          types.add('drugstore');
+          break;
+        case POIType.gasStation:
+          types.add('gas_station');
+          break;
+        case POIType.hotel:
+          types.add('hotel');
+          types.add('lodging');
+          break;
+        case POIType.bar:
+          types.add('bar');
+          types.add('night_club');
+          break;
+        case POIType.fastFood:
+          types.add('fast_food_restaurant');
+          types.add('meal_takeaway');
+          break;
         case POIType.other:
           types.add('point_of_interest');
           break;

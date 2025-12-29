@@ -319,6 +319,8 @@ class POI {
           return POIType.viewpoint;
         case 'attraction':
           return POIType.touristAttraction;
+        case 'hotel':
+          return POIType.hotel;
         default:
           return POIType.touristAttraction;
       }
@@ -328,8 +330,41 @@ class POI {
       return POIType.park;
     }
 
-    if (tags['amenity'] == 'place_of_worship') {
-      return POIType.religiousSite;
+    if (tags['amenity'] != null) {
+      final amenity = tags['amenity'] as String;
+      switch (amenity) {
+        case 'place_of_worship':
+          return POIType.religiousSite;
+        case 'restaurant':
+          return POIType.restaurant;
+        case 'cafe':
+          return POIType.cafe;
+        case 'pharmacy':
+          return POIType.pharmacy;
+        case 'fuel':
+          return POIType.gasStation;
+        case 'bar':
+          return POIType.bar;
+        case 'fast_food':
+          return POIType.fastFood;
+        default:
+          return POIType.other;
+      }
+    }
+
+    if (tags['shop'] != null) {
+      final shop = tags['shop'] as String;
+      switch (shop) {
+        case 'bakery':
+          return POIType.bakery;
+        case 'supermarket':
+          return POIType.supermarket;
+        case 'doityourself':
+        case 'hardware':
+          return POIType.hardwareStore;
+        default:
+          return POIType.other;
+      }
     }
 
     return POIType.other;
@@ -351,6 +386,7 @@ class POI {
 
     final typeSet = types.map((t) => t.toString()).toSet();
 
+    // Attractions
     if (typeSet.contains('museum')) return POIType.museum;
     if (typeSet.contains('church') ||
         typeSet.contains('mosque') ||
@@ -362,6 +398,30 @@ class POI {
     if (typeSet.contains('park')) return POIType.park;
     if (typeSet.contains('tourist_attraction')) {
       return POIType.touristAttraction;
+    }
+
+    // Commercial types
+    if (typeSet.contains('restaurant')) return POIType.restaurant;
+    if (typeSet.contains('cafe')) return POIType.cafe;
+    if (typeSet.contains('bakery')) return POIType.bakery;
+    if (typeSet.contains('supermarket')) return POIType.supermarket;
+    if (typeSet.contains('hardware_store') ||
+        typeSet.contains('home_goods_store')) {
+      return POIType.hardwareStore;
+    }
+    if (typeSet.contains('pharmacy') || typeSet.contains('drugstore')) {
+      return POIType.pharmacy;
+    }
+    if (typeSet.contains('gas_station')) return POIType.gasStation;
+    if (typeSet.contains('lodging') || typeSet.contains('hotel')) {
+      return POIType.hotel;
+    }
+    if (typeSet.contains('bar') || typeSet.contains('night_club')) {
+      return POIType.bar;
+    }
+    if (typeSet.contains('meal_takeaway') ||
+        typeSet.contains('fast_food_restaurant')) {
+      return POIType.fastFood;
     }
 
     return POIType.other;

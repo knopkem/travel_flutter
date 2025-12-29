@@ -194,6 +194,61 @@ class OverpassRepository implements POIRepository {
           '  node["amenity"~"^(theatre|cinema|arts_centre)\$"](around:$radius,$lat,$lon);');
     }
 
+    // Restaurant: amenity=restaurant
+    if (types.contains(POIType.restaurant)) {
+      queryParts
+          .add('  node["amenity"="restaurant"](around:$radius,$lat,$lon);');
+    }
+
+    // Cafe: amenity=cafe
+    if (types.contains(POIType.cafe)) {
+      queryParts.add('  node["amenity"="cafe"](around:$radius,$lat,$lon);');
+    }
+
+    // Bakery: shop=bakery
+    if (types.contains(POIType.bakery)) {
+      queryParts.add('  node["shop"="bakery"](around:$radius,$lat,$lon);');
+    }
+
+    // Supermarket: shop=supermarket
+    if (types.contains(POIType.supermarket)) {
+      queryParts
+          .add('  node["shop"="supermarket"](around:$radius,$lat,$lon);');
+    }
+
+    // Hardware Store: shop=doityourself|hardware
+    if (types.contains(POIType.hardwareStore)) {
+      queryParts.add(
+          '  node["shop"~"^(doityourself|hardware)\$"](around:$radius,$lat,$lon);');
+    }
+
+    // Pharmacy: amenity=pharmacy
+    if (types.contains(POIType.pharmacy)) {
+      queryParts
+          .add('  node["amenity"="pharmacy"](around:$radius,$lat,$lon);');
+    }
+
+    // Gas Station: amenity=fuel
+    if (types.contains(POIType.gasStation)) {
+      queryParts.add('  node["amenity"="fuel"](around:$radius,$lat,$lon);');
+    }
+
+    // Hotel: tourism=hotel
+    if (types.contains(POIType.hotel)) {
+      queryParts.add('  node["tourism"="hotel"](around:$radius,$lat,$lon);');
+    }
+
+    // Bar: amenity=bar
+    if (types.contains(POIType.bar)) {
+      queryParts.add('  node["amenity"="bar"](around:$radius,$lat,$lon);');
+    }
+
+    // Fast Food: amenity=fast_food
+    if (types.contains(POIType.fastFood)) {
+      queryParts
+          .add('  node["amenity"="fast_food"](around:$radius,$lat,$lon);');
+    }
+
     // If no query parts, return empty result
     if (queryParts.isEmpty) {
       return Uri.encodeComponent(

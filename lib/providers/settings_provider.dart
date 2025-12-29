@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../models/poi_category.dart';
 import '../models/poi_type.dart';
 import '../models/poi_source.dart';
 import '../utils/settings_service.dart';
@@ -22,6 +23,7 @@ class SettingsProvider extends ChangeNotifier {
   bool _useLocalContent = SettingsService.defaultUseLocalContent;
   String? _googlePlacesApiKey;
   int _googlePlacesRequestCount = 0;
+  POICategory _defaultPoiCategory = POICategory.attraction;
 
   SettingsProvider({
     SettingsService? settingsService,
@@ -97,6 +99,9 @@ class SettingsProvider extends ChangeNotifier {
   /// Whether to use local content based on location country
   bool get useLocalContent => _useLocalContent;
 
+  /// Default POI category to display on startup
+  POICategory get defaultPoiCategory => _defaultPoiCategory;
+
   /// Whether settings are currently being loaded
   bool get isLoading => _isLoading;
 
@@ -111,6 +116,7 @@ class SettingsProvider extends ChangeNotifier {
     _googlePlacesApiKey = await _settingsService.loadGooglePlacesApiKey();
     final gpCount = await _settingsService.loadGooglePlacesRequestCount();
     _googlePlacesRequestCount = gpCount.$1;
+    _defaultPoiCategory = await _settingsService.loadDefaultPoiCategory();
     _isLoading = true;
     notifyListeners();
 
@@ -236,6 +242,13 @@ class SettingsProvider extends ChangeNotifier {
   Future<void> updateUseLocalContent(bool useLocal) async {
     await _settingsService.saveUseLocalContent(useLocal);
     _useLocalContent = useLocal;
+    notifyListeners();
+  }
+
+  /// Update default POI category setting
+  Future<void> updateDefaultPoiCategory(POICategory category) async {
+    await _settingsService.saveDefaultPoiCategory(category);
+    _defaultPoiCategory = category;
     notifyListeners();
   }
 

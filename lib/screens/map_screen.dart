@@ -48,13 +48,28 @@ class _MapScreenState extends State<MapScreen> {
     );
 
     mapNavProvider.addListener(() {
-      if (mapNavProvider.shouldNavigate && mapNavProvider.targetPOI != null) {
-        final poi = mapNavProvider.targetPOI!;
-        // Center map on POI with higher zoom level
-        _mapController.move(
-          LatLng(poi.latitude, poi.longitude),
-          16.0, // Closer zoom for individual POI
-        );
+      if (mapNavProvider.shouldNavigate) {
+        if (mapNavProvider.targetPOI != null) {
+          final poi = mapNavProvider.targetPOI!;
+          // Center map on POI with higher zoom level
+          _mapController.move(
+            LatLng(poi.latitude, poi.longitude),
+            16.0, // Closer zoom for individual POI
+          );
+        } else if (mapNavProvider.nameFilter != null) {
+          // For name filter, just center on the selected city with medium zoom
+          final locationProvider = Provider.of<LocationProvider>(
+            context,
+            listen: false,
+          );
+          if (locationProvider.selectedCity != null) {
+            final city = locationProvider.selectedCity!;
+            _mapController.move(
+              LatLng(city.latitude, city.longitude),
+              14.0, // Medium zoom to see multiple locations
+            );
+          }
+        }
         // Clear navigation request
         mapNavProvider.clearNavigation();
       }
@@ -90,6 +105,26 @@ class _MapScreenState extends State<MapScreen> {
         return Colors.pink;
       case POIType.historicSite:
         return Colors.amber;
+      case POIType.restaurant:
+        return Colors.red;
+      case POIType.cafe:
+        return Colors.brown[300]!;
+      case POIType.bakery:
+        return Colors.orange[300]!;
+      case POIType.supermarket:
+        return Colors.blue[700]!;
+      case POIType.hardwareStore:
+        return Colors.deepOrange;
+      case POIType.pharmacy:
+        return Colors.green[700]!;
+      case POIType.gasStation:
+        return Colors.yellow[700]!;
+      case POIType.hotel:
+        return Colors.indigo;
+      case POIType.bar:
+        return Colors.purple[700]!;
+      case POIType.fastFood:
+        return Colors.red[700]!;
       case POIType.other:
         return Colors.grey;
     }
@@ -112,6 +147,26 @@ class _MapScreenState extends State<MapScreen> {
         return Icons.attractions;
       case POIType.historicSite:
         return Icons.castle;
+      case POIType.restaurant:
+        return Icons.restaurant;
+      case POIType.cafe:
+        return Icons.local_cafe;
+      case POIType.bakery:
+        return Icons.bakery_dining;
+      case POIType.supermarket:
+        return Icons.shopping_cart;
+      case POIType.hardwareStore:
+        return Icons.hardware;
+      case POIType.pharmacy:
+        return Icons.local_pharmacy;
+      case POIType.gasStation:
+        return Icons.local_gas_station;
+      case POIType.hotel:
+        return Icons.hotel;
+      case POIType.bar:
+        return Icons.local_bar;
+      case POIType.fastFood:
+        return Icons.fastfood;
       case POIType.other:
         return Icons.place;
     }
@@ -355,10 +410,32 @@ class _MapScreenState extends State<MapScreen> {
 
           // Add POI markers (if loaded)
           if (!poiProvider.isLoading && poiProvider.error == null) {
+            // Check if we should filter by name (from MapNavigationProvider)
+            final mapNavProvider = Provider.of<MapNavigationProvider>(context);
+            final nameFilter = mapNavProvider.nameFilter;
+
             // Use filtered POIs if filters are active, otherwise show all
-            final poisToShow = poiProvider.selectedFilters.isEmpty
+            var poisToShow = poiProvider.selectedFilters.isEmpty
                 ? poiProvider.allPois
                 : poiProvider.filteredPois;
+
+            // Apply search query filter (from POIProvider)
+            final searchQuery = poiProvider.searchQuery;
+            if (searchQuery.isNotEmpty) {
+              poisToShow = poisToShow.where((poi) {
+                return _fuzzyMatch(poi.name.toLowerCase(), searchQuery.toLowerCase());
+              }).toList();
+            }
+
+            // Apply name filter if present (for "Show all locations")
+            if (nameFilter != null && nameFilter.isNotEmpty) {
+              poisToShow = poisToShow
+                  .where((poi) => poi.name
+                      .toLowerCase()
+                      .contains(nameFilter.toLowerCase()))
+                  .toList();
+            }
+
             for (final poi in poisToShow) {
               markers.add(_createPOIMarker(poi));
             }
@@ -518,5 +595,18 @@ class _MapScreenState extends State<MapScreen> {
         },
       ),
     );
+  }
+
+  /// Fuzzy match helper - checks if characters appear in order
+  bool _fuzzyMatch(String text, String query) {
+    if (query.isEmpty) return true;
+    
+    int queryIndex = 0;
+    for (int i = 0; i < text.length && queryIndex < query.length; i++) {
+      if (text[i] == query[queryIndex]) {
+        queryIndex++;
+      }
+    }
+    return queryIndex == query.length;
   }
 }
