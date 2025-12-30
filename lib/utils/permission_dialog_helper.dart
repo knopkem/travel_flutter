@@ -74,9 +74,30 @@ class PermissionDialogHelper {
     );
   }
 
+  /// Show success message after reminder creation (with messenger)
+  static void showReminderCreatedMessageWithMessenger(ScaffoldMessengerState messenger, String brandName) {
+    messenger.showSnackBar(
+      SnackBar(
+        content: Text('Shopping reminder created for $brandName'),
+        backgroundColor: Colors.green,
+        duration: const Duration(seconds: 2),
+      ),
+    );
+  }
+
   /// Show success message after reminder removal
   static void showReminderRemovedMessage(BuildContext context, String brandName) {
     ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('Shopping reminder removed for $brandName'),
+        duration: const Duration(seconds: 2),
+      ),
+    );
+  }
+
+  /// Show success message after reminder removal (with messenger)
+  static void showReminderRemovedMessageWithMessenger(ScaffoldMessengerState messenger, String brandName) {
+    messenger.showSnackBar(
       SnackBar(
         content: Text('Shopping reminder removed for $brandName'),
         duration: const Duration(seconds: 2),
@@ -95,9 +116,31 @@ class PermissionDialogHelper {
     );
   }
 
+  /// Show auto-removal message when all items checked (with messenger)
+  static void showReminderAutoRemovedMessageWithMessenger(ScaffoldMessengerState messenger, String brandName) {
+    messenger.showSnackBar(
+      SnackBar(
+        content: Text('All items checked! Reminder for $brandName removed.'),
+        backgroundColor: Colors.blue,
+        duration: const Duration(seconds: 3),
+      ),
+    );
+  }
+
   /// Show error message
   static void showError(BuildContext context, String message) {
     ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: Colors.red,
+        duration: const Duration(seconds: 3),
+      ),
+    );
+  }
+
+  /// Show error message (with messenger)
+  static void showErrorWithMessenger(ScaffoldMessengerState messenger, String message) {
+    messenger.showSnackBar(
       SnackBar(
         content: Text(message),
         backgroundColor: Colors.red,

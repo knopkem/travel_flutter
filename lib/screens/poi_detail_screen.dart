@@ -510,6 +510,7 @@ class _POIDetailScreenState extends State<POIDetailScreen> {
                                   return CheckboxListTile(
                                     value: item.isChecked,
                                     onChanged: (checked) async {
+                                      final scaffoldMessenger = ScaffoldMessenger.of(context);
                                       final success =
                                           await reminderProvider.toggleItem(
                                         reminder.id,
@@ -520,8 +521,8 @@ class _POIDetailScreenState extends State<POIDetailScreen> {
                                         if (checked == true &&
                                             reminder.items.length == 1) {
                                           PermissionDialogHelper
-                                              .showReminderAutoRemovedMessage(
-                                            context,
+                                              .showReminderAutoRemovedMessageWithMessenger(
+                                            scaffoldMessenger,
                                             brandName,
                                           );
                                         }
@@ -597,9 +598,10 @@ class _POIDetailScreenState extends State<POIDetailScreen> {
                                 width: double.infinity,
                                 child: OutlinedButton.icon(
                                   onPressed: () async {
+                                    final scaffoldMessenger = ScaffoldMessenger.of(context);
                                     final confirm = await showDialog<bool>(
                                       context: context,
-                                      builder: (context) => AlertDialog(
+                                      builder: (dialogContext) => AlertDialog(
                                         title: const Text('Remove Reminder?'),
                                         content: Text(
                                           'Remove shopping reminder for $brandName?',
@@ -607,12 +609,12 @@ class _POIDetailScreenState extends State<POIDetailScreen> {
                                         actions: [
                                           TextButton(
                                             onPressed: () =>
-                                                Navigator.pop(context, false),
+                                                Navigator.pop(dialogContext, false),
                                             child: const Text('Cancel'),
                                           ),
                                           ElevatedButton(
                                             onPressed: () =>
-                                                Navigator.pop(context, true),
+                                                Navigator.pop(dialogContext, true),
                                             child: const Text('Remove'),
                                           ),
                                         ],
@@ -626,8 +628,8 @@ class _POIDetailScreenState extends State<POIDetailScreen> {
                                       );
                                       if (success && mounted) {
                                         PermissionDialogHelper
-                                            .showReminderRemovedMessage(
-                                          context,
+                                            .showReminderRemovedMessageWithMessenger(
+                                          scaffoldMessenger,
                                           brandName,
                                         );
                                         setState(() {
@@ -670,15 +672,20 @@ class _POIDetailScreenState extends State<POIDetailScreen> {
 
     // Check if this is the first reminder
     final isFirstReminder = !reminderProvider.hasReminders;
+    final scaffoldMessenger = ScaffoldMessenger.of(context);
 
     if (isFirstReminder) {
       // Show permission rationale dialogs
+      if (!mounted) return;
+      // ignore: use_build_context_synchronously
       final allowedBg = await PermissionDialogHelper
-          .showBackgroundLocationRationale(context);
+          .showBackgroundLocationRationale(context); // ignore: use_build_context_synchronously
       if (!allowedBg) return;
 
+      if (!mounted) return;
+      // ignore: use_build_context_synchronously
       final allowedNotif =
-          await PermissionDialogHelper.showNotificationRationale(context);
+          await PermissionDialogHelper.showNotificationRationale(context); // ignore: use_build_context_synchronously
       if (!allowedNotif) return;
 
       // Request actual permissions
@@ -687,8 +694,8 @@ class _POIDetailScreenState extends State<POIDetailScreen> {
       
       if (!locationGranted) {
         if (mounted) {
-          PermissionDialogHelper.showError(
-            context,
+          PermissionDialogHelper.showErrorWithMessenger(
+            scaffoldMessenger,
             'Background location permission is required for reminders',
           );
         }
@@ -700,8 +707,8 @@ class _POIDetailScreenState extends State<POIDetailScreen> {
       
       if (!notifGranted) {
         if (mounted) {
-          PermissionDialogHelper.showError(
-            context,
+          PermissionDialogHelper.showErrorWithMessenger(
+            scaffoldMessenger,
             'Notification permission is required for reminders',
           );
         }
@@ -710,9 +717,11 @@ class _POIDetailScreenState extends State<POIDetailScreen> {
     }
 
     // Show dialog to add initial shopping items
+    if (!mounted) return;
+    // ignore: use_build_context_synchronously
     final items = await showDialog<List<String>>(
-      context: context,
-      builder: (context) => _ShoppingListDialog(brandName: brandName),
+      context: context, // ignore: use_build_context_synchronously
+      builder: (dialogContext) => _ShoppingListDialog(brandName: brandName),
     );
 
     if (items == null || items.isEmpty) return;
@@ -721,7 +730,7 @@ class _POIDetailScreenState extends State<POIDetailScreen> {
     final success = await reminderProvider.addReminder(_currentPOI, items);
     
     if (success && mounted) {
-      PermissionDialogHelper.showReminderCreatedMessage(context, brandName);
+      PermissionDialogHelper.showReminderCreatedMessageWithMessenger(scaffoldMessenger, brandName);
       setState(() {
         _isReminderExpanded = true;
       });
@@ -731,8 +740,8 @@ class _POIDetailScreenState extends State<POIDetailScreen> {
         await settingsProvider.updateBackgroundLocationEnabled(true);
       }
     } else if (mounted) {
-      PermissionDialogHelper.showError(
-        context,
+      PermissionDialogHelper.showErrorWithMessenger(
+        scaffoldMessenger,
         reminderProvider.error ?? 'Failed to create reminder',
       );
     }

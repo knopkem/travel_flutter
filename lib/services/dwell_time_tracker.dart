@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 /// Service for tracking dwell time at POIs (5-minute requirement before notification)
@@ -18,7 +19,7 @@ class DwellTimeTracker {
         await prefs.setString(_dwellTimesKey, json.encode(dwellTimes));
       }
     } catch (e) {
-      print('Error recording entry time: $e');
+      debugPrint('Error recording entry time: $e');
     }
   }
 
@@ -31,7 +32,7 @@ class DwellTimeTracker {
       dwellTimes.remove(poiId);
       await prefs.setString(_dwellTimesKey, json.encode(dwellTimes));
     } catch (e) {
-      print('Error clearing entry time: $e');
+      debugPrint('Error clearing entry time: $e');
     }
   }
 
@@ -48,7 +49,7 @@ class DwellTimeTracker {
       
       return elapsed >= _requiredDwellTime;
     } catch (e) {
-      print('Error checking dwell time: $e');
+      debugPrint('Error checking dwell time: $e');
       return false;
     }
   }
@@ -63,7 +64,7 @@ class DwellTimeTracker {
       
       return DateTime.parse(entryTimeStr);
     } catch (e) {
-      print('Error getting entry time: $e');
+      debugPrint('Error getting entry time: $e');
       return null;
     }
   }
@@ -74,7 +75,7 @@ class DwellTimeTracker {
       final prefs = await SharedPreferences.getInstance();
       await prefs.remove(_dwellTimesKey);
     } catch (e) {
-      print('Error clearing all dwell times: $e');
+      debugPrint('Error clearing all dwell times: $e');
     }
   }
 
@@ -91,7 +92,7 @@ class DwellTimeTracker {
       final decoded = json.decode(dwellTimesJson);
       return Map<String, String>.from(decoded);
     } catch (e) {
-      print('Error loading dwell times: $e');
+      debugPrint('Error loading dwell times: $e');
       return {};
     }
   }

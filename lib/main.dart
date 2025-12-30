@@ -25,7 +25,7 @@ void main() async {
     onNotificationTapped: (poiId) {
       // Navigate to POI detail screen
       // This will be handled by the navigator in TabNavigationScreen
-      print('Notification tapped for POI: $poiId');
+      debugPrint('Notification tapped for POI: $poiId');
       // TODO: Implement deep link navigation
     },
   );

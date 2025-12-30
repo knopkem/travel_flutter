@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import '../models/location.dart';
 import '../models/poi.dart';
@@ -56,11 +57,12 @@ class GooglePlacesRepository implements POIRepository {
 
     try {
       final allPOIs = <POI>[];
+      final seenIds = <String>{}; // Track seen place IDs to avoid duplicates
 
-      // Fetch POIs for each relevant Google place type
-      final placeTypes = _getNewApiPlaceTypes(enabledTypes);
+      // Fetch POIs for each type group
+      final typeGroups = _getNewApiPlaceTypeGroups(enabledTypes);
 
-      for (final placeType in placeTypes) {
+      for (final typeGroup in typeGroups) {
         // Track API request
         onRequestMade?.call();
 
@@ -84,16 +86,18 @@ class GooglePlacesRepository implements POIRepository {
                     'radius': clampedRadius.toDouble(),
                   },
                 },
-                'includedTypes': [placeType],
+                'includedTypes': typeGroup,
                 'maxResultCount': 20,
+                'rankPreference': 'DISTANCE', // Get places closest to center first
                 'languageCode': 'en',
               }),
             )
             .timeout(_timeout);
 
         if (response.statusCode != 200) {
-          throw Exception(
-              'Google Places API failed with status ${response.statusCode}');
+          // Log but continue with other type groups
+          debugPrint('Google Places API failed for types $typeGroup: ${response.statusCode}');
+          continue;
         }
 
         final data = json.decode(response.body) as Map<String, dynamic>;
@@ -101,8 +105,19 @@ class GooglePlacesRepository implements POIRepository {
 
         for (final place in places) {
           try {
+            final placeMap = place as Map<String, dynamic>;
+            final placeId = placeMap['id'] as String?;
+            
+            // Skip duplicates
+            if (placeId != null && seenIds.contains(placeId)) {
+              continue;
+            }
+            if (placeId != null) {
+              seenIds.add(placeId);
+            }
+            
             final poi = POI.fromGooglePlaces(
-              place as Map<String, dynamic>,
+              placeMap,
               city,
               apiKey: _apiKey,
             );
@@ -147,8 +162,10 @@ class GooglePlacesRepository implements POIRepository {
   }
 
   /// Map POITypes to new Google Places API (v1) types
-  List<String> _getNewApiPlaceTypes(Set<POIType>? enabledTypes) {
-    final types = <String>[];
+  /// Returns a list of type groups - each group will be queried separately
+  /// to maximize results within API limits
+  List<List<String>> _getNewApiPlaceTypeGroups(Set<POIType>? enabledTypes) {
+    final typeGroups = <List<String>>[];
 
     // If no filter, use a broad set of tourist-relevant types
     final typesToCheck = enabledTypes ?? POIType.values.toSet();
@@ -156,72 +173,68 @@ class GooglePlacesRepository implements POIRepository {
     for (final poiType in typesToCheck) {
       switch (poiType) {
         case POIType.museum:
-          types.add('museum');
+          typeGroups.add(['museum']);
           break;
         case POIType.monument:
         case POIType.historicSite:
-          types.add('tourist_attraction');
-          types.add('historical_landmark');
+          typeGroups.add(['tourist_attraction', 'historical_landmark']);
           break;
         case POIType.park:
-          types.add('park');
-          types.add('national_park');
+          typeGroups.add(['park', 'national_park']);
           break;
         case POIType.religiousSite:
-          types.add('church');
-          types.add('mosque');
-          types.add('synagogue');
-          types.add('hindu_temple');
+          typeGroups.add(['church', 'mosque', 'synagogue', 'hindu_temple']);
           break;
         case POIType.viewpoint:
-          types.add('tourist_attraction');
+          // Already covered by tourist_attraction
           break;
         case POIType.touristAttraction:
-          types.add('tourist_attraction');
+          typeGroups.add(['tourist_attraction']);
           break;
         case POIType.restaurant:
-          types.add('restaurant');
-          break;
-        case POIType.cafe:
-          types.add('cafe');
-          break;
-        case POIType.bakery:
-          types.add('bakery');
-          break;
-        case POIType.supermarket:
-          types.add('supermarket');
-          break;
-        case POIType.hardwareStore:
-          types.add('hardware_store');
-          types.add('home_goods_store');
-          break;
-        case POIType.pharmacy:
-          types.add('pharmacy');
-          types.add('drugstore');
-          break;
-        case POIType.gasStation:
-          types.add('gas_station');
-          break;
-        case POIType.hotel:
-          types.add('hotel');
-          types.add('lodging');
-          break;
-        case POIType.bar:
-          types.add('bar');
-          types.add('night_club');
+          // Split into multiple queries to get more results
+          typeGroups.add(['restaurant']);
+          typeGroups.add(['italian_restaurant', 'chinese_restaurant', 'japanese_restaurant']);
+          typeGroups.add(['mexican_restaurant', 'indian_restaurant', 'thai_restaurant']);
+          typeGroups.add(['american_restaurant', 'french_restaurant', 'greek_restaurant']);
+          typeGroups.add(['seafood_restaurant', 'steak_house', 'pizza_restaurant']);
           break;
         case POIType.fastFood:
-          types.add('fast_food_restaurant');
-          types.add('meal_takeaway');
+          typeGroups.add(['fast_food_restaurant', 'hamburger_restaurant', 'sandwich_shop']);
+          typeGroups.add(['meal_takeaway']);
+          break;
+        case POIType.cafe:
+          typeGroups.add(['cafe', 'coffee_shop']);
+          break;
+        case POIType.bakery:
+          typeGroups.add(['bakery']);
+          break;
+        case POIType.supermarket:
+          typeGroups.add(['supermarket', 'grocery_store']);
+          break;
+        case POIType.hardwareStore:
+          typeGroups.add(['hardware_store', 'home_goods_store', 'home_improvement_store']);
+          break;
+        case POIType.pharmacy:
+          typeGroups.add(['pharmacy', 'drugstore']);
+          break;
+        case POIType.gasStation:
+          typeGroups.add(['gas_station']);
+          break;
+        case POIType.hotel:
+          typeGroups.add(['hotel', 'lodging']);
+          typeGroups.add(['motel', 'bed_and_breakfast', 'resort_hotel']);
+          break;
+        case POIType.bar:
+          typeGroups.add(['bar', 'night_club', 'pub']);
           break;
         case POIType.other:
-          types.add('point_of_interest');
+          // Skip 'other' type
           break;
       }
     }
 
-    // Remove duplicates and limit to avoid too many requests
-    return types.toSet().take(5).toList();
+    return typeGroups;
   }
 
   /// Fetch detailed information for a specific place by place_id

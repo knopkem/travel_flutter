@@ -408,7 +408,7 @@ class _POIListWidgetState extends State<POIListWidget>
             borderRadius: BorderRadius.circular(10),
             boxShadow: [
               BoxShadow(
-                color: Theme.of(context).colorScheme.primary.withOpacity(0.3),
+                color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.3),
                 blurRadius: 4,
                 offset: const Offset(0, 2),
               ),
@@ -426,7 +426,7 @@ class _POIListWidgetState extends State<POIListWidget>
             fontWeight: FontWeight.w500,
           ),
           dividerColor: Colors.transparent,
-          overlayColor: MaterialStateProperty.all(Colors.transparent),
+          overlayColor: WidgetStateProperty.all(Colors.transparent),
           splashFactory: NoSplash.splashFactory,
           padding: const EdgeInsets.all(4),
           tabs: [

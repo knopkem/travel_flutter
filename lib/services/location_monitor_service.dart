@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:io';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:geolocator/geolocator.dart';
 import '../models/poi.dart';
@@ -70,7 +71,7 @@ class LocationMonitorService {
         });
       }
     } catch (e) {
-      print('Error starting iOS monitoring: $e');
+      debugPrint('Error starting iOS monitoring: $e');
     }
   }
 
@@ -79,7 +80,7 @@ class LocationMonitorService {
     try {
       await _channel.invokeMethod('removeAllGeofences');
     } catch (e) {
-      print('Error stopping iOS monitoring: $e');
+      debugPrint('Error stopping iOS monitoring: $e');
     }
   }
 
@@ -105,7 +106,7 @@ class LocationMonitorService {
         _handleLocationUpdate(position);
       });
     } catch (e) {
-      print('Error starting Android monitoring: $e');
+      debugPrint('Error starting Android monitoring: $e');
     }
   }
 
@@ -125,7 +126,7 @@ class LocationMonitorService {
       );
       await _handleLocationUpdate(position);
     } catch (e) {
-      print('Error checking location: $e');
+      debugPrint('Error checking location: $e');
     }
   }
 
@@ -198,7 +199,7 @@ class LocationMonitorService {
         }
       }
     } catch (e) {
-      print('Error checking location: $e');
+      debugPrint('Error checking location: $e');
     }
   }
 

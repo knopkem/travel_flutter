@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/reminder.dart';
 
@@ -21,7 +22,7 @@ class ReminderService {
           .map((json) => Reminder.fromJson(json as Map<String, dynamic>))
           .toList();
     } catch (e) {
-      print('Error loading reminders: $e');
+      debugPrint('Error loading reminders: $e');
       return [];
     }
   }
@@ -35,7 +36,7 @@ class ReminderService {
       );
       return await prefs.setString(_remindersKey, remindersJson);
     } catch (e) {
-      print('Error saving reminders: $e');
+      debugPrint('Error saving reminders: $e');
       return false;
     }
   }
@@ -76,7 +77,7 @@ class ReminderService {
       final prefs = await SharedPreferences.getInstance();
       return await prefs.remove(_remindersKey);
     } catch (e) {
-      print('Error clearing reminders: $e');
+      debugPrint('Error clearing reminders: $e');
       return false;
     }
   }
