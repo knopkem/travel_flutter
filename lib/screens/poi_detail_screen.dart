@@ -5,8 +5,9 @@ import '../models/poi.dart';
 import '../models/poi_category.dart';
 import '../providers/providers.dart';
 import '../providers/reminder_provider.dart';
-import '../utils/country_language_map.dart';
 import '../utils/brand_matcher.dart';
+import '../utils/country_language_map.dart';
+import '../utils/format_utils.dart';
 import '../utils/permission_dialog_helper.dart';
 import '../services/location_monitor_service.dart';
 import '../services/notification_service.dart';
@@ -262,7 +263,7 @@ class _POIDetailScreenState extends State<POIDetailScreen> {
               ),
               const SizedBox(width: 4),
               Text(
-                _formatDistance(_currentPOI.distanceFromCity),
+                '${formatDistance(_currentPOI.distanceFromCity)} away',
                 style: TextStyle(
                   color: Colors.grey[600],
                   fontSize: 14,
@@ -1032,14 +1033,6 @@ class _POIDetailScreenState extends State<POIDetailScreen> {
         return 'Wikidata';
       default:
         return sourceName;
-    }
-  }
-
-  String _formatDistance(double meters) {
-    if (meters < 1000) {
-      return '${meters.round()}m away';
-    } else {
-      return '${(meters / 1000).toStringAsFixed(1)}km away';
     }
   }
 

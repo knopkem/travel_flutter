@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../models/poi.dart';
-import '../models/poi_type.dart';
 import '../providers/reminder_provider.dart';
 import '../utils/brand_matcher.dart';
+import '../utils/format_utils.dart';
 
 /// Individual POI list item widget
 ///
@@ -31,7 +31,7 @@ class POIListItem extends StatelessWidget {
 
         return Semantics(
           label:
-              '${poi.name}, ${poi.type.displayName}, ${_formatDistance(poi.distanceFromCity)} away',
+              '${poi.name}, ${poi.type.displayName}, ${formatDistance(poi.distanceFromCity)} away',
           hint: 'Tap to view details',
           button: true,
           child: Card(
@@ -41,9 +41,8 @@ class POIListItem extends StatelessWidget {
                 clipBehavior: Clip.none,
                 children: [
                   CircleAvatar(
-                    backgroundColor: _getTypeColor(poi.type),
-                    child: Icon(_getTypeIcon(poi.type),
-                        color: Colors.white, size: 20),
+                    backgroundColor: poi.type.color,
+                    child: Icon(poi.type.icon, color: Colors.white, size: 20),
                   ),
                   if (hasReminder)
                     Positioned(
@@ -77,7 +76,7 @@ class POIListItem extends StatelessWidget {
                   Icon(Icons.location_on, size: 14, color: Colors.grey[600]),
                   const SizedBox(width: 4),
                   Text(
-                    _formatDistance(poi.distanceFromCity),
+                    formatDistance(poi.distanceFromCity),
                     style: TextStyle(color: Colors.grey[600], fontSize: 13),
                   ),
                   const SizedBox(width: 12),
@@ -105,95 +104,5 @@ class POIListItem extends StatelessWidget {
         );
       },
     );
-  }
-
-  String _formatDistance(double meters) {
-    if (meters < 1000) {
-      return '${meters.round()}m';
-    } else {
-      return '${(meters / 1000).toStringAsFixed(1)}km';
-    }
-  }
-
-  IconData _getTypeIcon(POIType type) {
-    switch (type) {
-      case POIType.museum:
-        return Icons.museum;
-      case POIType.monument:
-        return Icons.account_balance;
-      case POIType.park:
-        return Icons.park;
-      case POIType.viewpoint:
-        return Icons.landscape;
-      case POIType.religiousSite:
-        return Icons.church;
-      case POIType.historicSite:
-        return Icons.history_edu;
-      case POIType.touristAttraction:
-        return Icons.star;
-      case POIType.restaurant:
-        return Icons.restaurant;
-      case POIType.cafe:
-        return Icons.local_cafe;
-      case POIType.bakery:
-        return Icons.bakery_dining;
-      case POIType.supermarket:
-        return Icons.shopping_cart;
-      case POIType.hardwareStore:
-        return Icons.hardware;
-      case POIType.pharmacy:
-        return Icons.local_pharmacy;
-      case POIType.gasStation:
-        return Icons.local_gas_station;
-      case POIType.hotel:
-        return Icons.hotel;
-      case POIType.bar:
-        return Icons.local_bar;
-      case POIType.fastFood:
-        return Icons.fastfood;
-      case POIType.other:
-        return Icons.location_city;
-    }
-  }
-
-  Color _getTypeColor(POIType type) {
-    switch (type) {
-      case POIType.museum:
-        return Colors.purple;
-      case POIType.monument:
-        return Colors.amber[700]!;
-      case POIType.park:
-        return Colors.green;
-      case POIType.viewpoint:
-        return Colors.blue;
-      case POIType.religiousSite:
-        return Colors.indigo;
-      case POIType.historicSite:
-        return Colors.brown;
-      case POIType.touristAttraction:
-        return Colors.orange;
-      case POIType.restaurant:
-        return Colors.red;
-      case POIType.cafe:
-        return Colors.brown[300]!;
-      case POIType.bakery:
-        return Colors.orange[300]!;
-      case POIType.supermarket:
-        return Colors.blue[700]!;
-      case POIType.hardwareStore:
-        return Colors.deepOrange;
-      case POIType.pharmacy:
-        return Colors.green[700]!;
-      case POIType.gasStation:
-        return Colors.yellow[700]!;
-      case POIType.hotel:
-        return Colors.indigo[300]!;
-      case POIType.bar:
-        return Colors.purple[700]!;
-      case POIType.fastFood:
-        return Colors.red[700]!;
-      case POIType.other:
-        return Colors.grey;
-    }
   }
 }

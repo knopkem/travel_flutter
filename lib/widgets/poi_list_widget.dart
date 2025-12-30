@@ -510,14 +510,14 @@ class _POIListWidgetState extends State<POIListWidget>
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     Icon(
-                      _getTypeIcon(type),
+                      type.icon,
                       size: 16,
                       color: isSelected
                           ? Theme.of(context).colorScheme.onSecondaryContainer
                           : null,
                     ),
                     const SizedBox(width: 6),
-                    Text('${_getTypeName(type)} (${typeCounts[type]})'),
+                    Text('${type.displayName} (${typeCounts[type]})'),
                   ],
                 ),
                 onSelected: (selected) {
@@ -782,88 +782,6 @@ class _POIListWidgetState extends State<POIListWidget>
         ],
       ),
     );
-  }
-
-  IconData _getTypeIcon(POIType type) {
-    switch (type) {
-      case POIType.monument:
-        return Icons.account_balance;
-      case POIType.museum:
-        return Icons.museum;
-      case POIType.religiousSite:
-        return Icons.church;
-      case POIType.park:
-        return Icons.park;
-      case POIType.viewpoint:
-        return Icons.landscape;
-      case POIType.touristAttraction:
-        return Icons.attractions;
-      case POIType.historicSite:
-        return Icons.castle;
-      case POIType.restaurant:
-        return Icons.restaurant;
-      case POIType.cafe:
-        return Icons.local_cafe;
-      case POIType.bakery:
-        return Icons.bakery_dining;
-      case POIType.supermarket:
-        return Icons.shopping_cart;
-      case POIType.hardwareStore:
-        return Icons.hardware;
-      case POIType.pharmacy:
-        return Icons.local_pharmacy;
-      case POIType.gasStation:
-        return Icons.local_gas_station;
-      case POIType.hotel:
-        return Icons.hotel;
-      case POIType.bar:
-        return Icons.local_bar;
-      case POIType.fastFood:
-        return Icons.fastfood;
-      case POIType.other:
-        return Icons.place;
-    }
-  }
-
-  String _getTypeName(POIType type) {
-    switch (type) {
-      case POIType.monument:
-        return 'Monument';
-      case POIType.museum:
-        return 'Museum';
-      case POIType.religiousSite:
-        return 'Religious Site';
-      case POIType.park:
-        return 'Park';
-      case POIType.viewpoint:
-        return 'Viewpoint';
-      case POIType.touristAttraction:
-        return 'Tourist Attraction';
-      case POIType.historicSite:
-        return 'Historic Site';
-      case POIType.restaurant:
-        return 'Restaurant';
-      case POIType.cafe:
-        return 'Café';
-      case POIType.bakery:
-        return 'Bakery';
-      case POIType.supermarket:
-        return 'Supermarket';
-      case POIType.hardwareStore:
-        return 'Hardware Store';
-      case POIType.pharmacy:
-        return 'Pharmacy';
-      case POIType.gasStation:
-        return 'Gas Station';
-      case POIType.hotel:
-        return 'Hotel';
-      case POIType.bar:
-        return 'Bar';
-      case POIType.fastFood:
-        return 'Fast Food';
-      case POIType.other:
-        return 'Other';
-    }
   }
 
   Widget _buildNoFilterResultsState() {

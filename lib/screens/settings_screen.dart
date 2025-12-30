@@ -148,7 +148,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     title: Row(
                       children: [
                         Icon(
-                          _getProviderIcon(source),
+                          source.icon,
                           size: 20,
                           color: isEnabled
                               ? Theme.of(context).colorScheme.primary
@@ -168,7 +168,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          _getProviderDescription(source),
+                          source.description,
                           style: TextStyle(
                             fontSize: 12,
                             color: Colors.grey[600],
@@ -453,7 +453,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     }
                   },
                   title: Text(type.displayName),
-                  secondary: Icon(_getTypeIcon(type)),
+                  secondary: Icon(type.icon),
                   contentPadding: const EdgeInsets.symmetric(horizontal: 8),
                 );
               }),
@@ -552,7 +552,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     }
                   },
                   title: Text(type.displayName),
-                  secondary: Icon(_getTypeIcon(type)),
+                  secondary: Icon(type.icon),
                   contentPadding: const EdgeInsets.symmetric(horizontal: 8),
                 );
               }),
@@ -787,13 +787,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
         title: Row(
           children: [
             Icon(
-              _getTypeIcon(type),
+              type.icon,
               size: 20,
               color: Theme.of(context).colorScheme.primary,
             ),
             const SizedBox(width: 12),
             Text(
-              _getTypeName(type),
+              type.displayName,
               style: const TextStyle(
                 fontWeight: FontWeight.w500,
               ),
@@ -972,114 +972,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
         ],
       ),
     );
-  }
-
-  IconData _getTypeIcon(POIType type) {
-    switch (type) {
-      case POIType.monument:
-        return Icons.account_balance;
-      case POIType.museum:
-        return Icons.museum;
-      case POIType.religiousSite:
-        return Icons.church;
-      case POIType.park:
-        return Icons.park;
-      case POIType.viewpoint:
-        return Icons.landscape;
-      case POIType.touristAttraction:
-        return Icons.attractions;
-      case POIType.historicSite:
-        return Icons.castle;
-      case POIType.restaurant:
-        return Icons.restaurant;
-      case POIType.cafe:
-        return Icons.local_cafe;
-      case POIType.bakery:
-        return Icons.bakery_dining;
-      case POIType.supermarket:
-        return Icons.shopping_cart;
-      case POIType.hardwareStore:
-        return Icons.hardware;
-      case POIType.pharmacy:
-        return Icons.local_pharmacy;
-      case POIType.gasStation:
-        return Icons.local_gas_station;
-      case POIType.hotel:
-        return Icons.hotel;
-      case POIType.bar:
-        return Icons.local_bar;
-      case POIType.fastFood:
-        return Icons.fastfood;
-      case POIType.other:
-        return Icons.place;
-    }
-  }
-
-  String _getTypeName(POIType type) {
-    switch (type) {
-      case POIType.monument:
-        return 'Monument';
-      case POIType.museum:
-        return 'Museum';
-      case POIType.religiousSite:
-        return 'Religious Site';
-      case POIType.park:
-        return 'Park';
-      case POIType.viewpoint:
-        return 'Viewpoint';
-      case POIType.touristAttraction:
-        return 'Tourist Attraction';
-      case POIType.historicSite:
-        return 'Historic Site';
-      case POIType.restaurant:
-        return 'Restaurant';
-      case POIType.cafe:
-        return 'Café';
-      case POIType.bakery:
-        return 'Bakery';
-      case POIType.supermarket:
-        return 'Supermarket';
-      case POIType.hardwareStore:
-        return 'Hardware Store';
-      case POIType.pharmacy:
-        return 'Pharmacy';
-      case POIType.gasStation:
-        return 'Gas Station';
-      case POIType.hotel:
-        return 'Hotel';
-      case POIType.bar:
-        return 'Bar';
-      case POIType.fastFood:
-        return 'Fast Food';
-      case POIType.other:
-        return 'Other';
-    }
-  }
-
-  IconData _getProviderIcon(POISource source) {
-    switch (source) {
-      case POISource.wikipediaGeosearch:
-        return Icons.article;
-      case POISource.overpass:
-        return Icons.map;
-      case POISource.wikidata:
-        return Icons.storage;
-      case POISource.googlePlaces:
-        return Icons.place;
-    }
-  }
-
-  String _getProviderDescription(POISource source) {
-    switch (source) {
-      case POISource.wikipediaGeosearch:
-        return 'Articles about notable places';
-      case POISource.overpass:
-        return 'Tourist attractions from OpenStreetMap';
-      case POISource.wikidata:
-        return 'Structured knowledge base';
-      case POISource.googlePlaces:
-        return 'Rich place data (requires API key)';
-    }
   }
 
   Widget _buildAboutSection(BuildContext context) {

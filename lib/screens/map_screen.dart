@@ -4,7 +4,6 @@ import 'package:latlong2/latlong.dart';
 import 'package:provider/provider.dart';
 import '../models/location.dart';
 import '../models/poi.dart';
-import '../models/poi_type.dart';
 import '../providers/ai_guidance_provider.dart';
 import '../providers/location_provider.dart';
 import '../providers/poi_provider.dart';
@@ -90,95 +89,12 @@ class _MapScreenState extends State<MapScreen> {
     return '${text.substring(0, maxLength)}...';
   }
 
-  /// Gets appropriate color for POI marker based on type
-  Color _getMarkerColor(POIType type) {
-    switch (type) {
-      case POIType.monument:
-        return Colors.brown;
-      case POIType.museum:
-        return Colors.purple;
-      case POIType.religiousSite:
-        return Colors.blue;
-      case POIType.park:
-        return Colors.green;
-      case POIType.viewpoint:
-        return Colors.orange;
-      case POIType.touristAttraction:
-        return Colors.pink;
-      case POIType.historicSite:
-        return Colors.amber;
-      case POIType.restaurant:
-        return Colors.red;
-      case POIType.cafe:
-        return Colors.brown[300]!;
-      case POIType.bakery:
-        return Colors.orange[300]!;
-      case POIType.supermarket:
-        return Colors.blue[700]!;
-      case POIType.hardwareStore:
-        return Colors.deepOrange;
-      case POIType.pharmacy:
-        return Colors.green[700]!;
-      case POIType.gasStation:
-        return Colors.yellow[700]!;
-      case POIType.hotel:
-        return Colors.indigo;
-      case POIType.bar:
-        return Colors.purple[700]!;
-      case POIType.fastFood:
-        return Colors.red[700]!;
-      case POIType.other:
-        return Colors.grey;
-    }
-  }
-
-  /// Gets appropriate icon for POI marker based on type
-  IconData _getMarkerIcon(POIType type) {
-    switch (type) {
-      case POIType.monument:
-        return Icons.account_balance;
-      case POIType.museum:
-        return Icons.museum;
-      case POIType.religiousSite:
-        return Icons.church;
-      case POIType.park:
-        return Icons.park;
-      case POIType.viewpoint:
-        return Icons.landscape;
-      case POIType.touristAttraction:
-        return Icons.attractions;
-      case POIType.historicSite:
-        return Icons.castle;
-      case POIType.restaurant:
-        return Icons.restaurant;
-      case POIType.cafe:
-        return Icons.local_cafe;
-      case POIType.bakery:
-        return Icons.bakery_dining;
-      case POIType.supermarket:
-        return Icons.shopping_cart;
-      case POIType.hardwareStore:
-        return Icons.hardware;
-      case POIType.pharmacy:
-        return Icons.local_pharmacy;
-      case POIType.gasStation:
-        return Icons.local_gas_station;
-      case POIType.hotel:
-        return Icons.hotel;
-      case POIType.bar:
-        return Icons.local_bar;
-      case POIType.fastFood:
-        return Icons.fastfood;
-      case POIType.other:
-        return Icons.place;
-    }
-  }
-
   /// Creates a marker for a POI
   Marker _createPOIMarker(POI poi) {
     final bool showLabel =
         _currentZoom >= 13.0; // Lower threshold to show labels earlier
     final double iconSize = 30.0;
+    final color = poi.type.color;
 
     return Marker(
       point: LatLng(poi.latitude, poi.longitude),
@@ -198,8 +114,8 @@ class _MapScreenState extends State<MapScreen> {
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   Icon(
-                    _getMarkerIcon(poi.type),
-                    color: _getMarkerColor(poi.type),
+                    poi.type.icon,
+                    color: color,
                     size: iconSize,
                     shadows: const [
                       Shadow(
@@ -219,7 +135,7 @@ class _MapScreenState extends State<MapScreen> {
                       color: Colors.white.withValues(alpha: 0.95),
                       borderRadius: BorderRadius.circular(4),
                       border: Border.all(
-                        color: _getMarkerColor(poi.type),
+                        color: color,
                         width: 1.5,
                       ),
                       boxShadow: const [
@@ -235,7 +151,7 @@ class _MapScreenState extends State<MapScreen> {
                       style: TextStyle(
                         fontSize: 11,
                         fontWeight: FontWeight.w600,
-                        color: _getMarkerColor(poi.type),
+                        color: color,
                       ),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
@@ -245,8 +161,8 @@ class _MapScreenState extends State<MapScreen> {
                 ],
               )
             : Icon(
-                _getMarkerIcon(poi.type),
-                color: _getMarkerColor(poi.type),
+                poi.type.icon,
+                color: color,
                 size: iconSize,
                 shadows: const [
                   Shadow(
