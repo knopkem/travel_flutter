@@ -14,19 +14,26 @@ class GooglePlacesRepository implements POIRepository {
   final http.Client _client;
   final String? _apiKey;
   final void Function()? onRequestMade;
+  String _languageCode = 'en';
   // New Places API (v1) endpoints
   static const String _searchUrl =
       'https://places.googleapis.com/v1/places:searchNearby';
   static const String _detailsUrl = 'https://places.googleapis.com/v1/places';
   static const Duration _timeout = Duration(seconds: 15);
 
-  GooglePlacesRepository({http.Client? client, String? apiKey, this.onRequestMade})
+  GooglePlacesRepository({http.Client? client, String? apiKey, this.onRequestMade, String? languageCode})
       : _client = client ?? http.Client(),
-        _apiKey = apiKey;
+        _apiKey = apiKey,
+        _languageCode = languageCode ?? 'en';
 
   /// Update the API key
   GooglePlacesRepository withApiKey(String apiKey) {
-    return GooglePlacesRepository(client: _client, apiKey: apiKey, onRequestMade: onRequestMade);
+    return GooglePlacesRepository(client: _client, apiKey: apiKey, onRequestMade: onRequestMade, languageCode: _languageCode);
+  }
+
+  /// Set the language code for API responses
+  void setLanguageCode(String languageCode) {
+    _languageCode = languageCode;
   }
 
   @override
@@ -88,8 +95,8 @@ class GooglePlacesRepository implements POIRepository {
                 },
                 'includedTypes': typeGroup,
                 'maxResultCount': 20,
-                'rankPreference': 'DISTANCE', // Get places closest to center first
-                'languageCode': 'en',
+                'rankPreference': 'DISTANCE',
+                'languageCode': _languageCode,
               }),
             )
             .timeout(_timeout);

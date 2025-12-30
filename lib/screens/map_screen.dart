@@ -539,25 +539,12 @@ class _MapScreenState extends State<MapScreen> {
                 ),
 
               // Crosshair at map center
-              Center(
+              const Center(
                 child: IgnorePointer(
-                  child: Container(
-                    width: 32,
-                    height: 32,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      border: Border.all(
-                        color: Colors.black54,
-                        width: 2,
-                      ),
-                    ),
-                    child: const Center(
-                      child: Icon(
-                        Icons.add,
-                        size: 20,
-                        color: Colors.black54,
-                      ),
-                    ),
+                  child: Icon(
+                    Icons.add,
+                    size: 28,
+                    color: Colors.black54,
                   ),
                 ),
               ),
@@ -577,10 +564,19 @@ class _MapScreenState extends State<MapScreen> {
                         ? null
                         : () async {
                             final center = _mapController.camera.center;
+                            // Clear POI cache before setting new location
+                            poiProvider.clearCache();
                             await locationProvider.setLocationFromMapCenter(
                               center.latitude,
                               center.longitude,
                             );
+                            // Force refresh POIs for the new location
+                            if (locationProvider.selectedCity != null) {
+                              poiProvider.discoverPOIs(
+                                locationProvider.selectedCity!,
+                                forceRefresh: true,
+                              );
+                            }
                           },
                     child: Padding(
                       padding: const EdgeInsets.all(12),
@@ -667,16 +663,9 @@ class _MapScreenState extends State<MapScreen> {
     );
   }
 
-  /// Fuzzy match helper - checks if characters appear in order
+  /// Substring match helper - checks if query is contained in text (case-insensitive)
   bool _fuzzyMatch(String text, String query) {
     if (query.isEmpty) return true;
-    
-    int queryIndex = 0;
-    for (int i = 0; i < text.length && queryIndex < query.length; i++) {
-      if (text[i] == query[queryIndex]) {
-        queryIndex++;
-      }
-    }
-    return queryIndex == query.length;
+    return text.contains(query);
   }
 }

@@ -32,6 +32,7 @@ class GooglePlacesAutocompleteRepository implements GeocodingRepository {
   final http.Client _client;
   final String? _apiKey;
   final void Function()? onRequestMade;
+  String _languageCode = 'en';
   // New Places API (v1) endpoints
   static const String _autocompleteUrl =
       'https://places.googleapis.com/v1/places:autocomplete';
@@ -50,8 +51,10 @@ class GooglePlacesAutocompleteRepository implements GeocodingRepository {
     http.Client? client,
     String? apiKey,
     this.onRequestMade,
+    String? languageCode,
   })  : _client = client ?? http.Client(),
-        _apiKey = apiKey;
+        _apiKey = apiKey,
+        _languageCode = languageCode ?? 'en';
 
   /// Returns a new instance with the specified API key
   GooglePlacesAutocompleteRepository withApiKey(String apiKey) {
@@ -59,7 +62,13 @@ class GooglePlacesAutocompleteRepository implements GeocodingRepository {
       client: _client,
       apiKey: apiKey,
       onRequestMade: onRequestMade,
+      languageCode: _languageCode,
     );
+  }
+
+  /// Set the language code for API responses
+  void setLanguageCode(String languageCode) {
+    _languageCode = languageCode;
   }
 
   @override
@@ -90,7 +99,7 @@ class GooglePlacesAutocompleteRepository implements GeocodingRepository {
                 'locality',
                 'administrative_area_level_1'
               ],
-              'languageCode': 'en',
+              'languageCode': _languageCode,
             }),
           )
           .timeout(_timeout);

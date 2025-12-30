@@ -174,6 +174,7 @@ class POIProvider extends ChangeNotifier {
       // Configure all repositories with the determined language
       _wikipediaRepo.setLanguageCode(languageCode);
       _wikidataRepo.setLanguageCode(languageCode);
+      _googlePlacesRepo.setLanguageCode(languageCode);
 
       // Phase 1: Wikipedia Geosearch (fast) - only for attractions
       _isLoadingPhase1 = true;
