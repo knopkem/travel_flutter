@@ -5,9 +5,11 @@ import 'package:provider/provider.dart';
 import '../models/location.dart';
 import '../models/poi.dart';
 import '../models/poi_type.dart';
+import '../providers/ai_guidance_provider.dart';
 import '../providers/location_provider.dart';
 import '../providers/poi_provider.dart';
 import '../providers/map_navigation_provider.dart';
+import '../utils/string_utils.dart';
 import 'poi_detail_screen.dart';
 import 'settings_screen.dart';
 
@@ -365,8 +367,8 @@ class _MapScreenState extends State<MapScreen> {
           ),
         ],
       ),
-      body: Consumer2<LocationProvider, POIProvider>(
-        builder: (context, locationProvider, poiProvider, child) {
+      body: Consumer3<LocationProvider, POIProvider, AIGuidanceProvider>(
+        builder: (context, locationProvider, poiProvider, aiGuidanceProvider, child) {
           final selectedCity = locationProvider.selectedCity;
 
           // Auto-recenter when location changes
@@ -408,31 +410,42 @@ class _MapScreenState extends State<MapScreen> {
           // Add city center marker
           markers.add(_createCityMarker(selectedCity));
 
-          // Add POI markers (if loaded)
+          // Calculate filtered POIs (same logic as POIListWidget)
+          List<POI> poisToShow = [];
           if (!poiProvider.isLoading && poiProvider.error == null) {
             // Check if we should filter by name (from MapNavigationProvider)
             final mapNavProvider = Provider.of<MapNavigationProvider>(context);
             final nameFilter = mapNavProvider.nameFilter;
 
-            // Use filtered POIs if filters are active, otherwise show all
-            var poisToShow = poiProvider.selectedFilters.isEmpty
-                ? poiProvider.allPois
-                : poiProvider.filteredPois;
+            // Start with all POIs
+            poisToShow = poiProvider.allPois.toList();
+
+            // Apply AI guidance filter first (same as POIListWidget)
+            if (aiGuidanceProvider.hasActiveGuidance) {
+              poisToShow = poisToShow
+                  .where((poi) => aiGuidanceProvider.isPoiMatchingGuidance(poi))
+                  .toList();
+            }
 
             // Apply search query filter (from POIProvider)
             final searchQuery = poiProvider.searchQuery;
             if (searchQuery.isNotEmpty) {
               poisToShow = poisToShow.where((poi) {
-                return _fuzzyMatch(poi.name.toLowerCase(), searchQuery.toLowerCase());
+                return matchesSearch(poi.name, searchQuery);
               }).toList();
+            }
+
+            // Apply type filters (from POIProvider)
+            if (poiProvider.selectedFilters.isNotEmpty) {
+              poisToShow = poisToShow
+                  .where((poi) => poiProvider.selectedFilters.contains(poi.type))
+                  .toList();
             }
 
             // Apply name filter if present (for "Show all locations")
             if (nameFilter != null && nameFilter.isNotEmpty) {
               poisToShow = poisToShow
-                  .where((poi) => poi.name
-                      .toLowerCase()
-                      .contains(nameFilter.toLowerCase()))
+                  .where((poi) => matchesSearch(poi.name, nameFilter))
                   .toList();
             }
 
@@ -632,7 +645,7 @@ class _MapScreenState extends State<MapScreen> {
                             Icon(Icons.place, color: Colors.grey, size: 20),
                             const SizedBox(width: 8),
                             Text(
-                                'POIs (${poiProvider.selectedFilters.isEmpty ? poiProvider.allPois.length : poiProvider.filteredPois.length})',
+                                'POIs (${poisToShow.length})',
                                 style: const TextStyle(fontSize: 12)),
                           ],
                         ),
@@ -661,11 +674,5 @@ class _MapScreenState extends State<MapScreen> {
         },
       ),
     );
-  }
-
-  /// Substring match helper - checks if query is contained in text (case-insensitive)
-  bool _fuzzyMatch(String text, String query) {
-    if (query.isEmpty) return true;
-    return text.contains(query);
   }
 }

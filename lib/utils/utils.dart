@@ -11,8 +11,10 @@
 /// - [deduplicatePOIs]: Remove duplicate POIs using proximity and name matching
 /// - [calculateNameSimilarity]: Normalized Levenshtein distance
 /// - [calculateNotabilityScore]: Score POIs based on attributes
+/// - [matchesSearch]: Case-insensitive substring matching
 library;
 
 export 'distance_calculator.dart';
 export 'deduplication_utils.dart';
 export 'notability_scorer.dart';
+export 'string_utils.dart';

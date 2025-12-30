@@ -9,6 +9,7 @@ import '../providers/poi_provider.dart';
 import '../providers/settings_provider.dart';
 import '../providers/ai_guidance_provider.dart';
 import '../screens/poi_detail_screen.dart';
+import '../utils/string_utils.dart';
 import 'poi_list_item.dart';
 
 /// POI list widget with progressive loading, filtering, and pagination
@@ -83,6 +84,7 @@ class _POIListWidgetState extends State<POIListWidget>
 
         // Update provider and fetch POIs for new category
         final poiProvider = Provider.of<POIProvider>(context, listen: false);
+        poiProvider.clearFilters(); // Sync filters/search to provider
         poiProvider.setCategory(newCategory);
         poiProvider.discoverPOIs(widget.city, category: newCategory);
       }
@@ -133,10 +135,10 @@ class _POIListWidgetState extends State<POIListWidget>
       debugPrint('POIListWidget: After AI guidance filter: ${allPois.length}');
     }
 
-    // Apply search query with fuzzy matching
+    // Apply search query with contains matching
     if (_searchQuery.isNotEmpty) {
       allPois = allPois.where((poi) {
-        return _fuzzyMatch(poi.name.toLowerCase(), _searchQuery.toLowerCase());
+        return matchesSearch(poi.name, _searchQuery);
       }).toList();
       debugPrint('POIListWidget: After search filter: ${allPois.length}');
     }
@@ -149,24 +151,6 @@ class _POIListWidgetState extends State<POIListWidget>
         allPois.where((poi) => _selectedFilters.contains(poi.type)).toList();
     debugPrint('POIListWidget: Filtered POIs count: ${filtered.length}');
     return filtered;
-  }
-
-  /// Fuzzy match algorithm - returns true if query characters appear in order in text
-  bool _fuzzyMatch(String text, String query) {
-    if (query.isEmpty) return true;
-    if (text.isEmpty) return false;
-
-    int queryIndex = 0;
-    int textIndex = 0;
-
-    while (queryIndex < query.length && textIndex < text.length) {
-      if (query[queryIndex] == text[textIndex]) {
-        queryIndex++;
-      }
-      textIndex++;
-    }
-
-    return queryIndex == query.length;
   }
 
   List<POI> _getPaginatedPOIs(List<POI> pois) {
@@ -574,6 +558,9 @@ class _POIListWidgetState extends State<POIListWidget>
                       _searchQuery = '';
                       _currentPage = 1;
                     });
+                    // Sync cleared search to provider for map
+                    final poiProvider = Provider.of<POIProvider>(context, listen: false);
+                    poiProvider.updateSearchQuery('');
                   },
                 )
               : null,
