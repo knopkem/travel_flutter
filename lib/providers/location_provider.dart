@@ -392,6 +392,62 @@ class LocationProvider extends ChangeNotifier {
     }
   }
 
+  /// Sets the location from map center coordinates.
+  ///
+  /// This method:
+  /// 1. Takes latitude/longitude from the map center
+  /// 2. Attempts reverse geocoding to get location name
+  /// 3. Falls back to coordinate-only mode if reverse geocoding fails
+  /// 4. Sets the location as selected city (triggers POI auto-fetch)
+  ///
+  /// Example:
+  /// ```dart
+  /// await provider.setLocationFromMapCenter(48.8566, 2.3522);
+  /// ```
+  Future<void> setLocationFromMapCenter(double latitude, double longitude) async {
+    _isLoading = true;
+    _errorMessage = null;
+    notifyListeners();
+
+    try {
+      // Attempt reverse geocoding to get location name
+      // Always use Nominatim for reverse geocoding (free, no API key needed)
+      LocationSuggestion? suggestion;
+      try {
+        suggestion = await _fallbackRepository.reverseGeocode(
+          latitude,
+          longitude,
+        );
+      } catch (e) {
+        debugPrint('Reverse geocode failed: $e');
+      }
+
+      // Create location object
+      Location location;
+      if (suggestion != null) {
+        // Use resolved location name
+        location = suggestion.toLocation();
+        debugPrint('Reverse geocoded map center to: ${location.displayName}');
+      } else {
+        // Fall back to coordinate-only mode
+        location = Location.fromCoordinates(
+          latitude,
+          longitude,
+        );
+        debugPrint('Using coordinate-only location for map center');
+      }
+
+      // Set as selected city (this will trigger POI fetch in UI)
+      _selectedCity = location;
+    } catch (e) {
+      debugPrint('LocationProvider: Set from map center failed: $e');
+      _errorMessage = e.toString().replaceAll('Exception: ', '');
+    } finally {
+      _isLoading = false;
+      notifyListeners();
+    }
+  }
+
   @override
   void dispose() {
     // Repository disposal is handled by its owner (typically main.dart)

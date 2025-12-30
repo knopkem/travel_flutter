@@ -538,6 +538,76 @@ class _MapScreenState extends State<MapScreen> {
                   ),
                 ),
 
+              // Crosshair at map center
+              Center(
+                child: IgnorePointer(
+                  child: Container(
+                    width: 32,
+                    height: 32,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      border: Border.all(
+                        color: Colors.black54,
+                        width: 2,
+                      ),
+                    ),
+                    child: const Center(
+                      child: Icon(
+                        Icons.add,
+                        size: 20,
+                        color: Colors.black54,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+
+              // Set location from map center button
+              Positioned(
+                top: 16,
+                right: 16,
+                child: Card(
+                  elevation: 4,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: InkWell(
+                    borderRadius: BorderRadius.circular(8),
+                    onTap: locationProvider.isLoading
+                        ? null
+                        : () async {
+                            final center = _mapController.camera.center;
+                            await locationProvider.setLocationFromMapCenter(
+                              center.latitude,
+                              center.longitude,
+                            );
+                          },
+                    child: Padding(
+                      padding: const EdgeInsets.all(12),
+                      child: locationProvider.isLoading
+                          ? const SizedBox(
+                              width: 24,
+                              height: 24,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : const Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(Icons.my_location, size: 24),
+                                SizedBox(width: 8),
+                                Text(
+                                  'Set Location Here',
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                ),
+                              ],
+                            ),
+                    ),
+                  ),
+                ),
+              ),
+
               // Map legend
               Positioned(
                 bottom: 16,
