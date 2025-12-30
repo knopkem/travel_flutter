@@ -4,12 +4,16 @@ import 'providers/providers.dart';
 import 'providers/reminder_provider.dart';
 import 'repositories/repositories.dart';
 import 'screens/tab_navigation_screen.dart';
+import 'screens/poi_detail_screen.dart';
 import 'services/openai_service.dart';
 import 'services/notification_service.dart';
 import 'utils/settings_service.dart';
 
 // Global navigator key for deep linking from notifications
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
+
+// Global POI provider reference for deep linking
+POIProvider? _poiProviderRef;
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -23,10 +27,9 @@ void main() async {
   final notificationService = NotificationService();
   await notificationService.initialize(
     onNotificationTapped: (poiId) {
-      // Navigate to POI detail screen
-      // This will be handled by the navigator in TabNavigationScreen
+      // Navigate to POI detail screen using global navigator key
       debugPrint('Notification tapped for POI: $poiId');
-      // TODO: Implement deep link navigation
+      _handleNotificationTap(poiId);
     },
   );
 
@@ -108,11 +111,50 @@ void main() async {
   );
 }
 
+/// Handle notification tap to navigate to POI detail screen
+void _handleNotificationTap(String poiId) {
+  // Wait a bit for app to be ready if launched from background
+  Future.delayed(const Duration(milliseconds: 500), () {
+    if (_poiProviderRef == null) {
+      debugPrint('POI provider not available for deep linking');
+      return;
+    }
+
+    final poi = _poiProviderRef!.findById(poiId);
+    if (poi == null) {
+      debugPrint('POI not found for deep linking: $poiId');
+      // Show a snackbar if navigator is available
+      final context = navigatorKey.currentContext;
+      if (context != null) {
+        // ignore: use_build_context_synchronously
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Could not find the store. Try searching for it.'),
+          ),
+        );
+      }
+      return;
+    }
+
+    // Navigate to POI detail screen
+    navigatorKey.currentState?.push(
+      MaterialPageRoute(
+        builder: (context) => POIDetailScreen(poi: poi),
+      ),
+    );
+  });
+}
+
 class MyApp extends StatelessWidget {
   const MyApp({super.key});
 
   @override
   Widget build(BuildContext context) {
+    // Capture POI provider reference for deep linking
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _poiProviderRef = Provider.of<POIProvider>(context, listen: false);
+    });
+
     return MaterialApp(
       title: 'LocationPal',
       navigatorKey: navigatorKey,

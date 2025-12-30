@@ -1,17 +1,39 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 import '../models/poi_category.dart';
 import '../models/poi_type.dart';
 import '../models/poi_source.dart';
 import '../providers/settings_provider.dart';
 import '../providers/reminder_provider.dart';
+import 'reminders_overview_screen.dart';
 
 /// Settings screen for customizing app preferences
 ///
 /// Currently supports:
 /// - POI Type Interests: Drag-and-drop ranking of POI types
-class SettingsScreen extends StatelessWidget {
+class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
+
+  @override
+  State<SettingsScreen> createState() => _SettingsScreenState();
+}
+
+class _SettingsScreenState extends State<SettingsScreen> {
+  String _version = 'Loading...';
+
+  @override
+  void initState() {
+    super.initState();
+    _loadVersion();
+  }
+
+  Future<void> _loadVersion() async {
+    final packageInfo = await PackageInfo.fromPlatform();
+    setState(() {
+      _version = '${packageInfo.version}+${packageInfo.buildNumber}';
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -310,11 +332,10 @@ class SettingsScreen extends StatelessWidget {
                       subtitle: const Text('View and edit all your shopping lists'),
                       trailing: const Icon(Icons.chevron_right),
                       onTap: () {
-                        // TODO: Navigate to reminders overview screen (Phase 2)
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text('Reminders overview coming soon!'),
-                            duration: Duration(seconds: 2),
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => const RemindersOverviewScreen(),
                           ),
                         );
                       },
@@ -357,15 +378,27 @@ class SettingsScreen extends StatelessWidget {
     BuildContext context,
     SettingsProvider settingsProvider,
   ) {
-    final poiOrder = settingsProvider.poiTypeOrder;
+    return Column(
+      children: [
+        _buildAttractionTypesSection(context, settingsProvider),
+        _buildCommercialTypesSection(context, settingsProvider),
+      ],
+    );
+  }
+
+  Widget _buildAttractionTypesSection(
+    BuildContext context,
+    SettingsProvider settingsProvider,
+  ) {
+    final poiOrder = settingsProvider.attractionPoiOrder;
     final enabledCount = poiOrder.where((entry) => entry.$2).length;
     final totalCount = poiOrder.length;
 
     return ExpansionTile(
       initiallyExpanded: false,
-      leading: const Icon(Icons.category),
+      leading: const Icon(Icons.attractions),
       title: const Text(
-        'POI Types',
+        'Attraction Types',
         style: TextStyle(
           fontSize: 18,
           fontWeight: FontWeight.bold,
@@ -378,7 +411,7 @@ class SettingsScreen extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              if (settingsProvider.allPoiTypesDisabled)
+              if (settingsProvider.allAttractionPoiTypesDisabled)
                 Container(
                   padding: const EdgeInsets.all(12),
                   margin: const EdgeInsets.only(bottom: 16),
@@ -393,7 +426,7 @@ class SettingsScreen extends StatelessWidget {
                       const SizedBox(width: 12),
                       const Expanded(
                         child: Text(
-                          'At least one POI type must be enabled for discovery to work.',
+                          'At least one attraction type must be enabled for discovery.',
                           style: TextStyle(fontSize: 14),
                         ),
                       ),
@@ -401,7 +434,7 @@ class SettingsScreen extends StatelessWidget {
                   ),
                 ),
               const Text(
-                'Enable or disable specific POI types',
+                'Museums, monuments, parks, and tourist sites',
                 style: TextStyle(
                   fontSize: 14,
                   color: Colors.grey,
@@ -415,7 +448,8 @@ class SettingsScreen extends StatelessWidget {
                   value: enabled,
                   onChanged: (value) {
                     if (value != null) {
-                      settingsProvider.updatePoiTypeEnabled(type, value);
+                      settingsProvider.updateAttractionPoiTypeEnabled(
+                          type, value);
                     }
                   },
                   title: Text(type.displayName),
@@ -429,11 +463,110 @@ class SettingsScreen extends StatelessWidget {
                 children: [
                   TextButton.icon(
                     onPressed: () async {
-                      await settingsProvider.resetPoiOrder();
+                      await settingsProvider.resetAttractionPoiOrder();
                       if (context.mounted) {
                         ScaffoldMessenger.of(context).showSnackBar(
                           const SnackBar(
-                            content: Text('All POI types enabled'),
+                            content: Text('All attraction types enabled'),
+                            backgroundColor: Colors.green,
+                          ),
+                        );
+                      }
+                    },
+                    icon: const Icon(Icons.restart_alt),
+                    label: const Text('Enable All'),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildCommercialTypesSection(
+    BuildContext context,
+    SettingsProvider settingsProvider,
+  ) {
+    final poiOrder = settingsProvider.commercialPoiOrder;
+    final enabledCount = poiOrder.where((entry) => entry.$2).length;
+    final totalCount = poiOrder.length;
+
+    return ExpansionTile(
+      initiallyExpanded: false,
+      leading: const Icon(Icons.store),
+      title: const Text(
+        'Commercial Types',
+        style: TextStyle(
+          fontSize: 18,
+          fontWeight: FontWeight.bold,
+        ),
+      ),
+      subtitle: Text('$enabledCount of $totalCount types enabled'),
+      children: [
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              if (settingsProvider.allCommercialPoiTypesDisabled)
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  margin: const EdgeInsets.only(bottom: 16),
+                  decoration: BoxDecoration(
+                    color: Colors.orange[100],
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: Colors.orange[300]!),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(Icons.warning_amber, color: Colors.orange[700]),
+                      const SizedBox(width: 12),
+                      const Expanded(
+                        child: Text(
+                          'At least one commercial type must be enabled for discovery.',
+                          style: TextStyle(fontSize: 14),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              const Text(
+                'Restaurants, cafés, supermarkets, and services',
+                style: TextStyle(
+                  fontSize: 14,
+                  color: Colors.grey,
+                ),
+              ),
+              const SizedBox(height: 12),
+              ...poiOrder.map((entry) {
+                final type = entry.$1;
+                final enabled = entry.$2;
+                return CheckboxListTile(
+                  value: enabled,
+                  onChanged: (value) {
+                    if (value != null) {
+                      settingsProvider.updateCommercialPoiTypeEnabled(
+                          type, value);
+                    }
+                  },
+                  title: Text(type.displayName),
+                  secondary: Icon(_getTypeIcon(type)),
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 8),
+                );
+              }),
+              const SizedBox(height: 8),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  TextButton.icon(
+                    onPressed: () async {
+                      await settingsProvider.resetCommercialPoiOrder();
+                      if (context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text('All commercial types enabled'),
                             backgroundColor: Colors.green,
                           ),
                         );
@@ -469,17 +602,29 @@ class SettingsScreen extends StatelessWidget {
     BuildContext context,
     SettingsProvider settingsProvider,
   ) {
+    return Column(
+      children: [
+        _buildAttractionInterestsSection(context, settingsProvider),
+        _buildCommercialInterestsSection(context, settingsProvider),
+      ],
+    );
+  }
+
+  Widget _buildAttractionInterestsSection(
+    BuildContext context,
+    SettingsProvider settingsProvider,
+  ) {
     return ExpansionTile(
       initiallyExpanded: true,
-      leading: const Icon(Icons.favorite_border),
+      leading: const Icon(Icons.attractions),
       title: const Text(
-        'Interests',
+        'Attraction Interests',
         style: TextStyle(
           fontSize: 18,
           fontWeight: FontWeight.bold,
         ),
       ),
-      subtitle: const Text('Customize your POI preferences'),
+      subtitle: const Text('Rank your attraction preferences'),
       children: [
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -500,12 +645,12 @@ class SettingsScreen extends StatelessWidget {
                     icon: const Icon(Icons.refresh, size: 18),
                     label: const Text('Reset'),
                     onPressed: () =>
-                        _showResetDialog(context, settingsProvider),
+                        _showResetAttractionInterestsDialog(context, settingsProvider),
                   ),
                 ],
               ),
               const SizedBox(height: 8),
-              _buildPoiTypeList(context, settingsProvider),
+              _buildAttractionPoiTypeList(context, settingsProvider),
             ],
           ),
         ),
@@ -513,16 +658,64 @@ class SettingsScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildPoiTypeList(
+  Widget _buildCommercialInterestsSection(
     BuildContext context,
     SettingsProvider settingsProvider,
   ) {
-    final poiOrder = settingsProvider.poiTypeOrder;
+    return ExpansionTile(
+      initiallyExpanded: false,
+      leading: const Icon(Icons.store),
+      title: const Text(
+        'Commercial Interests',
+        style: TextStyle(
+          fontSize: 18,
+          fontWeight: FontWeight.bold,
+        ),
+      ),
+      subtitle: const Text('Rank your commercial preferences'),
+      children: [
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      'Drag to reorder by preference',
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                            color: Colors.grey[600],
+                          ),
+                    ),
+                  ),
+                  TextButton.icon(
+                    icon: const Icon(Icons.refresh, size: 18),
+                    label: const Text('Reset'),
+                    onPressed: () =>
+                        _showResetCommercialInterestsDialog(context, settingsProvider),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              _buildCommercialPoiTypeList(context, settingsProvider),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildAttractionPoiTypeList(
+    BuildContext context,
+    SettingsProvider settingsProvider,
+  ) {
+    final poiOrder = settingsProvider.attractionPoiOrder;
 
     return ReorderableListView.builder(
       shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),
-      buildDefaultDragHandles: false, // Disable default drag handles
+      buildDefaultDragHandles: false,
       itemCount: poiOrder.length,
       onReorder: (oldIndex, newIndex) {
         final updatedOrder = List<(POIType, bool)>.from(poiOrder);
@@ -531,7 +724,35 @@ class SettingsScreen extends StatelessWidget {
         }
         final item = updatedOrder.removeAt(oldIndex);
         updatedOrder.insert(newIndex, item);
-        settingsProvider.updatePoiOrder(updatedOrder);
+        settingsProvider.updateAttractionPoiOrder(updatedOrder);
+      },
+      itemBuilder: (context, index) {
+        final entry = poiOrder[index];
+        return _buildPoiTypeItem(context, entry.$1, index + 1, index,
+            key: ValueKey(entry.$1));
+      },
+    );
+  }
+
+  Widget _buildCommercialPoiTypeList(
+    BuildContext context,
+    SettingsProvider settingsProvider,
+  ) {
+    final poiOrder = settingsProvider.commercialPoiOrder;
+
+    return ReorderableListView.builder(
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      buildDefaultDragHandles: false,
+      itemCount: poiOrder.length,
+      onReorder: (oldIndex, newIndex) {
+        final updatedOrder = List<(POIType, bool)>.from(poiOrder);
+        if (newIndex > oldIndex) {
+          newIndex -= 1;
+        }
+        final item = updatedOrder.removeAt(oldIndex);
+        updatedOrder.insert(newIndex, item);
+        settingsProvider.updateCommercialPoiOrder(updatedOrder);
       },
       itemBuilder: (context, index) {
         final entry = poiOrder[index];
@@ -685,16 +906,16 @@ class SettingsScreen extends StatelessWidget {
     );
   }
 
-  void _showResetDialog(
+  void _showResetAttractionInterestsDialog(
     BuildContext context,
     SettingsProvider settingsProvider,
   ) {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Reset to Defaults?'),
+        title: const Text('Reset Attraction Interests?'),
         content: const Text(
-          'This will restore the default POI type ordering. Your custom preferences will be lost.',
+          'This will restore the default attraction interest ordering. Your custom preferences will be lost.',
         ),
         actions: [
           TextButton(
@@ -703,11 +924,45 @@ class SettingsScreen extends StatelessWidget {
           ),
           FilledButton(
             onPressed: () {
-              settingsProvider.resetPoiOrder();
+              settingsProvider.resetAttractionPoiOrder();
               Navigator.pop(context);
               ScaffoldMessenger.of(context).showSnackBar(
                 const SnackBar(
-                  content: Text('Settings reset to defaults'),
+                  content: Text('Attraction interests reset to defaults'),
+                  backgroundColor: Colors.green,
+                ),
+              );
+            },
+            child: const Text('Reset'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showResetCommercialInterestsDialog(
+    BuildContext context,
+    SettingsProvider settingsProvider,
+  ) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Reset Commercial Interests?'),
+        content: const Text(
+          'This will restore the default commercial interest ordering. Your custom preferences will be lost.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () {
+              settingsProvider.resetCommercialPoiOrder();
+              Navigator.pop(context);
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('Commercial interests reset to defaults'),
                   backgroundColor: Colors.green,
                 ),
               );
@@ -842,7 +1097,7 @@ class SettingsScreen extends StatelessWidget {
         ListTile(
           leading: const Icon(Icons.travel_explore),
           title: const Text('LocationPal'),
-          subtitle: const Text('Version 1.0.0'),
+          subtitle: Text('Version $_version'),
         ),
         const Divider(),
         ListTile(
@@ -854,7 +1109,7 @@ class SettingsScreen extends StatelessWidget {
             showLicensePage(
               context: context,
               applicationName: 'LocationPal',
-              applicationVersion: '1.0.0',
+              applicationVersion: _version,
               applicationLegalese: '© 2025 LocationPal',
             );
           },

@@ -7,6 +7,8 @@ import '../models/poi_source.dart';
 /// Service for persisting user settings using SharedPreferences
 class SettingsService {
   static const String _poiOrderKey = 'poi_type_order';
+  static const String _attractionPoiOrderKey = 'attraction_poi_type_order';
+  static const String _commercialPoiOrderKey = 'commercial_poi_type_order';
   static const String _poiDistanceKey = 'poi_search_distance';
   static const String _poiProvidersEnabledKey = 'poi_providers_enabled';
   static const String _defaultPoiCategoryKey = 'default_poi_category';
@@ -44,6 +46,32 @@ class SettingsService {
     POIType.park,
     POIType.other,
     // Commercial
+    POIType.restaurant,
+    POIType.cafe,
+    POIType.bakery,
+    POIType.supermarket,
+    POIType.hardwareStore,
+    POIType.pharmacy,
+    POIType.gasStation,
+    POIType.hotel,
+    POIType.bar,
+    POIType.fastFood,
+  ];
+
+  /// Default attraction POI type order
+  static final List<POIType> defaultAttractionPoiOrder = [
+    POIType.touristAttraction,
+    POIType.museum,
+    POIType.historicSite,
+    POIType.monument,
+    POIType.viewpoint,
+    POIType.religiousSite,
+    POIType.park,
+    POIType.other,
+  ];
+
+  /// Default commercial POI type order
+  static final List<POIType> defaultCommercialPoiOrder = [
     POIType.restaurant,
     POIType.cafe,
     POIType.bakery,
@@ -149,6 +177,116 @@ class SettingsService {
     try {
       final prefs = await SharedPreferences.getInstance();
       return await prefs.remove(_poiOrderKey);
+    } catch (e) {
+      return false;
+    }
+  }
+
+  /// Load attraction POI type order with enabled state
+  Future<List<(POIType, bool)>> loadAttractionPoiOrder() async {
+    return _loadCategoryPoiOrder(
+      _attractionPoiOrderKey,
+      defaultAttractionPoiOrder,
+      POICategory.attraction,
+    );
+  }
+
+  /// Load commercial POI type order with enabled state
+  Future<List<(POIType, bool)>> loadCommercialPoiOrder() async {
+    return _loadCategoryPoiOrder(
+      _commercialPoiOrderKey,
+      defaultCommercialPoiOrder,
+      POICategory.commercial,
+    );
+  }
+
+  /// Generic method to load POI order for a specific category
+  Future<List<(POIType, bool)>> _loadCategoryPoiOrder(
+    String key,
+    List<POIType> defaultOrder,
+    POICategory category,
+  ) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final orderStrings = prefs.getStringList(key);
+
+      if (orderStrings == null || orderStrings.isEmpty) {
+        // Return default with all types enabled
+        return defaultOrder.map((type) => (type, true)).toList();
+      }
+
+      final order = <(POIType, bool)>[];
+      for (final entry in orderStrings) {
+        final parts = entry.split('=');
+        if (parts.length == 2) {
+          try {
+            final type = POIType.values.firstWhere(
+              (t) => t.toString() == parts[0],
+            );
+            // Only include types from the correct category
+            if (type.category == category) {
+              final enabled = parts[1] == 'true';
+              order.add((type, enabled));
+            }
+          } catch (e) {
+            continue;
+          }
+        }
+      }
+
+      // Ensure all types for this category are present
+      for (final type in defaultOrder) {
+        if (!order.any((entry) => entry.$1 == type)) {
+          order.add((type, true));
+        }
+      }
+
+      return order;
+    } catch (e) {
+      return defaultOrder.map((type) => (type, true)).toList();
+    }
+  }
+
+  /// Save attraction POI type order with enabled state
+  Future<bool> saveAttractionPoiOrder(List<(POIType, bool)> order) async {
+    return _saveCategoryPoiOrder(_attractionPoiOrderKey, order);
+  }
+
+  /// Save commercial POI type order with enabled state
+  Future<bool> saveCommercialPoiOrder(List<(POIType, bool)> order) async {
+    return _saveCategoryPoiOrder(_commercialPoiOrderKey, order);
+  }
+
+  /// Generic method to save POI order for a specific category
+  Future<bool> _saveCategoryPoiOrder(
+    String key,
+    List<(POIType, bool)> order,
+  ) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final orderStrings =
+          order.map((entry) => '${entry.$1.toString()}=${entry.$2}').toList();
+      return await prefs.setStringList(key, orderStrings);
+    } catch (e) {
+      return false;
+    }
+  }
+
+  /// Reset attraction POI order to default (all types enabled)
+  Future<bool> resetAttractionPoiOrder() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      return await prefs.remove(_attractionPoiOrderKey);
+    } catch (e) {
+      return false;
+    }
+  }
+
+  /// Reset commercial POI order to default (all types enabled)
+  Future<bool> resetCommercialPoiOrder() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      return await prefs.remove(_commercialPoiOrderKey);
     } catch (e) {
       return false;
     }

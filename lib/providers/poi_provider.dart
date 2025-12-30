@@ -75,6 +75,15 @@ class POIProvider extends ChangeNotifier {
     return _pois.where((poi) => _selectedFilters.contains(poi.type)).toList();
   }
 
+  /// Find a POI by its ID
+  POI? findById(String id) {
+    try {
+      return _pois.firstWhere((poi) => poi.id == id);
+    } catch (e) {
+      return null;
+    }
+  }
+
   Set<POIType> get selectedFilters => Set.unmodifiable(_selectedFilters);
   POICategory get currentCategory => _currentCategory;
   String get searchQuery => _searchQuery;

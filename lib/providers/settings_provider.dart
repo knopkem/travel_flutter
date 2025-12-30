@@ -14,6 +14,8 @@ class SettingsProvider extends ChangeNotifier {
   final SettingsService _settingsService;
   final OpenAIService _openAIService;
   List<(POIType, bool)> _poiTypeOrder = [];
+  List<(POIType, bool)> _attractionPoiOrder = [];
+  List<(POIType, bool)> _commercialPoiOrder = [];
   int _poiSearchDistance = SettingsService.defaultPoiDistance;
   Map<POISource, bool> _poiProvidersEnabled = {};
   String? _openaiApiKey;
@@ -35,23 +37,58 @@ class SettingsProvider extends ChangeNotifier {
   /// Current POI type order with enabled state (user's preference)
   List<(POIType, bool)> get poiTypeOrder => List.unmodifiable(_poiTypeOrder);
 
-  /// Get list of enabled POI types in priority order
-  List<POIType> get enabledPoiTypes => _poiTypeOrder
+  /// Attraction POI type order with enabled state
+  List<(POIType, bool)> get attractionPoiOrder =>
+      List.unmodifiable(_attractionPoiOrder);
+
+  /// Commercial POI type order with enabled state
+  List<(POIType, bool)> get commercialPoiOrder =>
+      List.unmodifiable(_commercialPoiOrder);
+
+  /// Get list of enabled POI types in priority order (combines both categories)
+  List<POIType> get enabledPoiTypes {
+    final enabledAttractions = _attractionPoiOrder
+        .where((entry) => entry.$2)
+        .map((entry) => entry.$1);
+    final enabledCommercial = _commercialPoiOrder
+        .where((entry) => entry.$2)
+        .map((entry) => entry.$1);
+    return [...enabledAttractions, ...enabledCommercial];
+  }
+
+  /// Get list of enabled attraction POI types in priority order
+  List<POIType> get enabledAttractionPoiTypes => _attractionPoiOrder
+      .where((entry) => entry.$2)
+      .map((entry) => entry.$1)
+      .toList();
+
+  /// Get list of enabled commercial POI types in priority order
+  List<POIType> get enabledCommercialPoiTypes => _commercialPoiOrder
       .where((entry) => entry.$2)
       .map((entry) => entry.$1)
       .toList();
 
   /// Check if a specific POI type is enabled
   bool isPoiTypeEnabled(POIType type) {
-    final entry = _poiTypeOrder.firstWhere(
-      (e) => e.$1 == type,
-      orElse: () => (type, true),
-    );
-    return entry.$2;
+    // Check in the appropriate category list
+    if (type.category == POICategory.attraction) {
+      final entry = _attractionPoiOrder.firstWhere(
+        (e) => e.$1 == type,
+        orElse: () => (type, true),
+      );
+      return entry.$2;
+    } else {
+      final entry = _commercialPoiOrder.firstWhere(
+        (e) => e.$1 == type,
+        orElse: () => (type, true),
+      );
+      return entry.$2;
+    }
   }
 
-  /// Check if all POI types are disabled
-  bool get allPoiTypesDisabled => _poiTypeOrder.every((entry) => !entry.$2);
+  /// Check if all POI types are disabled (both categories)
+  bool get allPoiTypesDisabled =>
+      allAttractionPoiTypesDisabled && allCommercialPoiTypesDisabled;
 
   /// Current POI search distance in meters
   int get poiSearchDistance => _poiSearchDistance;
@@ -127,6 +164,8 @@ class SettingsProvider extends ChangeNotifier {
     notifyListeners();
 
     _poiTypeOrder = await _settingsService.loadPoiOrder();
+    _attractionPoiOrder = await _settingsService.loadAttractionPoiOrder();
+    _commercialPoiOrder = await _settingsService.loadCommercialPoiOrder();
 
     _isLoading = false;
     notifyListeners();
@@ -158,6 +197,68 @@ class SettingsProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Update attraction POI type order and persist to storage
+  Future<void> updateAttractionPoiOrder(List<(POIType, bool)> newOrder) async {
+    _attractionPoiOrder = List.from(newOrder);
+    notifyListeners();
+    await _settingsService.saveAttractionPoiOrder(newOrder);
+  }
+
+  /// Update attraction POI type enabled state
+  Future<void> updateAttractionPoiTypeEnabled(
+      POIType type, bool enabled) async {
+    final index = _attractionPoiOrder.indexWhere((entry) => entry.$1 == type);
+    if (index >= 0) {
+      _attractionPoiOrder[index] = (type, enabled);
+      notifyListeners();
+      await _settingsService.saveAttractionPoiOrder(_attractionPoiOrder);
+    }
+  }
+
+  /// Reset attraction POI order to default (all types enabled)
+  Future<void> resetAttractionPoiOrder() async {
+    await _settingsService.resetAttractionPoiOrder();
+    _attractionPoiOrder = SettingsService.defaultAttractionPoiOrder
+        .map((type) => (type, true))
+        .toList();
+    notifyListeners();
+  }
+
+  /// Update commercial POI type order and persist to storage
+  Future<void> updateCommercialPoiOrder(List<(POIType, bool)> newOrder) async {
+    _commercialPoiOrder = List.from(newOrder);
+    notifyListeners();
+    await _settingsService.saveCommercialPoiOrder(newOrder);
+  }
+
+  /// Update commercial POI type enabled state
+  Future<void> updateCommercialPoiTypeEnabled(
+      POIType type, bool enabled) async {
+    final index = _commercialPoiOrder.indexWhere((entry) => entry.$1 == type);
+    if (index >= 0) {
+      _commercialPoiOrder[index] = (type, enabled);
+      notifyListeners();
+      await _settingsService.saveCommercialPoiOrder(_commercialPoiOrder);
+    }
+  }
+
+  /// Reset commercial POI order to default (all types enabled)
+  Future<void> resetCommercialPoiOrder() async {
+    await _settingsService.resetCommercialPoiOrder();
+    _commercialPoiOrder = SettingsService.defaultCommercialPoiOrder
+        .map((type) => (type, true))
+        .toList();
+    notifyListeners();
+  }
+
+  /// Check if all attraction POI types are disabled
+  bool get allAttractionPoiTypesDisabled =>
+      _attractionPoiOrder.every((entry) => !entry.$2);
+
+  /// Check if all commercial POI types are disabled
+  bool get allCommercialPoiTypesDisabled =>
+      _commercialPoiOrder.every((entry) => !entry.$2);
+
   /// Update POI search distance and persist to storage
   Future<void> updatePoiDistance(int distance) async {
     _poiSearchDistance = distance;
@@ -169,8 +270,14 @@ class SettingsProvider extends ChangeNotifier {
   /// Get priority index for a POI type (lower = higher priority)
   /// Returns the position in the user's ordered list (only considering enabled types)
   int getPriorityIndex(POIType type) {
-    final index = _poiTypeOrder.indexWhere((entry) => entry.$1 == type);
-    return index >= 0 ? index : _poiTypeOrder.length;
+    // Check in the appropriate category list
+    if (type.category == POICategory.attraction) {
+      final index = _attractionPoiOrder.indexWhere((entry) => entry.$1 == type);
+      return index >= 0 ? index : _attractionPoiOrder.length;
+    } else {
+      final index = _commercialPoiOrder.indexWhere((entry) => entry.$1 == type);
+      return index >= 0 ? index : _commercialPoiOrder.length;
+    }
   }
 
   /// Update POI provider enabled state and persist to storage
