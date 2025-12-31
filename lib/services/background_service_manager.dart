@@ -100,6 +100,20 @@ class BackgroundServiceManager {
       // Give the service time to stop properly
       await Future.delayed(const Duration(milliseconds: 300));
     }
+
+    // Cancel the foreground notification directly
+    await _cancelNotification();
+  }
+
+  /// Cancel the foreground notification
+  static Future<void> _cancelNotification() async {
+    try {
+      final notifications = FlutterLocalNotificationsPlugin();
+      await notifications.cancel(_foregroundNotificationId);
+      debugPrint('Cancelled foreground notification');
+    } catch (e) {
+      debugPrint('Error cancelling notification: $e');
+    }
   }
 
   /// Update the reminder count (updates foreground notification)
