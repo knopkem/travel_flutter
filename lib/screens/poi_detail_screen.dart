@@ -9,6 +9,7 @@ import '../utils/brand_matcher.dart';
 import '../utils/country_language_map.dart';
 import '../utils/format_utils.dart';
 import '../utils/permission_dialog_helper.dart';
+import '../utils/battery_optimization_helper.dart';
 import '../services/location_monitor_service.dart';
 import '../services/notification_service.dart';
 import 'settings_screen.dart';
@@ -462,7 +463,8 @@ class _POIDetailScreenState extends State<POIDetailScreen> {
                 if (!hasReminder)
                   // Add reminder button
                   ListTile(
-                    leading: const Icon(Icons.shopping_cart, color: Colors.blue),
+                    leading:
+                        const Icon(Icons.shopping_cart, color: Colors.blue),
                     title: const Text('Add Shopping Reminder'),
                     subtitle: Text('Get notified at any $brandName store'),
                     trailing: const Icon(Icons.add),
@@ -511,7 +513,8 @@ class _POIDetailScreenState extends State<POIDetailScreen> {
                                   return CheckboxListTile(
                                     value: item.isChecked,
                                     onChanged: (checked) async {
-                                      final scaffoldMessenger = ScaffoldMessenger.of(context);
+                                      final scaffoldMessenger =
+                                          ScaffoldMessenger.of(context);
                                       final success =
                                           await reminderProvider.toggleItem(
                                         reminder.id,
@@ -581,7 +584,8 @@ class _POIDetailScreenState extends State<POIDetailScreen> {
                                     icon: const Icon(Icons.add_circle),
                                     color: Colors.blue,
                                     onPressed: () {
-                                      final text = _newItemController.text.trim();
+                                      final text =
+                                          _newItemController.text.trim();
                                       if (text.isNotEmpty) {
                                         reminderProvider.addItem(
                                           reminder.id,
@@ -599,7 +603,8 @@ class _POIDetailScreenState extends State<POIDetailScreen> {
                                 width: double.infinity,
                                 child: OutlinedButton.icon(
                                   onPressed: () async {
-                                    final scaffoldMessenger = ScaffoldMessenger.of(context);
+                                    final scaffoldMessenger =
+                                        ScaffoldMessenger.of(context);
                                     final confirm = await showDialog<bool>(
                                       context: context,
                                       builder: (dialogContext) => AlertDialog(
@@ -609,13 +614,13 @@ class _POIDetailScreenState extends State<POIDetailScreen> {
                                         ),
                                         actions: [
                                           TextButton(
-                                            onPressed: () =>
-                                                Navigator.pop(dialogContext, false),
+                                            onPressed: () => Navigator.pop(
+                                                dialogContext, false),
                                             child: const Text('Cancel'),
                                           ),
                                           ElevatedButton(
-                                            onPressed: () =>
-                                                Navigator.pop(dialogContext, true),
+                                            onPressed: () => Navigator.pop(
+                                                dialogContext, true),
                                             child: const Text('Remove'),
                                           ),
                                         ],
@@ -665,7 +670,7 @@ class _POIDetailScreenState extends State<POIDetailScreen> {
       context,
       listen: false,
     );
-    
+
     final settingsProvider = Provider.of<SettingsProvider>(
       context,
       listen: false,
@@ -676,36 +681,58 @@ class _POIDetailScreenState extends State<POIDetailScreen> {
     final scaffoldMessenger = ScaffoldMessenger.of(context);
 
     if (isFirstReminder) {
-      // Show permission rationale dialogs
-      if (!mounted) return;
-      // ignore: use_build_context_synchronously
-      final allowedBg = await PermissionDialogHelper
-          .showBackgroundLocationRationale(context); // ignore: use_build_context_synchronously
-      if (!allowedBg) return;
-
-      if (!mounted) return;
-      // ignore: use_build_context_synchronously
-      final allowedNotif =
-          await PermissionDialogHelper.showNotificationRationale(context); // ignore: use_build_context_synchronously
-      if (!allowedNotif) return;
-
-      // Request actual permissions
       final locationService = LocationMonitorService();
-      final locationGranted = await locationService.requestBackgroundPermission();
-      
-      if (!locationGranted) {
+
+      // Step 1: Request foreground location permission first
+      if (!mounted) return;
+      // ignore: use_build_context_synchronously
+      final allowedForeground =
+          await PermissionDialogHelper.showForegroundLocationRationale(context);
+      if (!allowedForeground) return;
+
+      final foregroundGranted =
+          await locationService.requestForegroundPermission();
+
+      if (!foregroundGranted) {
         if (mounted) {
           PermissionDialogHelper.showErrorWithMessenger(
             scaffoldMessenger,
-            'Background location permission is required for reminders',
+            'Location permission is required for reminders. Please enable location services in device settings and grant location permission.',
           );
         }
         return;
       }
 
+      // Step 2: Request background location permission (Android 10+)
+      if (!mounted) return;
+      // ignore: use_build_context_synchronously
+      final allowedBg =
+          await PermissionDialogHelper.showBackgroundLocationRationale(context);
+      if (!allowedBg) return;
+
+      final backgroundGranted =
+          await locationService.requestBackgroundPermission();
+
+      if (!backgroundGranted) {
+        if (mounted) {
+          PermissionDialogHelper.showErrorWithMessenger(
+            scaffoldMessenger,
+            'Background location permission is required for reminders. Please select "Allow all the time" in the permission dialog.',
+          );
+        }
+        return;
+      }
+
+      // Step 3: Request notification permission
+      if (!mounted) return;
+      // ignore: use_build_context_synchronously
+      final allowedNotif =
+          await PermissionDialogHelper.showNotificationRationale(context);
+      if (!allowedNotif) return;
+
       final notificationService = NotificationService();
       final notifGranted = await notificationService.requestPermission();
-      
+
       if (!notifGranted) {
         if (mounted) {
           PermissionDialogHelper.showErrorWithMessenger(
@@ -729,16 +756,22 @@ class _POIDetailScreenState extends State<POIDetailScreen> {
 
     // Create the reminder
     final success = await reminderProvider.addReminder(_currentPOI, items);
-    
+
     if (success && mounted) {
-      PermissionDialogHelper.showReminderCreatedMessageWithMessenger(scaffoldMessenger, brandName);
+      PermissionDialogHelper.showReminderCreatedMessageWithMessenger(
+          scaffoldMessenger, brandName);
       setState(() {
         _isReminderExpanded = true;
       });
-      
+
       // Enable background location monitoring in settings
       if (isFirstReminder) {
         await settingsProvider.updateBackgroundLocationEnabled(true);
+
+        // Request battery optimization exemption on Android
+        if (!mounted) return;
+        await BatteryOptimizationHelper.requestBatteryOptimizationExemption(
+            context);
       }
     } else if (mounted) {
       PermissionDialogHelper.showErrorWithMessenger(
@@ -1192,9 +1225,8 @@ class _ShoppingListDialogState extends State<_ShoppingListDialog> {
           child: const Text('Cancel'),
         ),
         ElevatedButton(
-          onPressed: _items.isEmpty
-              ? null
-              : () => Navigator.pop(context, _items),
+          onPressed:
+              _items.isEmpty ? null : () => Navigator.pop(context, _items),
           child: const Text('Create Reminder'),
         ),
       ],

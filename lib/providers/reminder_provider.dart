@@ -3,6 +3,7 @@ import '../models/poi.dart';
 import '../models/reminder.dart';
 import '../services/reminder_service.dart';
 import '../services/location_monitor_service.dart';
+import '../services/background_service_manager.dart';
 import '../utils/brand_matcher.dart';
 
 /// Provider for managing shopping reminders
@@ -27,7 +28,7 @@ class ReminderProvider extends ChangeNotifier {
 
     try {
       _reminders = await _reminderService.loadReminders();
-      
+
       // Start monitoring if reminders exist
       if (_reminders.isNotEmpty) {
         await _locationService.startMonitoring(_reminders);
@@ -83,9 +84,8 @@ class ReminderProvider extends ChangeNotifier {
         return false;
       }
 
-      final items = shoppingItems
-          .map((text) => ShoppingItem(text: text))
-          .toList();
+      final items =
+          shoppingItems.map((text) => ShoppingItem(text: text)).toList();
 
       final reminder = Reminder(
         brandName: brandName,
@@ -100,11 +100,14 @@ class ReminderProvider extends ChangeNotifier {
       final success = await _reminderService.saveReminder(reminder);
       if (success) {
         _reminders.add(reminder);
-        
+
         // Restart monitoring with updated reminders
         await _locationService.stopMonitoring();
         await _locationService.startMonitoring(_reminders);
-        
+
+        // Update background service reminder count
+        await BackgroundServiceManager.updateReminderCount();
+
         notifyListeners();
         return true;
       } else {
@@ -125,13 +128,16 @@ class ReminderProvider extends ChangeNotifier {
       final success = await _reminderService.deleteReminder(id);
       if (success) {
         _reminders.removeWhere((r) => r.id == id);
-        
+
         // Restart monitoring or stop if no reminders left
         await _locationService.stopMonitoring();
         if (_reminders.isNotEmpty) {
           await _locationService.startMonitoring(_reminders);
         }
-        
+
+        // Update background service reminder count
+        await BackgroundServiceManager.updateReminderCount();
+
         notifyListeners();
         return true;
       } else {
@@ -158,10 +164,10 @@ class ReminderProvider extends ChangeNotifier {
 
       final item = reminder.items[itemIndex];
       final updatedItem = item.copyWith(isChecked: !item.isChecked);
-      
+
       final updatedItems = List<ShoppingItem>.from(reminder.items);
       updatedItems[itemIndex] = updatedItem;
-      
+
       final updatedReminder = reminder.copyWith(items: updatedItems);
 
       // Check if all items are now checked -> auto-remove reminder
@@ -192,10 +198,10 @@ class ReminderProvider extends ChangeNotifier {
 
       final reminder = _reminders[reminderIndex];
       final newItem = ShoppingItem(text: itemText);
-      
+
       final updatedItems = List<ShoppingItem>.from(reminder.items)
         ..add(newItem);
-      
+
       final updatedReminder = reminder.copyWith(items: updatedItems);
 
       final success = await _reminderService.updateReminder(updatedReminder);
@@ -220,15 +226,14 @@ class ReminderProvider extends ChangeNotifier {
       if (reminderIndex < 0) return false;
 
       final reminder = _reminders[reminderIndex];
-      final updatedItems = reminder.items
-          .where((item) => item.id != itemId)
-          .toList();
-      
+      final updatedItems =
+          reminder.items.where((item) => item.id != itemId).toList();
+
       // If no items left, remove the reminder entirely
       if (updatedItems.isEmpty) {
         return await removeReminder(reminderId);
       }
-      
+
       final updatedReminder = reminder.copyWith(items: updatedItems);
 
       final success = await _reminderService.updateReminder(updatedReminder);
@@ -252,6 +257,10 @@ class ReminderProvider extends ChangeNotifier {
       await _reminderService.clearAllReminders();
       await _locationService.stopMonitoring();
       _reminders = [];
+
+      // Update background service reminder count (will stop service if 0)
+      await BackgroundServiceManager.updateReminderCount();
+
       notifyListeners();
     } catch (e) {
       _error = 'Error clearing reminders: $e';

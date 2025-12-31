@@ -7,6 +7,7 @@ import 'screens/tab_navigation_screen.dart';
 import 'screens/poi_detail_screen.dart';
 import 'services/openai_service.dart';
 import 'services/notification_service.dart';
+import 'services/background_service_manager.dart';
 import 'utils/settings_service.dart';
 
 // Global navigator key for deep linking from notifications
@@ -17,6 +18,9 @@ POIProvider? _poiProviderRef;
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // Initialize background service for Android
+  await BackgroundServiceManager.initialize();
 
   // Initialize settings services
   final settingsService = SettingsService();
