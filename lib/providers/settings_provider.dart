@@ -4,6 +4,8 @@ import '../models/poi_type.dart';
 import '../models/poi_source.dart';
 import '../utils/settings_service.dart';
 import '../services/openai_service.dart';
+import '../services/background_service_manager.dart';
+import '../services/reminder_service.dart';
 import '../repositories/google_places_repository.dart';
 
 /// Provider for managing user settings
@@ -47,12 +49,10 @@ class SettingsProvider extends ChangeNotifier {
 
   /// Get list of enabled POI types in priority order (combines both categories)
   List<POIType> get enabledPoiTypes {
-    final enabledAttractions = _attractionPoiOrder
-        .where((entry) => entry.$2)
-        .map((entry) => entry.$1);
-    final enabledCommercial = _commercialPoiOrder
-        .where((entry) => entry.$2)
-        .map((entry) => entry.$1);
+    final enabledAttractions =
+        _attractionPoiOrder.where((entry) => entry.$2).map((entry) => entry.$1);
+    final enabledCommercial =
+        _commercialPoiOrder.where((entry) => entry.$2).map((entry) => entry.$1);
     return [...enabledAttractions, ...enabledCommercial];
   }
 
@@ -378,14 +378,14 @@ class SettingsProvider extends ChangeNotifier {
       final saved = await _settingsService.saveGooglePlacesApiKey(apiKey);
       if (saved) {
         _googlePlacesApiKey = apiKey;
-        
+
         // Auto-disable other providers when Google Places is enabled
         // (users can still re-enable them if desired)
         _poiProvidersEnabled[POISource.wikipediaGeosearch] = false;
         _poiProvidersEnabled[POISource.overpass] = false;
         _poiProvidersEnabled[POISource.wikidata] = false;
         _poiProvidersEnabled[POISource.googlePlaces] = true;
-        
+
         await _settingsService.savePoiProvidersEnabled(_poiProvidersEnabled);
         notifyListeners();
         return true;
@@ -421,6 +421,39 @@ class SettingsProvider extends ChangeNotifier {
   Future<void> updateBackgroundLocationEnabled(bool enabled) async {
     await _settingsService.saveBackgroundLocationEnabled(enabled);
     _backgroundLocationEnabled = enabled;
+
+    // Control the background service based on setting
+    if (enabled) {
+      // Start the service if there are reminders
+      await _restartBackgroundServiceIfNeeded();
+    } else {
+      // Stop the service
+      await _stopBackgroundService();
+    }
+
     notifyListeners();
+  }
+
+  /// Restart background service if reminders exist
+  Future<void> _restartBackgroundServiceIfNeeded() async {
+    try {
+      final reminderService = ReminderService();
+      final reminders = await reminderService.loadReminders();
+      if (reminders.isNotEmpty) {
+        await BackgroundServiceManager.startService();
+        await BackgroundServiceManager.updateReminderCount();
+      }
+    } catch (e) {
+      debugPrint('Error restarting background service: $e');
+    }
+  }
+
+  /// Stop background service
+  Future<void> _stopBackgroundService() async {
+    try {
+      await BackgroundServiceManager.stopService();
+    } catch (e) {
+      debugPrint('Error stopping background service: $e');
+    }
   }
 }

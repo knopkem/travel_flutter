@@ -101,6 +101,28 @@ class LocationMonitorService {
     }
   }
 
+  /// Check if has foreground location permission
+  Future<bool> hasPermission() async {
+    final serviceEnabled = await Geolocator.isLocationServiceEnabled();
+    if (!serviceEnabled) return false;
+
+    final permission = await Geolocator.checkPermission();
+    return permission == LocationPermission.whileInUse ||
+        permission == LocationPermission.always;
+  }
+
+  /// Check if has background location permission
+  Future<bool> hasBackgroundPermission() async {
+    if (Platform.isAndroid) {
+      final backgroundStatus = await Permission.locationAlways.status;
+      return backgroundStatus.isGranted;
+    } else {
+      // iOS
+      final permission = await Geolocator.checkPermission();
+      return permission == LocationPermission.always;
+    }
+  }
+
   /// Request foreground location permission
   Future<bool> requestForegroundPermission() async {
     // First check if location services are enabled

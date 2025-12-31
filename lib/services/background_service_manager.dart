@@ -69,13 +69,23 @@ class BackgroundServiceManager {
 
     // Check if already running
     final isRunning = await service.isRunning();
+    debugPrint('BackgroundServiceManager.startService: isRunning=$isRunning');
     if (isRunning) {
       // Update reminder count if already running
       await updateReminderCount();
       return true;
     }
 
-    return await service.startService();
+    final started = await service.startService();
+    debugPrint('BackgroundServiceManager.startService: started=$started');
+
+    // Give the service a moment to initialize, then update count
+    if (started) {
+      await Future.delayed(const Duration(milliseconds: 1500));
+      await updateReminderCount();
+    }
+
+    return started;
   }
 
   /// Stop the background service
@@ -83,7 +93,13 @@ class BackgroundServiceManager {
     if (!Platform.isAndroid) return;
 
     final service = FlutterBackgroundService();
-    service.invoke('stop');
+    final isRunning = await service.isRunning();
+
+    if (isRunning) {
+      service.invoke('stop');
+      // Give the service time to stop properly
+      await Future.delayed(const Duration(milliseconds: 300));
+    }
   }
 
   /// Update the reminder count (updates foreground notification)
@@ -92,11 +108,60 @@ class BackgroundServiceManager {
 
     final service = FlutterBackgroundService();
     final isRunning = await service.isRunning();
+    debugPrint(
+        'BackgroundServiceManager.updateReminderCount: isRunning=$isRunning');
 
     if (isRunning) {
       final reminderService = ReminderService();
       final reminders = await reminderService.loadReminders();
-      service.invoke('updateReminderCount', {'count': reminders.length});
+      final count = reminders.length;
+      debugPrint('BackgroundServiceManager.updateReminderCount: count=$count');
+
+      // Send to background isolate
+      service.invoke('updateReminderCount', {'count': count});
+
+      // Also directly update the notification from main isolate
+      // This is more reliable than inter-isolate communication
+      await _updateNotificationDirect(count);
+    }
+  }
+
+  /// Directly update the foreground notification from main isolate
+  static Future<void> _updateNotificationDirect(int reminderCount) async {
+    try {
+      final notifications = FlutterLocalNotificationsPlugin();
+
+      String content;
+      if (reminderCount == 0) {
+        content = 'Location monitoring active';
+      } else if (reminderCount == 1) {
+        content = 'Monitoring 1 reminder';
+      } else {
+        content = 'Monitoring $reminderCount reminders';
+      }
+
+      debugPrint('Directly updating notification: $content');
+
+      const androidDetails = AndroidNotificationDetails(
+        _notificationChannelId,
+        'Background Location Service',
+        channelDescription:
+            'Shows when location monitoring is active for reminders',
+        importance: Importance.low,
+        priority: Priority.low,
+        ongoing: true,
+        autoCancel: false,
+        showWhen: false,
+      );
+
+      await notifications.show(
+        _foregroundNotificationId,
+        'LocationPal',
+        content,
+        const NotificationDetails(android: androidDetails),
+      );
+    } catch (e) {
+      debugPrint('Error updating notification directly: $e');
     }
   }
 
@@ -104,6 +169,7 @@ class BackgroundServiceManager {
   @pragma('vm:entry-point')
   static void onStart(ServiceInstance service) async {
     DartPluginRegistrant.ensureInitialized();
+    debugPrint('Background service onStart called');
 
     if (service is AndroidServiceInstance) {
       service.on('setAsForeground').listen((event) {
@@ -121,14 +187,17 @@ class BackgroundServiceManager {
     // Initialize services
     await NotificationService().initialize();
 
-    // Load initial reminder count
+    // Load initial reminder count (with a small delay to ensure data is ready)
+    await Future.delayed(const Duration(milliseconds: 500));
     int reminderCount = await _getReminderCount();
+    debugPrint('Background service initial reminder count: $reminderCount');
 
     // Update foreground notification
     await _updateForegroundNotification(service, reminderCount);
 
     // Listen for reminder count updates from main app
     service.on('updateReminderCount').listen((event) async {
+      debugPrint('Background service received updateReminderCount: $event');
       if (event != null && event['count'] != null) {
         reminderCount = event['count'] as int;
         await _updateForegroundNotification(service, reminderCount);
@@ -143,8 +212,11 @@ class BackgroundServiceManager {
 
     // Listen for stop command
     service.on('stop').listen((event) {
+      debugPrint('Background service received stop command');
       locationCheckTimer?.cancel();
-      service.stopSelf();
+      if (service is AndroidServiceInstance) {
+        service.stopSelf();
+      }
     });
 
     // Start periodic location checks
@@ -182,6 +254,7 @@ class BackgroundServiceManager {
     if (service is! AndroidServiceInstance) return;
 
     final notification = _buildForegroundNotification(reminderCount);
+    debugPrint('Updating foreground notification: ${notification['content']}');
     await service.setForegroundNotificationInfo(
       title: notification['title']!,
       content: notification['content']!,

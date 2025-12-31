@@ -676,88 +676,34 @@ class _POIDetailScreenState extends State<POIDetailScreen> {
       listen: false,
     );
 
-    // Check if this is the first reminder
-    final isFirstReminder = !reminderProvider.hasReminders;
+    // Capture context-dependent values before any async operations
+    final navigator = Navigator.of(context);
     final scaffoldMessenger = ScaffoldMessenger.of(context);
 
+    // Check if this is the first reminder
+    final isFirstReminder = !reminderProvider.hasReminders;
+
     if (isFirstReminder) {
-      final locationService = LocationMonitorService();
-
-      // Step 1: Request foreground location permission first
-      if (!mounted) return;
-      // ignore: use_build_context_synchronously
-      final allowedForeground =
-          await PermissionDialogHelper.showForegroundLocationRationale(context);
-      if (!allowedForeground) return;
-
-      final foregroundGranted =
-          await locationService.requestForegroundPermission();
-
-      if (!foregroundGranted) {
-        if (mounted) {
-          PermissionDialogHelper.showErrorWithMessenger(
-            scaffoldMessenger,
-            'Location permission is required for reminders. Please enable location services in device settings and grant location permission.',
-          );
-        }
-        return;
-      }
-
-      // Step 2: Request background location permission (Android 10+)
-      if (!mounted) return;
-      // ignore: use_build_context_synchronously
-      final allowedBg =
-          await PermissionDialogHelper.showBackgroundLocationRationale(context);
-      if (!allowedBg) return;
-
-      final backgroundGranted =
-          await locationService.requestBackgroundPermission();
-
-      if (!backgroundGranted) {
-        if (mounted) {
-          PermissionDialogHelper.showErrorWithMessenger(
-            scaffoldMessenger,
-            'Background location permission is required for reminders. Please select "Allow all the time" in the permission dialog.',
-          );
-        }
-        return;
-      }
-
-      // Step 3: Request notification permission
-      if (!mounted) return;
-      // ignore: use_build_context_synchronously
-      final allowedNotif =
-          await PermissionDialogHelper.showNotificationRationale(context);
-      if (!allowedNotif) return;
-
-      final notificationService = NotificationService();
-      final notifGranted = await notificationService.requestPermission();
-
-      if (!notifGranted) {
-        if (mounted) {
-          PermissionDialogHelper.showErrorWithMessenger(
-            scaffoldMessenger,
-            'Notification permission is required for reminders',
-          );
-        }
-        return;
-      }
+      final permissionsGranted = await _requestAllPermissions();
+      if (!permissionsGranted) return;
     }
 
     // Show dialog to add initial shopping items
     if (!mounted) return;
-    // ignore: use_build_context_synchronously
-    final items = await showDialog<List<String>>(
-      context: context, // ignore: use_build_context_synchronously
-      builder: (dialogContext) => _ShoppingListDialog(brandName: brandName),
+    final items = await navigator.push<List<String>>(
+      MaterialPageRoute(
+        builder: (dialogContext) => _ShoppingListDialog(brandName: brandName),
+        fullscreenDialog: true,
+      ),
     );
 
     if (items == null || items.isEmpty) return;
 
     // Create the reminder
     final success = await reminderProvider.addReminder(_currentPOI, items);
+    if (!mounted) return;
 
-    if (success && mounted) {
+    if (success) {
       PermissionDialogHelper.showReminderCreatedMessageWithMessenger(
           scaffoldMessenger, brandName);
       setState(() {
@@ -770,15 +716,89 @@ class _POIDetailScreenState extends State<POIDetailScreen> {
 
         // Request battery optimization exemption on Android
         if (!mounted) return;
-        await BatteryOptimizationHelper.requestBatteryOptimizationExemption(
-            context);
+        await _requestBatteryOptimizationExemption();
       }
-    } else if (mounted) {
+    } else {
       PermissionDialogHelper.showErrorWithMessenger(
         scaffoldMessenger,
         reminderProvider.error ?? 'Failed to create reminder',
       );
     }
+  }
+
+  Future<void> _requestBatteryOptimizationExemption() async {
+    if (!mounted) return;
+    await BatteryOptimizationHelper.requestBatteryOptimizationExemption(
+        context);
+  }
+
+  Future<bool> _requestAllPermissions() async {
+    if (!mounted) return false;
+
+    final scaffoldMessenger = ScaffoldMessenger.of(context);
+    final locationService = LocationMonitorService();
+
+    // Step 1: Check and request foreground location permission
+    bool foregroundGranted = await locationService.hasPermission();
+    if (!mounted) return false;
+
+    if (!foregroundGranted) {
+      final allowedForeground =
+          await PermissionDialogHelper.showForegroundLocationRationale(context);
+      if (!allowedForeground) return false;
+
+      foregroundGranted = await locationService.requestForegroundPermission();
+      if (!mounted) return false;
+
+      if (!foregroundGranted) {
+        PermissionDialogHelper.showErrorWithMessenger(
+          scaffoldMessenger,
+          'Location permission is required for reminders. Please enable location services in device settings and grant location permission.',
+        );
+        return false;
+      }
+    }
+
+    // Step 2: Check and request background location permission (Android 10+)
+    bool backgroundGranted = await locationService.hasBackgroundPermission();
+    if (!mounted) return false;
+
+    if (!backgroundGranted) {
+      final allowedBg =
+          await PermissionDialogHelper.showBackgroundLocationRationale(context);
+      if (!allowedBg) return false;
+
+      backgroundGranted = await locationService.requestBackgroundPermission();
+      if (!mounted) return false;
+
+      if (!backgroundGranted) {
+        PermissionDialogHelper.showErrorWithMessenger(
+          scaffoldMessenger,
+          'Background location permission is required for reminders. Please select "Allow all the time" in the permission dialog.',
+        );
+        return false;
+      }
+    }
+
+    // Step 3: Check and request notification permission
+    final notificationService = NotificationService();
+
+    final allowedNotif =
+        await PermissionDialogHelper.showNotificationRationale(context);
+    if (!allowedNotif) return false;
+
+    final notifGranted = await notificationService.requestPermission();
+    if (!mounted) return false;
+
+    if (!notifGranted) {
+      PermissionDialogHelper.showErrorWithMessenger(
+        scaffoldMessenger,
+        'Notification permission is required for reminders',
+      );
+      return false;
+    }
+
+    return true;
   }
 
   Widget _buildWikipediaContent(BuildContext context) {
