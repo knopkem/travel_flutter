@@ -166,37 +166,64 @@ class LocationMonitorService {
       return false;
     }
 
-    // On Android, use permission_handler for background location
-    // On iOS, Geolocator handles it correctly
-    if (Platform.isAndroid) {
-      // Check if we have foreground permission first
-      final locationStatus = await Permission.location.status;
-      if (!locationStatus.isGranted) {
-        debugPrint('Foreground location not granted yet');
-        return false;
-      }
+    // Check if we have foreground permission first using Geolocator
+    // (This is important because Geolocator was used to request initial permission,
+    // and permission_handler may not be in sync on iOS)
+    final geolocatorPermission = await Geolocator.checkPermission();
+    debugPrint('Geolocator permission status: $geolocatorPermission');
 
-      // Now request background location permission specifically
-      final backgroundStatus = await Permission.locationAlways.request();
+    final hasForegroundPermission =
+        geolocatorPermission == LocationPermission.whileInUse ||
+        geolocatorPermission == LocationPermission.always;
 
-      debugPrint('Background location status: $backgroundStatus');
-      return backgroundStatus.isGranted;
-    } else {
-      // iOS: Use Geolocator
-      LocationPermission permission = await Geolocator.checkPermission();
-
-      if (permission == LocationPermission.denied) {
-        permission = await Geolocator.requestPermission();
-        if (permission == LocationPermission.denied) {
-          return false;
-        }
-      }
-
-      if (permission == LocationPermission.deniedForever) {
-        return false;
-      }
-
-      return permission == LocationPermission.always;
+    if (!hasForegroundPermission) {
+      debugPrint(
+          'Foreground location not granted yet (Geolocator: $geolocatorPermission)');
+      return false;
     }
+
+    // If already have "always" permission via Geolocator, we're done
+    if (geolocatorPermission == LocationPermission.always) {
+      debugPrint('Already have always permission (via Geolocator)');
+      return true;
+    }
+
+    // On iOS 13+, when user has "When In Use" permission, we cannot programmatically
+    // request an upgrade to "Always". We must direct the user to Settings.
+    if (Platform.isIOS) {
+      debugPrint('iOS: User has whileInUse, must open Settings for Always permission');
+      // Open the app's settings page directly - user needs to tap Location and change to Always
+      await openAppSettings();
+      
+      // Wait a moment for user to potentially change settings, then re-check
+      await Future.delayed(const Duration(milliseconds: 500));
+      
+      // Re-check permission after returning from settings
+      final newPermission = await Geolocator.checkPermission();
+      debugPrint('iOS: Permission after settings: $newPermission');
+      return newPermission == LocationPermission.always;
+    }
+
+    // Android: Use permission_handler to request background location
+    final currentAlwaysStatus = await Permission.locationAlways.status;
+    debugPrint('Android locationAlways status: $currentAlwaysStatus');
+
+    if (currentAlwaysStatus.isGranted) {
+      debugPrint('Already have always permission (via permission_handler)');
+      return true;
+    }
+
+    if (currentAlwaysStatus.isPermanentlyDenied) {
+      debugPrint('Always permission permanently denied, opening settings');
+      await openAppSettings();
+      return false;
+    }
+
+    // Request background/always location permission on Android
+    debugPrint('Android: Requesting locationAlways permission...');
+    final backgroundStatus = await Permission.locationAlways.request();
+    debugPrint('Android: Background location status after request: $backgroundStatus');
+
+    return backgroundStatus.isGranted;
   }
 }

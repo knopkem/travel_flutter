@@ -1,11 +1,17 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:package_info_plus/package_info_plus.dart';
+import 'package:geolocator/geolocator.dart';
 import '../models/poi_category.dart';
 import '../models/poi_type.dart';
 import '../models/poi_source.dart';
+import '../models/poi.dart';
 import '../providers/settings_provider.dart';
 import '../providers/reminder_provider.dart';
+import '../services/location_monitor_service.dart';
+import '../services/notification_service.dart';
+import '../utils/permission_dialog_helper.dart';
+import '../utils/battery_optimization_helper.dart';
 import 'reminders_overview_screen.dart';
 
 /// Settings screen for customizing app preferences
@@ -276,7 +282,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     return Consumer<ReminderProvider>(
       builder: (context, reminderProvider, child) {
         final hasReminders = reminderProvider.hasReminders;
-        
+
         return ExpansionTile(
           initiallyExpanded: hasReminders,
           leading: const Icon(Icons.shopping_cart),
@@ -308,7 +314,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       ),
                       value: settingsProvider.backgroundLocationEnabled,
                       onChanged: (value) async {
-                        await settingsProvider.updateBackgroundLocationEnabled(value);
+                        await settingsProvider
+                            .updateBackgroundLocationEnabled(value);
                         if (context.mounted) {
                           ScaffoldMessenger.of(context).showSnackBar(
                             SnackBar(
@@ -324,18 +331,57 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       },
                     ),
                     const SizedBox(height: 8),
+                    ListTile(
+                      title: const Text('Dwell Time'),
+                      subtitle: Text(
+                        'Time to stay near a location before notification',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Colors.grey[600],
+                        ),
+                      ),
+                      trailing: DropdownButton<int>(
+                        value: settingsProvider.dwellTimeMinutes,
+                        underline: const SizedBox(),
+                        items: const [
+                          DropdownMenuItem(value: 1, child: Text('1 min')),
+                          DropdownMenuItem(value: 2, child: Text('2 min')),
+                          DropdownMenuItem(value: 3, child: Text('3 min')),
+                          DropdownMenuItem(value: 5, child: Text('5 min')),
+                          DropdownMenuItem(value: 10, child: Text('10 min')),
+                        ],
+                        onChanged: (value) async {
+                          if (value != null) {
+                            await settingsProvider
+                                .updateDwellTimeMinutes(value);
+                            if (context.mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content:
+                                      Text('Dwell time set to $value minutes'),
+                                  backgroundColor: Colors.green,
+                                ),
+                              );
+                            }
+                          }
+                        },
+                      ),
+                    ),
+                    const SizedBox(height: 8),
                     Divider(color: Colors.grey[300]),
                     const SizedBox(height: 8),
                     ListTile(
                       leading: const Icon(Icons.list_alt),
                       title: const Text('Manage Shopping Reminders'),
-                      subtitle: const Text('View and edit all your shopping lists'),
+                      subtitle:
+                          const Text('View and edit all your shopping lists'),
                       trailing: const Icon(Icons.chevron_right),
                       onTap: () {
                         Navigator.push(
                           context,
                           MaterialPageRoute(
-                            builder: (context) => const RemindersOverviewScreen(),
+                            builder: (context) =>
+                                const RemindersOverviewScreen(),
                           ),
                         );
                       },
@@ -354,7 +400,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     ),
                     const SizedBox(height: 8),
                     ListTile(
-                      leading: Icon(Icons.info_outline, color: Colors.blue[700]),
+                      leading:
+                          Icon(Icons.info_outline, color: Colors.blue[700]),
                       title: const Text('How to create a reminder'),
                       subtitle: const Text(
                         '1. Find a commercial POI (e.g., supermarket)\n'
@@ -365,6 +412,17 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       dense: true,
                     ),
                   ],
+                  const SizedBox(height: 16),
+                  Divider(color: Colors.grey[300]),
+                  const SizedBox(height: 8),
+                  ListTile(
+                    leading: const Icon(Icons.bug_report, color: Colors.orange),
+                    title: const Text('Test Background Monitoring'),
+                    subtitle: const Text(
+                        'Create a test reminder at your current location'),
+                    trailing: const Icon(Icons.chevron_right),
+                    onTap: () => _createTestReminder(context),
+                  ),
                 ],
               ),
             ),
@@ -372,6 +430,193 @@ class _SettingsScreenState extends State<SettingsScreen> {
         );
       },
     );
+  }
+
+  /// Create a test reminder at the current GPS location for debugging background monitoring
+  Future<void> _createTestReminder(BuildContext context) async {
+    final reminderProvider =
+        Provider.of<ReminderProvider>(context, listen: false);
+    final settingsProvider =
+        Provider.of<SettingsProvider>(context, listen: false);
+    final scaffoldMessenger = ScaffoldMessenger.of(context);
+
+    // Check if this is the first reminder
+    final isFirstReminder = !reminderProvider.hasReminders;
+
+    if (isFirstReminder) {
+      final permissionsGranted = await _requestAllPermissions(context);
+      if (!permissionsGranted) return;
+    }
+
+    // Get current GPS location
+    if (!mounted) return;
+
+    // Show loading indicator
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => const Center(
+        child: Card(
+          child: Padding(
+            padding: EdgeInsets.all(20),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                CircularProgressIndicator(),
+                SizedBox(height: 16),
+                Text('Getting current location...'),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+
+    try {
+      final position = await Geolocator.getCurrentPosition(
+        desiredAccuracy: LocationAccuracy.high,
+        timeLimit: const Duration(seconds: 15),
+      );
+
+      if (!mounted) return;
+      Navigator.of(context).pop(); // Dismiss loading dialog
+
+      // Create a test POI at current location
+      final testPoi = POI(
+        id: 'test_poi_${DateTime.now().millisecondsSinceEpoch}',
+        name: 'Test Location',
+        type: POIType.supermarket,
+        latitude: position.latitude,
+        longitude: position.longitude,
+        distanceFromCity: 0,
+        sources: [POISource.googlePlaces],
+        notabilityScore: 50,
+        discoveredAt: DateTime.now(),
+        description:
+            'Test POI for background monitoring at coordinates: ${position.latitude.toStringAsFixed(6)}, ${position.longitude.toStringAsFixed(6)}',
+      );
+
+      // Default shopping items for testing
+      final testItems = [
+        'Test Item 1',
+        'Test Item 2',
+        'Check notification works',
+      ];
+
+      // Create the reminder
+      final success =
+          await reminderProvider.addReminderForTestPoi(testPoi, testItems);
+      if (!mounted) return;
+
+      if (success) {
+        scaffoldMessenger.showSnackBar(
+          SnackBar(
+            content: Text(
+              'Test reminder created at ${position.latitude.toStringAsFixed(4)}, ${position.longitude.toStringAsFixed(4)}',
+            ),
+            backgroundColor: Colors.green,
+            duration: const Duration(seconds: 4),
+          ),
+        );
+
+        // Enable background location monitoring in settings
+        if (isFirstReminder) {
+          await settingsProvider.updateBackgroundLocationEnabled(true);
+
+          // Request battery optimization exemption on Android
+          if (!mounted) return;
+          await BatteryOptimizationHelper.requestBatteryOptimizationExemption(
+              context);
+        }
+      } else {
+        scaffoldMessenger.showSnackBar(
+          SnackBar(
+            content: Text(
+                reminderProvider.error ?? 'Failed to create test reminder'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } catch (e) {
+      if (!mounted) return;
+      Navigator.of(context).pop(); // Dismiss loading dialog
+      scaffoldMessenger.showSnackBar(
+        SnackBar(
+          content: Text('Failed to get location: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+
+  /// Request all permissions required for reminders
+  Future<bool> _requestAllPermissions(BuildContext context) async {
+    if (!mounted) return false;
+
+    final scaffoldMessenger = ScaffoldMessenger.of(context);
+    final locationService = LocationMonitorService();
+
+    // Step 1: Check and request foreground location permission
+    bool foregroundGranted = await locationService.hasPermission();
+    if (!mounted) return false;
+
+    if (!foregroundGranted) {
+      final allowedForeground =
+          await PermissionDialogHelper.showForegroundLocationRationale(context);
+      if (!allowedForeground) return false;
+
+      foregroundGranted = await locationService.requestForegroundPermission();
+      if (!mounted) return false;
+
+      if (!foregroundGranted) {
+        PermissionDialogHelper.showErrorWithMessenger(
+          scaffoldMessenger,
+          'Location permission is required for reminders.',
+        );
+        return false;
+      }
+    }
+
+    // Step 2: Check and request background location permission
+    bool backgroundGranted = await locationService.hasBackgroundPermission();
+    if (!mounted) return false;
+
+    if (!backgroundGranted) {
+      final allowedBg =
+          await PermissionDialogHelper.showBackgroundLocationRationale(context);
+      if (!allowedBg) return false;
+
+      backgroundGranted = await locationService.requestBackgroundPermission();
+      if (!mounted) return false;
+
+      if (!backgroundGranted) {
+        PermissionDialogHelper.showErrorWithMessenger(
+          scaffoldMessenger,
+          'Background location permission is required for reminders. Please select "Allow all the time" in the permission dialog.',
+        );
+        return false;
+      }
+    }
+
+    // Step 3: Check and request notification permission
+    final notificationService = NotificationService();
+
+    final allowedNotif =
+        await PermissionDialogHelper.showNotificationRationale(context);
+    if (!allowedNotif) return false;
+
+    final notifGranted = await notificationService.requestPermission();
+    if (!mounted) return false;
+
+    if (!notifGranted) {
+      PermissionDialogHelper.showErrorWithMessenger(
+        scaffoldMessenger,
+        'Notification permission is required for reminders',
+      );
+      return false;
+    }
+
+    return true;
   }
 
   Widget _buildPoiTypesSection(
@@ -644,8 +889,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   TextButton.icon(
                     icon: const Icon(Icons.refresh, size: 18),
                     label: const Text('Reset'),
-                    onPressed: () =>
-                        _showResetAttractionInterestsDialog(context, settingsProvider),
+                    onPressed: () => _showResetAttractionInterestsDialog(
+                        context, settingsProvider),
                   ),
                 ],
               ),
@@ -692,8 +937,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   TextButton.icon(
                     icon: const Icon(Icons.refresh, size: 18),
                     label: const Text('Reset'),
-                    onPressed: () =>
-                        _showResetCommercialInterestsDialog(context, settingsProvider),
+                    onPressed: () => _showResetCommercialInterestsDialog(
+                        context, settingsProvider),
                   ),
                 ],
               ),
@@ -1457,7 +1702,7 @@ class _GooglePlacesSettingsState extends State<_GooglePlacesSettings> {
               'API key saved! Other POI providers have been auto-disabled (you can re-enable them if needed).';
           _apiKeyController.clear();
         });
-        
+
         // Show snackbar for better visibility
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(

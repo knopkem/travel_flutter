@@ -1,18 +1,31 @@
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../utils/settings_service.dart';
 
-/// Service for tracking dwell time at POIs (5-minute requirement before notification)
+/// Service for tracking dwell time at POIs (configurable time before notification)
 class DwellTimeTracker {
   static const String _dwellTimesKey = 'poi_dwell_times';
-  static const Duration _requiredDwellTime = Duration(minutes: 5);
+  static const String _dwellTimeMinutesKey = 'dwell_time_minutes';
+
+  /// Get the required dwell time from settings
+  Future<Duration> _getRequiredDwellTime() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final minutes = prefs.getInt(_dwellTimeMinutesKey) ??
+          SettingsService.defaultDwellTimeMinutes;
+      return Duration(minutes: minutes);
+    } catch (e) {
+      return Duration(minutes: SettingsService.defaultDwellTimeMinutes);
+    }
+  }
 
   /// Record entry time for a POI
   Future<void> recordEntry(String poiId) async {
     try {
       final prefs = await SharedPreferences.getInstance();
       final dwellTimes = await _loadDwellTimes();
-      
+
       // Only record if not already present
       if (!dwellTimes.containsKey(poiId)) {
         dwellTimes[poiId] = DateTime.now().toIso8601String();
@@ -28,7 +41,7 @@ class DwellTimeTracker {
     try {
       final prefs = await SharedPreferences.getInstance();
       final dwellTimes = await _loadDwellTimes();
-      
+
       dwellTimes.remove(poiId);
       await prefs.setString(_dwellTimesKey, json.encode(dwellTimes));
     } catch (e) {
@@ -41,13 +54,14 @@ class DwellTimeTracker {
     try {
       final dwellTimes = await _loadDwellTimes();
       final entryTimeStr = dwellTimes[poiId];
-      
+
       if (entryTimeStr == null) return false;
-      
+
       final entryTime = DateTime.parse(entryTimeStr);
       final elapsed = DateTime.now().difference(entryTime);
-      
-      return elapsed >= _requiredDwellTime;
+      final requiredDwellTime = await _getRequiredDwellTime();
+
+      return elapsed >= requiredDwellTime;
     } catch (e) {
       debugPrint('Error checking dwell time: $e');
       return false;
@@ -59,9 +73,9 @@ class DwellTimeTracker {
     try {
       final dwellTimes = await _loadDwellTimes();
       final entryTimeStr = dwellTimes[poiId];
-      
+
       if (entryTimeStr == null) return null;
-      
+
       return DateTime.parse(entryTimeStr);
     } catch (e) {
       debugPrint('Error getting entry time: $e');
@@ -84,7 +98,7 @@ class DwellTimeTracker {
     try {
       final prefs = await SharedPreferences.getInstance();
       final dwellTimesJson = prefs.getString(_dwellTimesKey);
-      
+
       if (dwellTimesJson == null || dwellTimesJson.isEmpty) {
         return {};
       }

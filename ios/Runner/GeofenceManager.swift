@@ -1,5 +1,6 @@
 import CoreLocation
 import Flutter
+import UserNotifications
 
 class GeofenceManager: NSObject, CLLocationManagerDelegate {
     private var locationManager: CLLocationManager?
@@ -18,6 +19,8 @@ class GeofenceManager: NSObject, CLLocationManagerDelegate {
         
         locationManager = CLLocationManager()
         locationManager?.delegate = self
+        locationManager?.allowsBackgroundLocationUpdates = true
+        locationManager?.pausesLocationUpdatesAutomatically = false
     }
     
     private func handleMethodCall(call: FlutterMethodCall, result: @escaping FlutterResult) {
@@ -47,6 +50,10 @@ class GeofenceManager: NSObject, CLLocationManagerDelegate {
             removeAllGeofences()
             result(nil)
             
+        case "sendDebugNotification":
+            sendDebugNotification()
+            result(nil)
+            
         default:
             result(FlutterMethodNotImplemented)
         }
@@ -61,6 +68,9 @@ class GeofenceManager: NSObject, CLLocationManagerDelegate {
         
         registeredGeofences[id] = region
         locationManager?.startMonitoring(for: region)
+        
+        // Send debug notification when geofence is registered
+        sendDebugNotification(message: "Registered geofence: \(id.prefix(8))... at \(String(format: "%.4f", latitude)), \(String(format: "%.4f", longitude))")
     }
     
     private func removeGeofence(id: String) {
@@ -77,9 +87,36 @@ class GeofenceManager: NSObject, CLLocationManagerDelegate {
         registeredGeofences.removeAll()
     }
     
+    private func sendDebugNotification(message: String? = nil) {
+        let content = UNMutableNotificationContent()
+        content.title = "🔍 iOS Geofence Debug"
+        
+        let dateFormatter = DateFormatter()
+        dateFormatter.dateFormat = "HH:mm:ss"
+        let timeStr = dateFormatter.string(from: Date())
+        
+        if let msg = message {
+            content.body = "[\(timeStr)] \(msg)"
+        } else {
+            content.body = "[\(timeStr)] Monitoring \(registeredGeofences.count) geofences"
+        }
+        content.sound = nil
+        
+        let request = UNNotificationRequest(
+            identifier: "geofence_debug_\(Date().timeIntervalSince1970)",
+            content: content,
+            trigger: nil
+        )
+        
+        UNUserNotificationCenter.current().add(request)
+    }
+    
     // CLLocationManagerDelegate methods
     func locationManager(_ manager: CLLocationManager, didEnterRegion region: CLRegion) {
         if let circularRegion = region as? CLCircularRegion {
+            // Send debug notification
+            sendDebugNotification(message: "ENTERED region: \(circularRegion.identifier.prefix(8))...")
+            
             // Notify Flutter about region entry
             methodChannel?.invokeMethod("onGeofenceEnter", arguments: ["id": circularRegion.identifier])
         }
@@ -87,6 +124,9 @@ class GeofenceManager: NSObject, CLLocationManagerDelegate {
     
     func locationManager(_ manager: CLLocationManager, didExitRegion region: CLRegion) {
         if let circularRegion = region as? CLCircularRegion {
+            // Send debug notification
+            sendDebugNotification(message: "EXITED region: \(circularRegion.identifier.prefix(8))...")
+            
             // Notify Flutter about region exit
             methodChannel?.invokeMethod("onGeofenceExit", arguments: ["id": circularRegion.identifier])
         }
@@ -94,11 +134,28 @@ class GeofenceManager: NSObject, CLLocationManagerDelegate {
     
     func locationManager(_ manager: CLLocationManager, monitoringDidFailFor region: CLRegion?, withError error: Error) {
         print("Geofence monitoring failed: \(error.localizedDescription)")
+        sendDebugNotification(message: "ERROR: \(error.localizedDescription)")
         if let region = region {
             methodChannel?.invokeMethod("onGeofenceError", arguments: [
                 "id": region.identifier,
                 "error": error.localizedDescription
             ])
         }
+    }
+    
+    func locationManager(_ manager: CLLocationManager, didStartMonitoringFor region: CLRegion) {
+        print("Started monitoring for region: \(region.identifier)")
+        // Request state to get initial status
+        locationManager?.requestState(for: region)
+    }
+    
+    func locationManager(_ manager: CLLocationManager, didDetermineState state: CLRegionState, for region: CLRegion) {
+        var stateStr = "unknown"
+        switch state {
+        case .inside: stateStr = "INSIDE"
+        case .outside: stateStr = "outside"
+        case .unknown: stateStr = "unknown"
+        }
+        sendDebugNotification(message: "State for \(region.identifier.prefix(8))...: \(stateStr)")
     }
 }

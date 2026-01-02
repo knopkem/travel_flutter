@@ -13,6 +13,8 @@ class SettingsService {
   static const String _poiProvidersEnabledKey = 'poi_providers_enabled';
   static const String _defaultPoiCategoryKey = 'default_poi_category';
   static const String _backgroundLocationEnabledKey = 'background_location_enabled';
+  static const String _dwellTimeMinutesKey = 'dwell_time_minutes';
+  static const int defaultDwellTimeMinutes = 1; // Default 1 min for development
 
   // Secure storage keys for OpenAI API
   static const String _openaiApiKeyKey = 'openai_api_key';
@@ -627,6 +629,26 @@ class SettingsService {
       return prefs.getBool(_backgroundLocationEnabledKey) ?? true; // Default enabled
     } catch (e) {
       return true;
+    }
+  }
+
+  /// Save dwell time in minutes
+  Future<bool> saveDwellTimeMinutes(int minutes) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      return await prefs.setInt(_dwellTimeMinutesKey, minutes);
+    } catch (e) {
+      return false;
+    }
+  }
+
+  /// Load dwell time in minutes
+  Future<int> loadDwellTimeMinutes() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      return prefs.getInt(_dwellTimeMinutesKey) ?? defaultDwellTimeMinutes;
+    } catch (e) {
+      return defaultDwellTimeMinutes;
     }
   }
 }

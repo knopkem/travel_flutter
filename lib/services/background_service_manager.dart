@@ -5,7 +5,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_background_service/flutter_background_service.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:geolocator/geolocator.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../models/reminder.dart';
+import '../utils/settings_service.dart';
 import 'dwell_time_tracker.dart';
 import 'notification_service.dart';
 import 'reminder_service.dart';
@@ -320,10 +322,20 @@ class BackgroundServiceManager {
       final reminderService = ReminderService();
       final reminders = await reminderService.loadReminders();
 
+      // Send debug notification showing monitoring is active
+      await _sendDebugNotification(reminders.length, position);
+
       if (reminders.isEmpty) {
         debugPrint('No reminders to check');
         return;
       }
+
+      // Get dwell time setting
+      final prefs = await SharedPreferences.getInstance();
+      final dwellTimeMinutes = prefs.getInt('dwell_time_minutes') ??
+          SettingsService.defaultDwellTimeMinutes;
+      final requiredDwellTime = Duration(minutes: dwellTimeMinutes);
+      debugPrint('Using dwell time: $dwellTimeMinutes minutes');
 
       // Check proximity to each reminder location
       for (final reminder in reminders) {
@@ -361,14 +373,14 @@ class BackgroundServiceManager {
           } else {
             // Check if we've been here long enough
             final elapsed = DateTime.now().difference(entryTime);
-            if (elapsed >= const Duration(minutes: 5)) {
+            if (elapsed >= requiredDwellTime) {
               // Dwelled long enough - send notification
               debugPrint('Sending notification for ${reminder.brandName}');
               await _sendReminderNotification(reminder);
               // Mark as notified by not clearing entry time
             } else {
               debugPrint(
-                  'Dwelling at ${reminder.brandName} for ${elapsed.inMinutes}m');
+                  'Dwelling at ${reminder.brandName} for ${elapsed.inMinutes}m (need ${dwellTimeMinutes}m)');
             }
           }
         } else {
@@ -394,6 +406,47 @@ class BackgroundServiceManager {
       );
     } catch (e) {
       debugPrint('Error sending notification: $e');
+    }
+  }
+
+  /// Send a debug notification to show background service is running
+  static const int _debugNotificationId = 889;
+
+  static Future<void> _sendDebugNotification(
+      int reminderCount, Position position) async {
+    try {
+      final notifications = FlutterLocalNotificationsPlugin();
+
+      final now = DateTime.now();
+      final timeStr =
+          '${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}:${now.second.toString().padLeft(2, '0')}';
+
+      const androidDetails = AndroidNotificationDetails(
+        'debug_channel',
+        'Debug Notifications',
+        channelDescription: 'Debug notifications for background monitoring',
+        importance: Importance.low,
+        priority: Priority.low,
+        autoCancel: true,
+        showWhen: true,
+      );
+
+      const iosDetails = DarwinNotificationDetails(
+        presentAlert: true,
+        presentBadge: false,
+        presentSound: false,
+      );
+
+      await notifications.show(
+        _debugNotificationId,
+        '🔍 Background Check',
+        'Time: $timeStr | POIs: $reminderCount | Loc: ${position.latitude.toStringAsFixed(4)}, ${position.longitude.toStringAsFixed(4)}',
+        const NotificationDetails(android: androidDetails, iOS: iosDetails),
+      );
+
+      debugPrint('Sent debug notification at $timeStr');
+    } catch (e) {
+      debugPrint('Error sending debug notification: $e');
     }
   }
 }

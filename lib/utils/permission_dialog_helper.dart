@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 
 /// Helper for showing permission rationale dialogs
@@ -36,16 +37,22 @@ class PermissionDialogHelper {
   /// Show background location permission rationale (Android 10+)
   static Future<bool> showBackgroundLocationRationale(
       BuildContext context) async {
+    final isIOS = Platform.isIOS;
+    
     final result = await showDialog<bool>(
       context: context,
       barrierDismissible: false,
       builder: (BuildContext context) {
         return AlertDialog(
           title: const Text('Background Location Permission'),
-          content: const Text(
-            'To check your location even when the app is closed or not in use, Android requires "Allow all the time" permission.\n\n'
-            'On the next screen, please select "Allow all the time" to enable shopping reminders.\n\n'
-            'Your location is only checked periodically when reminders are active and is never shared with third parties.',
+          content: Text(
+            isIOS
+                ? 'To receive reminders when near stores, this app needs "Always" location access.\n\n'
+                  'On the next screen, tap "Location" and select "Always" to enable shopping reminders.\n\n'
+                  'Your location is only checked periodically when reminders are active and is never shared with third parties.'
+                : 'To check your location even when the app is closed or not in use, Android requires "Allow all the time" permission.\n\n'
+                  'On the next screen, please select "Allow all the time" to enable shopping reminders.\n\n'
+                  'Your location is only checked periodically when reminders are active and is never shared with third parties.',
           ),
           actions: [
             TextButton(
@@ -54,7 +61,7 @@ class PermissionDialogHelper {
             ),
             ElevatedButton(
               onPressed: () => Navigator.of(context).pop(true),
-              child: const Text('Continue'),
+              child: Text(isIOS ? 'Open Settings' : 'Continue'),
             ),
           ],
         );

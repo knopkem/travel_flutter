@@ -122,6 +122,58 @@ class ReminderProvider extends ChangeNotifier {
     }
   }
 
+  /// Add a test reminder for debugging (bypasses brand extraction)
+  Future<bool> addReminderForTestPoi(
+      POI poi, List<String> shoppingItems) async {
+    try {
+      // Use the POI name directly as the brand name for test POIs
+      final brandName = poi.name;
+
+      // Check if reminder already exists for this brand
+      if (hasReminderForBrand(brandName)) {
+        _error = 'Test reminder already exists';
+        notifyListeners();
+        return false;
+      }
+
+      final items =
+          shoppingItems.map((text) => ShoppingItem(text: text)).toList();
+
+      final reminder = Reminder(
+        brandName: brandName,
+        originalPoiId: poi.id,
+        originalPoiName: poi.name,
+        poiType: poi.type,
+        latitude: poi.latitude,
+        longitude: poi.longitude,
+        items: items,
+      );
+
+      final success = await _reminderService.saveReminder(reminder);
+      if (success) {
+        _reminders.add(reminder);
+
+        // Restart monitoring with updated reminders
+        await _locationService.stopMonitoring();
+        await _locationService.startMonitoring(_reminders);
+
+        // Update background service reminder count
+        await BackgroundServiceManager.updateReminderCount();
+
+        notifyListeners();
+        return true;
+      } else {
+        _error = 'Failed to save test reminder';
+        notifyListeners();
+        return false;
+      }
+    } catch (e) {
+      _error = 'Error adding test reminder: $e';
+      notifyListeners();
+      return false;
+    }
+  }
+
   /// Remove a reminder
   Future<bool> removeReminder(String id) async {
     try {

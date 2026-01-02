@@ -29,6 +29,7 @@ class SettingsProvider extends ChangeNotifier {
   int _googlePlacesRequestCount = 0;
   POICategory _defaultPoiCategory = POICategory.attraction;
   bool _backgroundLocationEnabled = true;
+  int _dwellTimeMinutes = SettingsService.defaultDwellTimeMinutes;
 
   SettingsProvider({
     SettingsService? settingsService,
@@ -143,6 +144,9 @@ class SettingsProvider extends ChangeNotifier {
   /// Whether background location monitoring is enabled for reminders
   bool get backgroundLocationEnabled => _backgroundLocationEnabled;
 
+  /// Dwell time in minutes before triggering notification
+  int get dwellTimeMinutes => _dwellTimeMinutes;
+
   /// Whether settings are currently being loaded
   bool get isLoading => _isLoading;
 
@@ -160,6 +164,7 @@ class SettingsProvider extends ChangeNotifier {
     _defaultPoiCategory = await _settingsService.loadDefaultPoiCategory();
     _backgroundLocationEnabled =
         await _settingsService.loadBackgroundLocationEnabled();
+    _dwellTimeMinutes = await _settingsService.loadDwellTimeMinutes();
     _isLoading = true;
     notifyListeners();
 
@@ -455,5 +460,12 @@ class SettingsProvider extends ChangeNotifier {
     } catch (e) {
       debugPrint('Error stopping background service: $e');
     }
+  }
+
+  /// Update dwell time in minutes
+  Future<void> updateDwellTimeMinutes(int minutes) async {
+    await _settingsService.saveDwellTimeMinutes(minutes);
+    _dwellTimeMinutes = minutes;
+    notifyListeners();
   }
 }
