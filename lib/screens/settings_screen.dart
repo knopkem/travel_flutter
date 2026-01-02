@@ -448,101 +448,90 @@ class _SettingsScreenState extends State<SettingsScreen> {
       if (!permissionsGranted) return;
     }
 
-    // Get current GPS location
     if (!mounted) return;
 
-    // Show loading indicator
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) => const Center(
-        child: Card(
-          child: Padding(
-            padding: EdgeInsets.all(20),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                CircularProgressIndicator(),
-                SizedBox(height: 16),
-                Text('Getting current location...'),
-              ],
-            ),
-          ),
+    // Try to get location quickly - use last known position first
+    Position? position = await Geolocator.getLastKnownPosition();
+
+    if (position == null) {
+      // Fall back to getting current position with short timeout
+      scaffoldMessenger.showSnackBar(
+        const SnackBar(
+          content: Text('Getting location...'),
+          duration: Duration(seconds: 2),
         ),
-      ),
-    );
-
-    try {
-      final position = await Geolocator.getCurrentPosition(
-        desiredAccuracy: LocationAccuracy.high,
-        timeLimit: const Duration(seconds: 15),
       );
 
-      if (!mounted) return;
-      Navigator.of(context).pop(); // Dismiss loading dialog
-
-      // Create a test POI at current location
-      final testPoi = POI(
-        id: 'test_poi_${DateTime.now().millisecondsSinceEpoch}',
-        name: 'Test Location',
-        type: POIType.supermarket,
-        latitude: position.latitude,
-        longitude: position.longitude,
-        distanceFromCity: 0,
-        sources: [POISource.googlePlaces],
-        notabilityScore: 50,
-        discoveredAt: DateTime.now(),
-        description:
-            'Test POI for background monitoring at coordinates: ${position.latitude.toStringAsFixed(6)}, ${position.longitude.toStringAsFixed(6)}',
-      );
-
-      // Default shopping items for testing
-      final testItems = [
-        'Test Item 1',
-        'Test Item 2',
-        'Check notification works',
-      ];
-
-      // Create the reminder
-      final success =
-          await reminderProvider.addReminderForTestPoi(testPoi, testItems);
-      if (!mounted) return;
-
-      if (success) {
-        scaffoldMessenger.showSnackBar(
-          SnackBar(
-            content: Text(
-              'Test reminder created at ${position.latitude.toStringAsFixed(4)}, ${position.longitude.toStringAsFixed(4)}',
-            ),
-            backgroundColor: Colors.green,
-            duration: const Duration(seconds: 4),
-          ),
+      try {
+        position = await Geolocator.getCurrentPosition(
+          desiredAccuracy: LocationAccuracy.medium,
+          timeLimit: const Duration(seconds: 5),
         );
-
-        // Enable background location monitoring in settings
-        if (isFirstReminder) {
-          await settingsProvider.updateBackgroundLocationEnabled(true);
-
-          // Request battery optimization exemption on Android
-          if (!mounted) return;
-          await BatteryOptimizationHelper.requestBatteryOptimizationExemption(
-              context);
-        }
-      } else {
+      } catch (e) {
         scaffoldMessenger.showSnackBar(
           SnackBar(
-            content: Text(
-                reminderProvider.error ?? 'Failed to create test reminder'),
+            content: Text('Failed to get location: $e'),
             backgroundColor: Colors.red,
           ),
         );
+        return;
       }
-    } catch (e) {
-      if (!mounted) return;
-      Navigator.of(context).pop(); // Dismiss loading dialog
+    }
+
+    if (!mounted) return;
+
+    // Create a test POI at current location
+    final testPoi = POI(
+      id: 'test_poi_${DateTime.now().millisecondsSinceEpoch}',
+      name: 'Test Location',
+      type: POIType.supermarket,
+      latitude: position.latitude,
+      longitude: position.longitude,
+      distanceFromCity: 0,
+      sources: [POISource.googlePlaces],
+      notabilityScore: 50,
+      discoveredAt: DateTime.now(),
+      description:
+          'Test POI for background monitoring at coordinates: ${position.latitude.toStringAsFixed(6)}, ${position.longitude.toStringAsFixed(6)}',
+    );
+
+    // Default shopping items for testing
+    final testItems = [
+      'Test Item 1',
+      'Test Item 2',
+      'Check notification works',
+    ];
+
+    // Create the reminder
+    final success =
+        await reminderProvider.addReminderForTestPoi(testPoi, testItems);
+    if (!mounted) return;
+
+    if (success) {
       scaffoldMessenger.showSnackBar(
         SnackBar(
-          content: Text('Failed to get location: $e'),
+          content: Text(
+            'Test reminder created at ${position.latitude.toStringAsFixed(4)}, ${position.longitude.toStringAsFixed(4)}',
+          ),
+          backgroundColor: Colors.green,
+          duration: const Duration(seconds: 4),
+        ),
+      );
+
+      // Enable background location monitoring in settings
+      if (isFirstReminder) {
+        await settingsProvider.updateBackgroundLocationEnabled(true);
+
+        // Request battery optimization exemption on Android
+        if (!mounted) return;
+        await BatteryOptimizationHelper.requestBatteryOptimizationExemption(
+            context);
+      }
+    } else {
+      scaffoldMessenger.showSnackBar(
+        SnackBar(
+          content:
+              Text(reminderProvider.error ?? 'Failed to create test reminder'),
           backgroundColor: Colors.red,
         ),
       );

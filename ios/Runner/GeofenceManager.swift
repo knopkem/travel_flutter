@@ -6,6 +6,8 @@ class GeofenceManager: NSObject, CLLocationManagerDelegate {
     private var locationManager: CLLocationManager?
     private var registeredGeofences: [String: CLCircularRegion] = [:]
     private var methodChannel: FlutterMethodChannel?
+    // Track regions that have already had enter events sent to prevent duplicates
+    private var enteredRegions: Set<String> = []
     
     func setup(with messenger: FlutterBinaryMessenger) {
         methodChannel = FlutterMethodChannel(
@@ -77,6 +79,7 @@ class GeofenceManager: NSObject, CLLocationManagerDelegate {
         if let region = registeredGeofences[id] {
             locationManager?.stopMonitoring(for: region)
             registeredGeofences.removeValue(forKey: id)
+            enteredRegions.remove(id)
         }
     }
     
@@ -85,6 +88,7 @@ class GeofenceManager: NSObject, CLLocationManagerDelegate {
             locationManager?.stopMonitoring(for: region)
         }
         registeredGeofences.removeAll()
+        enteredRegions.removeAll()
     }
     
     private func sendDebugNotification(message: String? = nil) {
@@ -114,6 +118,13 @@ class GeofenceManager: NSObject, CLLocationManagerDelegate {
     // CLLocationManagerDelegate methods
     func locationManager(_ manager: CLLocationManager, didEnterRegion region: CLRegion) {
         if let circularRegion = region as? CLCircularRegion {
+            // Check if we've already sent an enter event for this region
+            guard !enteredRegions.contains(circularRegion.identifier) else {
+                sendDebugNotification(message: "ENTER (duplicate, skipping): \(circularRegion.identifier.prefix(8))...")
+                return
+            }
+            enteredRegions.insert(circularRegion.identifier)
+            
             // Send debug notification
             sendDebugNotification(message: "ENTERED region: \(circularRegion.identifier.prefix(8))...")
             
@@ -124,6 +135,9 @@ class GeofenceManager: NSObject, CLLocationManagerDelegate {
     
     func locationManager(_ manager: CLLocationManager, didExitRegion region: CLRegion) {
         if let circularRegion = region as? CLCircularRegion {
+            // Clear the entered state so we can trigger again on next entry
+            enteredRegions.remove(circularRegion.identifier)
+            
             // Send debug notification
             sendDebugNotification(message: "EXITED region: \(circularRegion.identifier.prefix(8))...")
             
@@ -152,10 +166,23 @@ class GeofenceManager: NSObject, CLLocationManagerDelegate {
     func locationManager(_ manager: CLLocationManager, didDetermineState state: CLRegionState, for region: CLRegion) {
         var stateStr = "unknown"
         switch state {
-        case .inside: stateStr = "INSIDE"
+        case .inside: 
+            stateStr = "INSIDE"
+            // If already inside when registering, trigger the enter event (but only if not already sent)
+            if let circularRegion = region as? CLCircularRegion {
+                guard !enteredRegions.contains(circularRegion.identifier) else {
+                    sendDebugNotification(message: "Already INSIDE \(region.identifier.prefix(8))... (already notified)")
+                    return
+                }
+                enteredRegions.insert(circularRegion.identifier)
+                sendDebugNotification(message: "Already INSIDE \(region.identifier.prefix(8))..., triggering enter")
+                methodChannel?.invokeMethod("onGeofenceEnter", arguments: ["id": circularRegion.identifier])
+            }
         case .outside: stateStr = "outside"
         case .unknown: stateStr = "unknown"
         }
-        sendDebugNotification(message: "State for \(region.identifier.prefix(8))...: \(stateStr)")
+        if state != .inside {
+            sendDebugNotification(message: "State for \(region.identifier.prefix(8))...: \(stateStr)")
+        }
     }
 }

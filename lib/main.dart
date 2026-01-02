@@ -8,6 +8,8 @@ import 'screens/poi_detail_screen.dart';
 import 'services/openai_service.dart';
 import 'services/notification_service.dart';
 import 'services/background_service_manager.dart';
+import 'services/location_monitor_service.dart';
+import 'services/dwell_time_tracker.dart';
 import 'utils/settings_service.dart';
 
 // Global navigator key for deep linking from notifications
@@ -18,9 +20,21 @@ POIProvider? _poiProviderRef;
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  debugPrint('=== App starting ===');
 
   // Initialize background service for Android
   await BackgroundServiceManager.initialize();
+
+  // Initialize LocationMonitorService early to set up iOS geofence handler
+  // This ensures the method call handler is ready before any geofence events
+  debugPrint('Initializing LocationMonitorService...');
+  final locationMonitor = LocationMonitorService();
+  debugPrint('LocationMonitorService initialized: $locationMonitor');
+
+  // Clear stale dwell times from previous runs to ensure fresh state
+  debugPrint('Clearing stale dwell times...');
+  await DwellTimeTracker().clearAll();
+  debugPrint('Dwell times cleared');
 
   // Initialize settings services
   final settingsService = SettingsService();
