@@ -17,7 +17,6 @@ import 'reminder_service.dart';
 class BackgroundServiceManager {
   static const String _notificationChannelId = 'background_service_foreground';
   static const int _foregroundNotificationId = 888;
-  static const Duration _checkInterval = Duration(minutes: 5);
   static const double _proximityThresholdMeters = 300.0;
 
   /// Initialize the background service (call before runApp)
@@ -235,8 +234,20 @@ class BackgroundServiceManager {
       }
     });
 
+    // Calculate check interval based on dwell time setting
+    final prefs = await SharedPreferences.getInstance();
+    final dwellTimeMinutes = prefs.getInt('dwell_time_minutes') ??
+        SettingsService.defaultDwellTimeMinutes;
+    
+    // Use dwell time as check interval, but cap at 5 minutes for battery efficiency
+    // and ensure minimum of 30 seconds for responsiveness
+    final checkIntervalMinutes = dwellTimeMinutes.clamp(1, 5);
+    final checkInterval = Duration(minutes: checkIntervalMinutes);
+    
+    debugPrint('Background service check interval: ${checkIntervalMinutes}m (dwell time: ${dwellTimeMinutes}m)');
+
     // Start periodic location checks
-    locationCheckTimer = Timer.periodic(_checkInterval, (timer) async {
+    locationCheckTimer = Timer.periodic(checkInterval, (timer) async {
       await _checkLocationAndNotify();
     });
 
@@ -310,12 +321,10 @@ class BackgroundServiceManager {
 
       // Get current position
       final position = await Geolocator.getCurrentPosition(
-        desiredAccuracy: LocationAccuracy.medium,
-      ).timeout(
-        const Duration(seconds: 30),
-        onTimeout: () {
-          throw TimeoutException('Location fetch timeout');
-        },
+        locationSettings: const LocationSettings(
+          accuracy: LocationAccuracy.medium,
+          timeLimit: Duration(seconds: 30),
+        ),
       );
 
       // Load all reminders
