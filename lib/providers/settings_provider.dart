@@ -30,6 +30,7 @@ class SettingsProvider extends ChangeNotifier {
   POICategory _defaultPoiCategory = POICategory.attraction;
   bool _backgroundLocationEnabled = true;
   int _dwellTimeMinutes = SettingsService.defaultDwellTimeMinutes;
+  int _proximityRadiusMeters = SettingsService.defaultProximityRadiusMeters;
 
   SettingsProvider({
     SettingsService? settingsService,
@@ -147,6 +148,9 @@ class SettingsProvider extends ChangeNotifier {
   /// Dwell time in minutes before triggering notification
   int get dwellTimeMinutes => _dwellTimeMinutes;
 
+  /// Proximity radius in meters for geofence detection
+  int get proximityRadiusMeters => _proximityRadiusMeters;
+
   /// Whether settings are currently being loaded
   bool get isLoading => _isLoading;
 
@@ -165,6 +169,7 @@ class SettingsProvider extends ChangeNotifier {
     _backgroundLocationEnabled =
         await _settingsService.loadBackgroundLocationEnabled();
     _dwellTimeMinutes = await _settingsService.loadDwellTimeMinutes();
+    _proximityRadiusMeters = await _settingsService.loadProximityRadiusMeters();
     _isLoading = true;
     notifyListeners();
 

@@ -225,4 +225,12 @@ class DynamicGeofenceManager {
 
   /// Get total count of reminders
   int getTotalCount() => _allReminders.length;
+
+  /// Get geofence statistics for debug display
+  Map<String, int> getGeofenceStats() {
+    return {
+      'active': _registeredGeofenceIds.length,
+      'total': _allReminders.length,
+    };
+  }
 }

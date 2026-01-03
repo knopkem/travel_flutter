@@ -8,7 +8,10 @@ import '../providers/ai_guidance_provider.dart';
 import '../providers/location_provider.dart';
 import '../providers/poi_provider.dart';
 import '../providers/map_navigation_provider.dart';
+import '../providers/reminder_provider.dart';
+import '../providers/settings_provider.dart';
 import '../utils/string_utils.dart';
+import '../widgets/geofence_debug_overlay.dart';
 import 'poi_detail_screen.dart';
 import 'settings_screen.dart';
 
@@ -23,6 +26,7 @@ class _MapScreenState extends State<MapScreen> {
   final MapController _mapController = MapController();
   Location? _previousLocation;
   double _currentZoom = 13.0;
+  bool _showGeofenceDebug = false;
 
   @override
   void initState() {
@@ -262,6 +266,24 @@ class _MapScreenState extends State<MapScreen> {
     }
   }
 
+  /// Get geofence circle markers for debug visualization
+  List<CircleMarker> _getGeofenceCircles(BuildContext context) {
+    final reminderProvider = Provider.of<ReminderProvider>(context, listen: false);
+    final settingsProvider = Provider.of<SettingsProvider>(context, listen: false);
+    final reminders = reminderProvider.reminders;
+    final proximityRadius = settingsProvider.proximityRadiusMeters.toDouble();
+
+    return reminders.map((reminder) {
+      return CircleMarker(
+        point: LatLng(reminder.latitude, reminder.longitude),
+        radius: proximityRadius,
+        color: Colors.blue.withOpacity(0.15),
+        borderColor: Colors.blue,
+        borderStrokeWidth: 2,
+      );
+    }).toList();
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -370,6 +392,11 @@ class _MapScreenState extends State<MapScreen> {
             }
           }
 
+          // Get geofence circles if debug mode enabled
+          final geofenceCircles = _showGeofenceDebug 
+              ? _getGeofenceCircles(context) 
+              : <CircleMarker>[];
+
           return Stack(
             children: [
               FlutterMap(
@@ -390,6 +417,10 @@ class _MapScreenState extends State<MapScreen> {
                     userAgentPackageName: 'com.example.travel_flutter_app',
                     maxZoom: 19,
                   ),
+                  if (_showGeofenceDebug && geofenceCircles.isNotEmpty)
+                    CircleLayer(
+                      circles: geofenceCircles,
+                    ),
                   MarkerLayer(
                     markers: markers,
                   ),
@@ -584,6 +615,16 @@ class _MapScreenState extends State<MapScreen> {
                     ),
                   ),
                 ),
+              ),
+
+              // Geofence debug overlay
+              GeofenceDebugOverlay(
+                showDebug: _showGeofenceDebug,
+                onToggleDebug: () {
+                  setState(() {
+                    _showGeofenceDebug = !_showGeofenceDebug;
+                  });
+                },
               ),
             ],
           );
