@@ -15,6 +15,8 @@ class SettingsService {
   static const String _backgroundLocationEnabledKey = 'background_location_enabled';
   static const String _dwellTimeMinutesKey = 'dwell_time_minutes';
   static const int defaultDwellTimeMinutes = 1; // Default 1 min for development
+  static const String _proximityRadiusMetersKey = 'proximity_radius_meters';
+  static const int defaultProximityRadiusMeters = 150; // Default 150 meters
 
   // Secure storage keys for OpenAI API
   static const String _openaiApiKeyKey = 'openai_api_key';
@@ -649,6 +651,26 @@ class SettingsService {
       return prefs.getInt(_dwellTimeMinutesKey) ?? defaultDwellTimeMinutes;
     } catch (e) {
       return defaultDwellTimeMinutes;
+    }
+  }
+
+  /// Save proximity radius in meters
+  Future<bool> saveProximityRadiusMeters(int meters) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      return await prefs.setInt(_proximityRadiusMetersKey, meters);
+    } catch (e) {
+      return false;
+    }
+  }
+
+  /// Load proximity radius in meters
+  Future<int> loadProximityRadiusMeters() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      return prefs.getInt(_proximityRadiusMetersKey) ?? defaultProximityRadiusMeters;
+    } catch (e) {
+      return defaultProximityRadiusMeters;
     }
   }
 }

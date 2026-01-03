@@ -4,49 +4,63 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:permission_handler/permission_handler.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../models/poi.dart';
 import '../models/reminder.dart';
-import 'background_service_manager.dart';
+import 'android_geofence_service.dart';
+import 'dynamic_geofence_manager.dart';
 import 'dwell_time_tracker.dart';
 import 'notification_service.dart';
 import 'reminder_service.dart';
 
-/// Service for monitoring location and triggering reminders
+/// Unified service for monitoring location and triggering reminders on both platforms
+/// Uses native geofencing for both iOS and Android
 class LocationMonitorService {
   static final LocationMonitorService _instance =
       LocationMonitorService._internal();
   factory LocationMonitorService() => _instance;
   LocationMonitorService._internal() {
-    _setupIOSMethodCallHandler();
+    _setupMethodCallHandler();
   }
 
   static const MethodChannel _channel =
-      MethodChannel('com.travel_flutter.geofencing');
+      MethodChannel('com.app/geofence');
 
   bool _isMonitoring = false;
   bool _isHandlerSetup = false;
 
-  // Track active dwell timers to prevent duplicates
+  // Track active dwell timers for iOS (Android handles natively)
   final Map<String, Timer> _activeDwellTimers = {};
   // Track reminders that have been notified to prevent duplicates
   final Set<String> _notifiedReminders = {};
 
+  // Dynamic geofence manager for Android only
+  DynamicGeofenceManager? _dynamicGeofenceManager;
+
   bool get isMonitoringEnabled => _isMonitoring;
 
-  /// Set up method call handler for iOS geofence events
-  void _setupIOSMethodCallHandler() {
+  /// Set up method call handler for geofence events (both platforms)
+  void _setupMethodCallHandler() {
     if (_isHandlerSetup) return;
     _isHandlerSetup = true;
 
     _channel.setMethodCallHandler((call) async {
       debugPrint(
-          'iOS Geofence event received: ${call.method} with args: ${call.arguments}');
+          'Geofence event received: ${call.method} with args: ${call.arguments}');
 
       switch (call.method) {
         case 'onGeofenceEnter':
           final args = call.arguments as Map<dynamic, dynamic>;
           final id = args['id'] as String;
           await _handleGeofenceEnter(id);
+          break;
+        case 'onGeofenceDwell':
+          final args = call.arguments as Map<dynamic, dynamic>;
+          final id = args['id'] as String;
+          // On Android, dwell event means notification already sent by native receiver
+          // Just mark as notified to prevent duplicates
+          _notifiedReminders.add(id);
+          debugPrint('Geofence dwell event for $id (notification sent by native)');
           break;
         case 'onGeofenceExit':
           final args = call.arguments as Map<dynamic, dynamic>;
@@ -62,19 +76,12 @@ class LocationMonitorService {
       }
     });
 
-    debugPrint('iOS Geofence method call handler set up');
+    debugPrint('Geofence method call handler set up');
   }
 
   /// Handle entering a geofence
   Future<void> _handleGeofenceEnter(String reminderId) async {
     debugPrint('Entered geofence: $reminderId');
-
-    // Check if we already have an active timer for this reminder
-    if (_activeDwellTimers.containsKey(reminderId)) {
-      debugPrint(
-          'Timer already active for $reminderId, ignoring duplicate enter event');
-      return;
-    }
 
     // Check if already notified
     if (_notifiedReminders.contains(reminderId)) {
@@ -82,21 +89,30 @@ class LocationMonitorService {
       return;
     }
 
-    final dwellTracker = DwellTimeTracker();
-
-    // Record entry time
-    await dwellTracker.recordEntry(reminderId);
-
-    // Check if we've already dwelled long enough (in case of re-entry)
-    final hasDwelled = await dwellTracker.hasDwelledLongEnough(reminderId);
-
-    if (hasDwelled) {
-      // Already notified for this, skip
-      debugPrint('Already dwelled at $reminderId, skipping notification');
+    if (Platform.isAndroid) {
+      // Android handles dwell natively via setLoiteringDelay, no timer needed
+      debugPrint('Android: Waiting for native dwell event');
       return;
     }
 
-    // Start a timer to check dwell time
+    // iOS: Manual dwell tracking needed
+    // Check if we already have an active timer
+    if (_activeDwellTimers.containsKey(reminderId)) {
+      debugPrint('Timer already active for $reminderId, ignoring duplicate');
+      return;
+    }
+
+    final dwellTracker = DwellTimeTracker();
+    await dwellTracker.recordEntry(reminderId);
+
+    // Check if we've already dwelled long enough
+    final hasDwelled = await dwellTracker.hasDwelledLongEnough(reminderId);
+    if (hasDwelled) {
+      debugPrint('Already dwelled at $reminderId, skipping');
+      return;
+    }
+
+    // Start iOS dwell timer
     _startDwellTimer(reminderId);
   }
 
@@ -104,22 +120,24 @@ class LocationMonitorService {
   Future<void> _handleGeofenceExit(String reminderId) async {
     debugPrint('Exited geofence: $reminderId');
 
-    // Cancel any active timer
+    // Cancel any active timer (iOS only)
     _activeDwellTimers[reminderId]?.cancel();
     _activeDwellTimers.remove(reminderId);
 
     // Clear notified state so user can be notified again on re-entry
     _notifiedReminders.remove(reminderId);
 
-    final dwellTracker = DwellTimeTracker();
-    await dwellTracker.clearEntry(reminderId);
+    // Clear iOS dwell tracking
+    if (Platform.isIOS) {
+      final dwellTracker = DwellTimeTracker();
+      await dwellTracker.clearEntry(reminderId);
+    }
   }
 
-  /// Start a timer to check dwell time and send notification
+  /// Start a timer to check dwell time (iOS only)
   void _startDwellTimer(String reminderId) {
-    debugPrint('Starting dwell timer for $reminderId');
+    debugPrint('Starting iOS dwell timer for $reminderId');
 
-    // Check dwell time periodically
     final timer = Timer.periodic(const Duration(seconds: 30), (timer) async {
       final dwellTracker = DwellTimeTracker();
       final hasDwelled = await dwellTracker.hasDwelledLongEnough(reminderId);
@@ -130,13 +148,12 @@ class LocationMonitorService {
         await _sendReminderNotification(reminderId);
       }
 
-      // Also check if we're still in the geofence (entry time still exists)
+      // Check if we're still in the geofence
       final entryTime = await dwellTracker.getEntryTime(reminderId);
       if (entryTime == null) {
-        // User left the geofence, stop timer
         timer.cancel();
         _activeDwellTimers.remove(reminderId);
-        debugPrint('User left geofence $reminderId, stopping dwell timer');
+        debugPrint('User left geofence $reminderId, stopping timer');
       }
     });
 
@@ -145,7 +162,6 @@ class LocationMonitorService {
 
   /// Send notification for a reminder
   Future<void> _sendReminderNotification(String reminderId) async {
-    // Mark as notified to prevent duplicates
     if (_notifiedReminders.contains(reminderId)) {
       debugPrint('Already notified for $reminderId, skipping');
       return;
@@ -155,8 +171,8 @@ class LocationMonitorService {
     try {
       final reminderService = ReminderService();
       final reminders = await reminderService.loadReminders();
-
       final reminder = reminders.where((r) => r.id == reminderId).firstOrNull;
+      
       if (reminder == null) {
         debugPrint('Reminder not found for id: $reminderId');
         return;
@@ -177,20 +193,21 @@ class LocationMonitorService {
     }
   }
 
-  /// Update the list of discovered POIs for location checking
-  /// Note: On Android, POIs are not needed as the background service checks directly against reminders
+  /// Update the list of discovered POIs (kept for compatibility)
   void updateDiscoveredPois(List<POI> pois) {
-    // No-op on Android, kept for iOS compatibility
+    // No longer needed with geofencing approach
   }
 
-  /// Start location monitoring
+  /// Start location monitoring with geofences
   Future<void> startMonitoring(List<Reminder> reminders) async {
     if (_isMonitoring) return;
 
-    if (Platform.isIOS) {
-      await _startIOSMonitoring(reminders);
-    } else if (Platform.isAndroid) {
-      await _startAndroidMonitoring();
+    debugPrint('Starting monitoring with ${reminders.length} reminders');
+
+    if (Platform.isAndroid) {
+      await _startAndroidGeofencing(reminders);
+    } else if (Platform.isIOS) {
+      await _startIOSGeofencing(reminders);
     }
 
     _isMonitoring = true;
@@ -200,63 +217,127 @@ class LocationMonitorService {
   Future<void> stopMonitoring() async {
     if (!_isMonitoring) return;
 
-    if (Platform.isIOS) {
-      await _stopIOSMonitoring();
-    } else if (Platform.isAndroid) {
-      await _stopAndroidMonitoring();
+    debugPrint('Stopping location monitoring');
+
+    if (Platform.isAndroid) {
+      await _stopAndroidGeofencing();
+    } else if (Platform.isIOS) {
+      await _stopIOSGeofencing();
     }
 
     _isMonitoring = false;
   }
 
-  /// iOS: Register geofences via native platform channel
-  Future<void> _startIOSMonitoring(List<Reminder> reminders) async {
+  /// Android: Start dynamic geofence management
+  Future<void> _startAndroidGeofencing(List<Reminder> reminders) async {
     try {
-      debugPrint('Starting iOS monitoring with ${reminders.length} reminders');
-      // Register geofences for all reminder locations
+      _dynamicGeofenceManager = DynamicGeofenceManager(
+        registerGeofenceCallback: (id, lat, lng, radius, dwellTimeMs) async {
+          await AndroidGeofenceService.registerGeofence(
+            id: id,
+            latitude: lat,
+            longitude: lng,
+            radius: radius,
+            dwellTimeMs: dwellTimeMs,
+          );
+        },
+        unregisterGeofenceCallback: (id) async {
+          await AndroidGeofenceService.unregisterGeofence(id);
+        },
+      );
+
+      await _dynamicGeofenceManager!.initialize(reminders);
+      debugPrint('Android geofencing initialized');
+    } catch (e) {
+      debugPrint('Error starting Android geofencing: $e');
+    }
+  }
+
+  /// Android: Stop dynamic geofence management
+  Future<void> _stopAndroidGeofencing() async {
+    try {
+      _dynamicGeofenceManager?.dispose();
+      _dynamicGeofenceManager = null;
+      await AndroidGeofenceService.unregisterAll();
+      debugPrint('Android geofencing stopped');
+    } catch (e) {
+      debugPrint('Error stopping Android geofencing: $e');
+    }
+  }
+
+  /// iOS: Register geofences via native platform channel
+  Future<void> _startIOSGeofencing(List<Reminder> reminders) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final proximityRadius = prefs.getInt('proximity_radius_meters') ?? 150;
+
       for (final reminder in reminders) {
-        debugPrint(
-            'Registering geofence for ${reminder.brandName} at ${reminder.latitude}, ${reminder.longitude}');
+        debugPrint('Registering iOS geofence for ${reminder.brandName}');
         await _channel.invokeMethod('registerGeofence', {
           'id': reminder.id,
           'latitude': reminder.latitude,
           'longitude': reminder.longitude,
-          'radius': 150.0, // 150 meters
+          'radius': proximityRadius.toDouble(),
         });
       }
+      debugPrint('iOS geofencing started');
     } catch (e) {
-      debugPrint('Error starting iOS monitoring: $e');
+      debugPrint('Error starting iOS geofencing: $e');
     }
   }
 
   /// iOS: Remove all geofences
-  Future<void> _stopIOSMonitoring() async {
+  Future<void> _stopIOSGeofencing() async {
     try {
       await _channel.invokeMethod('removeAllGeofences');
-    } catch (e) {
-      debugPrint('Error stopping iOS monitoring: $e');
-    }
-  }
-
-  /// Android: Start background location monitoring service
-  Future<void> _startAndroidMonitoring() async {
-    try {
-      final started = await BackgroundServiceManager.startService();
-      if (!started) {
-        debugPrint('Failed to start background service');
+      
+      // Cancel all iOS dwell timers
+      for (final timer in _activeDwellTimers.values) {
+        timer.cancel();
       }
+      _activeDwellTimers.clear();
+      
+      debugPrint('iOS geofencing stopped');
     } catch (e) {
-      debugPrint('Error starting Android monitoring: $e');
+      debugPrint('Error stopping iOS geofencing: $e');
     }
   }
 
-  /// Android: Stop background location monitoring service
-  Future<void> _stopAndroidMonitoring() async {
-    try {
-      await BackgroundServiceManager.stopService();
-    } catch (e) {
-      debugPrint('Error stopping Android monitoring: $e');
+  /// Notify dynamic geofence manager of reminder addition (Android only)
+  Future<void> onReminderAdded(Reminder reminder) async {
+    if (Platform.isAndroid && _dynamicGeofenceManager != null) {
+      await _dynamicGeofenceManager!.onReminderAdded(reminder);
+    } else if (Platform.isIOS && _isMonitoring) {
+      // Re-register all iOS geofences
+      final reminderService = ReminderService();
+      final reminders = await reminderService.loadReminders();
+      await _startIOSGeofencing(reminders);
     }
+  }
+
+  /// Notify dynamic geofence manager of reminder removal (Android only)
+  Future<void> onReminderRemoved(String reminderId) async {
+    if (Platform.isAndroid && _dynamicGeofenceManager != null) {
+      await _dynamicGeofenceManager!.onReminderRemoved(reminderId);
+    } else if (Platform.isIOS && _isMonitoring) {
+      // Unregister specific iOS geofence
+      try {
+        await _channel.invokeMethod('removeGeofence', {'id': reminderId});
+      } catch (e) {
+        debugPrint('Error removing iOS geofence: $e');
+      }
+    }
+  }
+
+  /// Get dynamic geofence stats (Android only)
+  Map<String, int>? getGeofenceStats() {
+    if (Platform.isAndroid && _dynamicGeofenceManager != null) {
+      return {
+        'active': _dynamicGeofenceManager!.getActiveCount(),
+        'total': _dynamicGeofenceManager!.getTotalCount(),
+      };
+    }
+    return null;
   }
 
   /// Check if has foreground location permission
@@ -275,7 +356,6 @@ class LocationMonitorService {
       final backgroundStatus = await Permission.locationAlways.status;
       return backgroundStatus.isGranted;
     } else {
-      // iOS
       final permission = await Geolocator.checkPermission();
       return permission == LocationPermission.always;
     }
@@ -283,11 +363,9 @@ class LocationMonitorService {
 
   /// Request foreground location permission
   Future<bool> requestForegroundPermission() async {
-    // First check if location services are enabled
     final serviceEnabled = await Geolocator.isLocationServiceEnabled();
     if (!serviceEnabled) {
       debugPrint('Location services are disabled');
-      // Try to open location settings
       try {
         await Geolocator.openLocationSettings();
       } catch (e) {
@@ -296,7 +374,6 @@ class LocationMonitorService {
       return false;
     }
 
-    // Check current permission
     LocationPermission permission = await Geolocator.checkPermission();
 
     if (permission == LocationPermission.denied) {
@@ -310,23 +387,18 @@ class LocationMonitorService {
       return false;
     }
 
-    // Accept both whileInUse and always for foreground permission
     return permission == LocationPermission.whileInUse ||
         permission == LocationPermission.always;
   }
 
   /// Request background location permission
   Future<bool> requestBackgroundPermission() async {
-    // First check if location services are enabled
     final serviceEnabled = await Geolocator.isLocationServiceEnabled();
     if (!serviceEnabled) {
       debugPrint('Location services are disabled');
       return false;
     }
 
-    // Check if we have foreground permission first using Geolocator
-    // (This is important because Geolocator was used to request initial permission,
-    // and permission_handler may not be in sync on iOS)
     final geolocatorPermission = await Geolocator.checkPermission();
     debugPrint('Geolocator permission status: $geolocatorPermission');
 
@@ -335,40 +407,30 @@ class LocationMonitorService {
             geolocatorPermission == LocationPermission.always;
 
     if (!hasForegroundPermission) {
-      debugPrint(
-          'Foreground location not granted yet (Geolocator: $geolocatorPermission)');
+      debugPrint('Foreground location not granted yet');
       return false;
     }
 
-    // If already have "always" permission via Geolocator, we're done
     if (geolocatorPermission == LocationPermission.always) {
-      debugPrint('Already have always permission (via Geolocator)');
+      debugPrint('Already have always permission');
       return true;
     }
 
-    // On iOS 13+, when user has "When In Use" permission, we cannot programmatically
-    // request an upgrade to "Always". We must direct the user to Settings.
     if (Platform.isIOS) {
-      debugPrint(
-          'iOS: User has whileInUse, must open Settings for Always permission');
-      // Open the app's settings page directly - user needs to tap Location and change to Always
+      debugPrint('iOS: Opening settings for Always permission');
       await openAppSettings();
-
-      // Wait a moment for user to potentially change settings, then re-check
       await Future.delayed(const Duration(milliseconds: 500));
-
-      // Re-check permission after returning from settings
       final newPermission = await Geolocator.checkPermission();
       debugPrint('iOS: Permission after settings: $newPermission');
       return newPermission == LocationPermission.always;
     }
 
-    // Android: Use permission_handler to request background location
+    // Android
     final currentAlwaysStatus = await Permission.locationAlways.status;
     debugPrint('Android locationAlways status: $currentAlwaysStatus');
 
     if (currentAlwaysStatus.isGranted) {
-      debugPrint('Already have always permission (via permission_handler)');
+      debugPrint('Already have always permission');
       return true;
     }
 
@@ -378,11 +440,9 @@ class LocationMonitorService {
       return false;
     }
 
-    // Request background/always location permission on Android
     debugPrint('Android: Requesting locationAlways permission...');
     final backgroundStatus = await Permission.locationAlways.request();
-    debugPrint(
-        'Android: Background location status after request: $backgroundStatus');
+    debugPrint('Android: Background location status: $backgroundStatus');
 
     return backgroundStatus.isGranted;
   }
