@@ -3,7 +3,6 @@ import '../models/poi.dart';
 import '../models/reminder.dart';
 import '../services/reminder_service.dart';
 import '../services/location_monitor_service.dart';
-import '../services/background_service_manager.dart';
 import '../utils/brand_matcher.dart';
 
 /// Provider for managing shopping reminders
@@ -105,8 +104,8 @@ class ReminderProvider extends ChangeNotifier {
         await _locationService.stopMonitoring();
         await _locationService.startMonitoring(_reminders);
 
-        // Update background service reminder count
-        await BackgroundServiceManager.updateReminderCount();
+        // Notify location service of new reminder for dynamic geofence management
+        await _locationService.onReminderAdded(reminder);
 
         notifyListeners();
         return true;
@@ -157,8 +156,8 @@ class ReminderProvider extends ChangeNotifier {
         await _locationService.stopMonitoring();
         await _locationService.startMonitoring(_reminders);
 
-        // Update background service reminder count
-        await BackgroundServiceManager.updateReminderCount();
+        // Notify location service of new reminder for dynamic geofence management
+        await _locationService.onReminderAdded(reminder);
 
         notifyListeners();
         return true;
@@ -181,14 +180,14 @@ class ReminderProvider extends ChangeNotifier {
       if (success) {
         _reminders.removeWhere((r) => r.id == id);
 
+        // Notify location service of reminder removal
+        await _locationService.onReminderRemoved(id);
+
         // Restart monitoring or stop if no reminders left
         await _locationService.stopMonitoring();
         if (_reminders.isNotEmpty) {
           await _locationService.startMonitoring(_reminders);
         }
-
-        // Update background service reminder count
-        await BackgroundServiceManager.updateReminderCount();
 
         notifyListeners();
         return true;
@@ -309,9 +308,6 @@ class ReminderProvider extends ChangeNotifier {
       await _reminderService.clearAllReminders();
       await _locationService.stopMonitoring();
       _reminders = [];
-
-      // Update background service reminder count (will stop service if 0)
-      await BackgroundServiceManager.updateReminderCount();
 
       notifyListeners();
     } catch (e) {

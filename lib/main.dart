@@ -5,9 +5,9 @@ import 'providers/reminder_provider.dart';
 import 'repositories/repositories.dart';
 import 'screens/tab_navigation_screen.dart';
 import 'screens/poi_detail_screen.dart';
+import 'screens/reminders_overview_screen.dart';
 import 'services/openai_service.dart';
 import 'services/notification_service.dart';
-import 'services/background_service_manager.dart';
 import 'services/location_monitor_service.dart';
 import 'services/dwell_time_tracker.dart';
 import 'utils/settings_service.dart';
@@ -22,10 +22,7 @@ void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   debugPrint('=== App starting ===');
 
-  // Initialize background service for Android
-  await BackgroundServiceManager.initialize();
-
-  // Initialize LocationMonitorService early to set up iOS geofence handler
+  // Initialize LocationMonitorService early to set up geofence handler
   // This ensures the method call handler is ready before any geofence events
   debugPrint('Initializing LocationMonitorService...');
   final locationMonitor = LocationMonitorService();
@@ -129,28 +126,93 @@ void main() async {
   );
 }
 
-/// Handle notification tap to navigate to POI detail screen
-void _handleNotificationTap(String poiId) {
+/// Handle notification tap to navigate to POI detail screen or show reminder
+void _handleNotificationTap(String payload) {
   // Wait a bit for app to be ready if launched from background
-  Future.delayed(const Duration(milliseconds: 500), () {
+  Future.delayed(const Duration(milliseconds: 500), () async {
+    final context = navigatorKey.currentContext;
+    if (context == null) {
+      debugPrint('Navigator context not available for deep linking');
+      return;
+    }
+
+    // Try to get the reminder by ID first (for geofence notifications)
+    final reminderProvider = Provider.of<ReminderProvider>(context, listen: false);
+    final reminders = reminderProvider.reminders;
+    final reminder = reminders.where((r) => r.id == payload).firstOrNull;
+    
+    if (reminder != null) {
+      // Found a reminder - show dialog with shopping list
+      debugPrint('Showing shopping list for reminder: ${reminder.brandName}');
+      showDialog(
+        context: context,
+        builder: (dialogContext) => AlertDialog(
+          title: Text('Shopping List - ${reminder.brandName}'),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'You\'re near ${reminder.brandName}!',
+                  style: const TextStyle(fontWeight: FontWeight.bold),
+                ),
+                const SizedBox(height: 16),
+                if (reminder.items.isEmpty)
+                  const Text('No items in shopping list')
+                else
+                  ...reminder.items.map((item) => Padding(
+                        padding: const EdgeInsets.only(bottom: 8),
+                        child: Row(
+                          children: [
+                            const Icon(Icons.check_box_outline_blank, size: 20),
+                            const SizedBox(width: 8),
+                            Expanded(child: Text(item.text)),
+                          ],
+                        ),
+                      )),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(),
+              child: const Text('CLOSE'),
+            ),
+            TextButton(
+              onPressed: () {
+                Navigator.of(dialogContext).pop();
+                // Navigate to reminders screen
+                Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (_) => const RemindersOverviewScreen(),
+                  ),
+                );
+              },
+              child: const Text('VIEW ALL REMINDERS'),
+            ),
+          ],
+        ),
+      );
+      return;
+    }
+
+    // Fallback: try to find POI by ID (for legacy notifications)
     if (_poiProviderRef == null) {
       debugPrint('POI provider not available for deep linking');
       return;
     }
 
-    final poi = _poiProviderRef!.findById(poiId);
+    final poi = _poiProviderRef!.findById(payload);
     if (poi == null) {
-      debugPrint('POI not found for deep linking: $poiId');
+      debugPrint('POI/Reminder not found for deep linking: $payload');
       // Show a snackbar if navigator is available
-      final context = navigatorKey.currentContext;
-      if (context != null) {
-        // ignore: use_build_context_synchronously
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Could not find the store. Try searching for it.'),
-          ),
-        );
-      }
+      // ignore: use_build_context_synchronously
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Could not find the store. Try searching for it.'),
+        ),
+      );
       return;
     }
 

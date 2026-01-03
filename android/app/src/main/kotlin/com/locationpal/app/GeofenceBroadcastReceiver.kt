@@ -105,9 +105,55 @@ class GeofenceBroadcastReceiver : BroadcastReceiver() {
             notificationManager.createNotificationChannel(channel)
         }
 
-        // Create intent to open app when notification is tapped
-        val launchIntent = context.packageManager.getLaunchIntentForPackage(context.packageName)
-        launchIntent?.putExtra("geofenceId", geofenceId)
+        // Load reminder details from SharedPreferences
+        val sharedPrefs = context.getSharedPreferences("FlutterSharedPreferences", Context.MODE_PRIVATE)
+        val remindersJson = sharedPrefs.getString("flutter.shopping_reminders", null)
+        
+        var brandName = "a saved location"
+        var items = emptyList<String>()
+        
+        if (remindersJson != null) {
+            try {
+                // Parse JSON to find the matching reminder
+                // Format: [{"id":"uuid","brandName":"Brand","items":[{"text":"item1"},{"text":"item2"}],...}]
+                val reminders = remindersJson.split("},{").map { it.replace("[", "").replace("]", "") }
+                
+                for (reminder in reminders) {
+                    if (reminder.contains("\"id\":\"$geofenceId\"")) {
+                        // Extract brand name
+                        val brandMatch = Regex("\"brandName\":\"([^\"]+)\"").find(reminder)
+                        if (brandMatch != null) {
+                            brandName = brandMatch.groupValues[1]
+                        }
+                        
+                        // Extract shopping items
+                        val itemsSection = reminder.substringAfter("\"items\":[").substringBefore("]")
+                        val itemMatches = Regex("\"text\":\"([^\"]+)\"").findAll(itemsSection)
+                        items = itemMatches.map { it.groupValues[1] }.toList()
+                        break
+                    }
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Error parsing reminder details: ${e.message}", e)
+            }
+        }
+
+        // Build notification content matching iOS format
+        val title = "You're near $brandName!"
+        val itemsPreview = items.take(3).joinToString(", ")
+        val moreItems = if (items.size > 3) " and ${items.size - 3} more" else ""
+        val message = if (items.isNotEmpty()) {
+            "Shopping list: $itemsPreview$moreItems"
+        } else {
+            "Tap to view details"
+        }
+
+        // Create intent to open app with the specific reminder (payload)
+        val launchIntent = context.packageManager.getLaunchIntentForPackage(context.packageName)?.apply {
+            action = "NOTIFICATION_TAPPED"
+            putExtra("payload", geofenceId)
+            addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP)
+        }
         
         val pendingIntent = PendingIntent.getActivity(
             context,
@@ -115,28 +161,6 @@ class GeofenceBroadcastReceiver : BroadcastReceiver() {
             launchIntent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
-
-        // Load reminder details from SharedPreferences
-        val sharedPrefs = context.getSharedPreferences("FlutterSharedPreferences", Context.MODE_PRIVATE)
-        val remindersJson = sharedPrefs.getString("flutter.shopping_reminders", null)
-        
-        var title = "Location Reminder"
-        var message = "You're near a saved location"
-        
-        if (remindersJson != null) {
-            try {
-                // Parse JSON to find reminder details - simplified parsing
-                val brandStart = remindersJson.indexOf("\"brandName\":\"")
-                if (brandStart > 0) {
-                    val brandEnd = remindersJson.indexOf("\"", brandStart + 13)
-                    val brandName = remindersJson.substring(brandStart + 13, brandEnd)
-                    title = brandName
-                    message = "You've arrived at $brandName"
-                }
-            } catch (e: Exception) {
-                Log.e(TAG, "Error parsing reminder details: ${e.message}")
-            }
-        }
 
         // Build notification
         val notification = NotificationCompat.Builder(context, NOTIFICATION_CHANNEL_ID)
@@ -149,6 +173,6 @@ class GeofenceBroadcastReceiver : BroadcastReceiver() {
             .build()
 
         notificationManager.notify(geofenceId.hashCode(), notification)
-        Log.d(TAG, "Notification shown for geofence: $geofenceId")
+        Log.d(TAG, "Notification shown for geofence: $geofenceId - $brandName with ${items.size} items")
     }
 }

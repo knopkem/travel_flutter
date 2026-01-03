@@ -4,7 +4,7 @@ import '../models/poi_type.dart';
 import '../models/poi_source.dart';
 import '../utils/settings_service.dart';
 import '../services/openai_service.dart';
-import '../services/background_service_manager.dart';
+import '../services/location_monitor_service.dart';
 import '../services/reminder_service.dart';
 import '../repositories/google_places_repository.dart';
 
@@ -439,26 +439,27 @@ class SettingsProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// Restart background service if reminders exist
+  /// Restart location monitoring if reminders exist
   Future<void> _restartBackgroundServiceIfNeeded() async {
     try {
+      final locationMonitor = LocationMonitorService();
       final reminderService = ReminderService();
       final reminders = await reminderService.loadReminders();
       if (reminders.isNotEmpty) {
-        await BackgroundServiceManager.startService();
-        await BackgroundServiceManager.updateReminderCount();
+        await locationMonitor.startMonitoring(reminders);
       }
     } catch (e) {
-      debugPrint('Error restarting background service: $e');
+      debugPrint('Error restarting location monitoring: $e');
     }
   }
 
-  /// Stop background service
+  /// Stop location monitoring
   Future<void> _stopBackgroundService() async {
     try {
-      await BackgroundServiceManager.stopService();
+      final locationMonitor = LocationMonitorService();
+      await locationMonitor.stopMonitoring();
     } catch (e) {
-      debugPrint('Error stopping background service: $e');
+      debugPrint('Error stopping location monitoring: $e');
     }
   }
 
