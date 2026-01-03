@@ -474,4 +474,22 @@ class SettingsProvider extends ChangeNotifier {
     _dwellTimeMinutes = minutes;
     notifyListeners();
   }
+
+  /// Update proximity radius in meters and re-register geofences
+  Future<void> updateProximityRadiusMeters(int meters) async {
+    await _settingsService.saveProximityRadiusMeters(meters);
+    _proximityRadiusMeters = meters;
+    notifyListeners();
+    
+    // Re-register all geofences with new radius
+    final locationService = LocationMonitorService();
+    if (locationService.isMonitoringEnabled) {
+      final reminderService = ReminderService();
+      final reminders = await reminderService.loadReminders();
+      for (final reminder in reminders) {
+        await locationService.onReminderRemoved(reminder.id);
+        await locationService.onReminderAdded(reminder);
+      }
+    }
+  }
 }

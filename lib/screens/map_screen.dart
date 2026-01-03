@@ -4,6 +4,7 @@ import 'package:latlong2/latlong.dart';
 import 'package:provider/provider.dart';
 import '../models/location.dart';
 import '../models/poi.dart';
+import '../models/reminder.dart';
 import '../providers/ai_guidance_provider.dart';
 import '../providers/location_provider.dart';
 import '../providers/poi_provider.dart';
@@ -267,12 +268,8 @@ class _MapScreenState extends State<MapScreen> {
   }
 
   /// Get geofence circle markers for debug visualization
-  List<CircleMarker> _getGeofenceCircles(BuildContext context) {
-    final reminderProvider = Provider.of<ReminderProvider>(context, listen: false);
-    final settingsProvider = Provider.of<SettingsProvider>(context, listen: false);
-    final reminders = reminderProvider.reminders;
-    final proximityRadius = settingsProvider.proximityRadiusMeters.toDouble();
-
+  List<CircleMarker> _getGeofenceCircles(
+      List<Reminder> reminders, double proximityRadius) {
     return reminders.map((reminder) {
       return CircleMarker(
         point: LatLng(reminder.latitude, reminder.longitude),
@@ -305,8 +302,8 @@ class _MapScreenState extends State<MapScreen> {
           ),
         ],
       ),
-      body: Consumer3<LocationProvider, POIProvider, AIGuidanceProvider>(
-        builder: (context, locationProvider, poiProvider, aiGuidanceProvider, child) {
+      body: Consumer5<LocationProvider, POIProvider, AIGuidanceProvider, SettingsProvider, ReminderProvider>(
+        builder: (context, locationProvider, poiProvider, aiGuidanceProvider, settingsProvider, reminderProvider, child) {
           final selectedCity = locationProvider.selectedCity;
 
           // Auto-recenter when location changes
@@ -394,7 +391,10 @@ class _MapScreenState extends State<MapScreen> {
 
           // Get geofence circles if debug mode enabled
           final geofenceCircles = _showGeofenceDebug 
-              ? _getGeofenceCircles(context) 
+              ? _getGeofenceCircles(
+                  reminderProvider.reminders,
+                  settingsProvider.proximityRadiusMeters.toDouble(),
+                ) 
               : <CircleMarker>[];
 
           return Stack(
