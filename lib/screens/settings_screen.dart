@@ -458,6 +458,91 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         ],
                       ),
                     ),
+                    const SizedBox(height: 16),
+                    // Battery optimization status card
+                    FutureBuilder<bool>(
+                      future: BatteryOptimizationHelper.isIgnoringBatteryOptimizations(),
+                      builder: (context, snapshot) {
+                        if (!snapshot.hasData) {
+                          return const SizedBox.shrink();
+                        }
+
+                        final isOptimized = !snapshot.data!;
+                        if (!isOptimized) {
+                          return const SizedBox.shrink();
+                        }
+
+                        return Container(
+                          margin: const EdgeInsets.symmetric(horizontal: 16),
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: Colors.orange[50],
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(color: Colors.orange[200]!),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                children: [
+                                  Icon(
+                                    Icons.battery_alert,
+                                    color: Colors.orange[700],
+                                    size: 24,
+                                  ),
+                                  const SizedBox(width: 12),
+                                  Expanded(
+                                    child: Text(
+                                      'Battery Optimization Active',
+                                      style: TextStyle(
+                                        fontWeight: FontWeight.bold,
+                                        color: Colors.orange[900],
+                                        fontSize: 14,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 8),
+                              Text(
+                                'Battery optimization may prevent location reminders from working reliably in the background. Tap below to disable it for this app.',
+                                style: TextStyle(
+                                  color: Colors.orange[800],
+                                  fontSize: 12,
+                                ),
+                              ),
+                              const SizedBox(height: 12),
+                              SizedBox(
+                                width: double.infinity,
+                                child: ElevatedButton.icon(
+                                  icon: const Icon(Icons.settings, size: 18),
+                                  label: const Text('Fix Battery Settings'),
+                                  onPressed: () async {
+                                    final result = await BatteryOptimizationHelper
+                                        .requestBatteryOptimizationExemption(context);
+                                    if (result && context.mounted) {
+                                      setState(() {}); // Refresh to hide banner
+                                      ScaffoldMessenger.of(context).showSnackBar(
+                                        const SnackBar(
+                                          content: Text(
+                                            'Battery optimization disabled successfully',
+                                          ),
+                                          backgroundColor: Colors.green,
+                                        ),
+                                      );
+                                    }
+                                  },
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: Colors.orange,
+                                    foregroundColor: Colors.white,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        );
+                      },
+                    ),
                     const SizedBox(height: 8),
                     Divider(color: Colors.grey[300]),
                     const SizedBox(height: 8),
