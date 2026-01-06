@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../models/reminder.dart';
+import '../models/poi.dart';
+import '../models/poi_source.dart';
 import '../providers/reminder_provider.dart';
+import '../providers/map_navigation_provider.dart';
 
 /// Screen for viewing and managing all shopping reminders
 class RemindersOverviewScreen extends StatefulWidget {
@@ -49,6 +52,7 @@ class _RemindersOverviewScreenState extends State<RemindersOverviewScreen> {
               return _ReminderCard(
                 reminder: reminder,
                 onDelete: () => _confirmDelete(context, reminder),
+                onShowOnMap: () => _showOnMap(context, reminder),
               );
             },
           );
@@ -128,12 +132,25 @@ class _RemindersOverviewScreenState extends State<RemindersOverviewScreen> {
       // ignore: use_build_context_synchronously
       final provider = Provider.of<ReminderProvider>(context, listen: false);
       final success = await provider.removeReminder(reminder.id);
-      if (success && mounted) {
-        scaffoldMessenger.showSnackBar(
-          SnackBar(
-            content: Text('Removed reminder for ${reminder.brandName}'),
-          ),
-        );
+      
+      if (mounted) {
+        if (success) {
+          scaffoldMessenger.showSnackBar(
+            SnackBar(
+              content: Text('Removed reminder for ${reminder.brandName}'),
+              backgroundColor: Colors.green,
+            ),
+          );
+          // Force rebuild to ensure list updates
+          setState(() {});
+        } else {
+          scaffoldMessenger.showSnackBar(
+            const SnackBar(
+              content: Text('Failed to remove reminder'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
       }
     }
   }
@@ -181,16 +198,44 @@ class _RemindersOverviewScreenState extends State<RemindersOverviewScreen> {
       }
     }
   }
+
+  void _showOnMap(BuildContext context, Reminder reminder) {
+    // Create a POI from the reminder data
+    final poi = POI(
+      id: reminder.originalPoiId,
+      name: reminder.brandName,
+      type: reminder.poiType,
+      latitude: reminder.latitude,
+      longitude: reminder.longitude,
+      distanceFromCity: 0, // Will be calculated by map
+      sources: [POISource.googlePlaces],
+      notabilityScore: 50,
+      discoveredAt: reminder.createdAt,
+      description: 'Shopping reminder location for ${reminder.brandName}',
+    );
+
+    // Navigate to map
+    final mapNavProvider = Provider.of<MapNavigationProvider>(
+      context,
+      listen: false,
+    );
+    mapNavProvider.navigateToPoiOnMap(poi);
+    
+    // Return to main screen (which will auto-switch to map tab)
+    Navigator.pop(context);
+  }
 }
 
 /// Card widget for displaying a single reminder with expandable shopping list
 class _ReminderCard extends StatefulWidget {
   final Reminder reminder;
   final VoidCallback onDelete;
+  final VoidCallback onShowOnMap;
 
   const _ReminderCard({
     required this.reminder,
     required this.onDelete,
+    required this.onShowOnMap,
   });
 
   @override
@@ -235,13 +280,20 @@ class _ReminderCardState extends State<_ReminderCard> {
               mainAxisSize: MainAxisSize.min,
               children: [
                 IconButton(
+                  icon: const Icon(Icons.map_outlined, color: Colors.blue),
+                  tooltip: 'Show on map',
+                  onPressed: widget.onShowOnMap,
+                ),
+                IconButton(
                   icon: const Icon(Icons.delete_outline, color: Colors.red),
+                  tooltip: 'Delete reminder',
                   onPressed: widget.onDelete,
                 ),
                 IconButton(
                   icon: Icon(
                     _isExpanded ? Icons.expand_less : Icons.expand_more,
                   ),
+                  tooltip: _isExpanded ? 'Collapse' : 'Expand',
                   onPressed: () {
                     setState(() {
                       _isExpanded = !_isExpanded;
