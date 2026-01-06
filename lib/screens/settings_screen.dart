@@ -64,7 +64,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
               _buildPoiTypesSection(context, settingsProvider),
               _buildInterestsSection(context, settingsProvider),
               _buildDistanceSection(context, settingsProvider),
-              _buildMapDisplaySection(context, settingsProvider),
               _buildAboutSection(context),
             ],
           );
@@ -1297,54 +1296,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 padding: const EdgeInsets.symmetric(vertical: 8),
                 child: Text(
                   'Larger distances may take longer to fetch results',
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: Colors.grey[600],
-                      ),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildMapDisplaySection(
-    BuildContext context,
-    SettingsProvider settingsProvider,
-  ) {
-    return ExpansionTile(
-      initiallyExpanded: false,
-      leading: const Icon(Icons.map),
-      title: const Text(
-        'Map Display',
-        style: TextStyle(
-          fontSize: 18,
-          fontWeight: FontWeight.bold,
-        ),
-      ),
-      subtitle: const Text('Configure map visualization'),
-      children: [
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              SwitchListTile(
-                title: const Text('Show GPS Location'),
-                subtitle: const Text(
-                  'Display real-time GPS position as a blue dot on the map',
-                ),
-                value: settingsProvider.showGpsOnMap,
-                onChanged: (value) async {
-                  await settingsProvider.updateShowGpsOnMap(value);
-                },
-                secondary: const Icon(Icons.gps_fixed),
-              ),
-              Padding(
-                padding: const EdgeInsets.all(16),
-                child: Text(
-                  'The GPS dot shows your current real-time location, while the search center marker shows the selected location used for POI discovery.',
                   style: Theme.of(context).textTheme.bodySmall?.copyWith(
                         color: Colors.grey[600],
                       ),

@@ -106,16 +106,6 @@ class _MapScreenState extends State<MapScreen> with SingleTickerProviderStateMix
 
   /// Start continuous GPS position tracking
   Future<void> _startGpsTracking() async {
-    // Check if GPS tracking is enabled in settings
-    final settingsProvider = Provider.of<SettingsProvider>(
-      context,
-      listen: false,
-    );
-    if (!settingsProvider.showGpsOnMap) {
-      setState(() => _gpsAvailable = false);
-      return;
-    }
-
     try {
       // Check permissions
       final permission = await Geolocator.checkPermission();
@@ -544,7 +534,7 @@ class _MapScreenState extends State<MapScreen> with SingleTickerProviderStateMix
           }
 
           // Add GPS dot marker on top if available
-          if (_gpsAvailable && _currentGpsPosition != null && settingsProvider.showGpsOnMap) {
+          if (_gpsAvailable && _currentGpsPosition != null) {
             markers.add(
               Marker(
                 point: LatLng(
@@ -763,7 +753,7 @@ class _MapScreenState extends State<MapScreen> with SingleTickerProviderStateMix
                                 style: TextStyle(fontSize: 12)),
                           ],
                         ),
-                        if (_gpsAvailable && settingsProvider.showGpsOnMap) ...[
+                        if (_gpsAvailable) ...[
                           const SizedBox(height: 4),
                           Row(
                             mainAxisSize: MainAxisSize.min,
