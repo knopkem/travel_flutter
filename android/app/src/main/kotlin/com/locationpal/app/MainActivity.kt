@@ -1,5 +1,8 @@
 package com.locationpal.app
 
+import android.app.NotificationChannel
+import android.app.NotificationManager
+import android.os.Build
 import android.os.Bundle
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
@@ -7,12 +10,35 @@ import io.flutter.plugin.common.MethodChannel
 
 class MainActivity : FlutterActivity() {
     private val GEOFENCE_CHANNEL = "com.app/geofence"
+    private val SERVICE_CHANNEL = "com.app/foreground_service"
     private lateinit var geofenceManager: GeofenceManager
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        // Create notification channel for background service BEFORE it tries to start
+        createNotificationChannel()
+    }
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
         
         geofenceManager = GeofenceManager(applicationContext)
+        
+        // Setup foreground service control channel
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, SERVICE_CHANNEL)
+            .setMethodCallHandler { call, result ->
+                when (call.method) {
+                    "startForegroundService" -> {
+                        LocationMonitorService.startService(applicationContext)
+                        result.success(true)
+                    }
+                    "stopForegroundService" -> {
+                        LocationMonitorService.stopService(applicationContext)
+                        result.success(true)
+                    }
+                    else -> result.notImplemented()
+                }
+            }
         
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, GEOFENCE_CHANNEL)
             .setMethodCallHandler { call, result ->
@@ -63,5 +89,27 @@ class MainActivity : FlutterActivity() {
                     }
                 }
             }
+    }
+
+    /**
+     * Create notification channel for background geofence service
+     * Must be called before the service starts to avoid "Bad notification" error
+     */
+    private fun createNotificationChannel() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val channel = NotificationChannel(
+                "background_geofence_channel",
+                "Shopping Reminders",
+                NotificationManager.IMPORTANCE_LOW
+            ).apply {
+                description = "Monitors your shopping list locations in the background"
+                setShowBadge(false)
+                enableVibration(false)
+                enableLights(false)
+            }
+
+            val notificationManager = getSystemService(NotificationManager::class.java)
+            notificationManager.createNotificationChannel(channel)
+        }
     }
 }

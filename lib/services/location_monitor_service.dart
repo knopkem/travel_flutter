@@ -12,6 +12,7 @@ import 'dynamic_geofence_manager.dart';
 import 'dwell_time_tracker.dart';
 import 'notification_service.dart';
 import 'reminder_service.dart';
+import 'foreground_notification_service.dart';
 
 /// Unified service for monitoring location and triggering reminders on both platforms
 /// Uses native geofencing for both iOS and Android
@@ -205,12 +206,18 @@ class LocationMonitorService {
     debugPrint('Starting monitoring with ${reminders.length} reminders');
 
     if (Platform.isAndroid) {
+      // Start foreground service first for persistent notification
+      await ForegroundNotificationService.start();
       await _startAndroidGeofencing(reminders);
     } else if (Platform.isIOS) {
       await _startIOSGeofencing(reminders);
     }
 
     _isMonitoring = true;
+    
+    // Persist monitoring state for boot receiver
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('monitoring_enabled', true);
   }
 
   /// Stop location monitoring
@@ -221,11 +228,17 @@ class LocationMonitorService {
 
     if (Platform.isAndroid) {
       await _stopAndroidGeofencing();
+      // Stop foreground service and remove notification
+      await ForegroundNotificationService.stop();
     } else if (Platform.isIOS) {
       await _stopIOSGeofencing();
     }
 
     _isMonitoring = false;
+    
+    // Persist monitoring state
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('monitoring_enabled', false);
   }
 
   /// Android: Start dynamic geofence management

@@ -54,6 +54,14 @@
 	<key>UIBackgroundModes</key>
 	<array>
 		<string>location</string>
+		<string>fetch</string>
+		<string>processing</string>
 	</array>
+	<key>BGTaskSchedulerPermittedIdentifiers</key>
+	<array>
+		<string>com.locationpal.geofence.check</string>
+	</array>
+	<key>UIRequiresPersistentWiFi</key>
+	<false/>
 </dict>
 </plist>

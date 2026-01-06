@@ -38,6 +38,11 @@ class SettingsService {
 
   final FlutterSecureStorage _secureStorage = const FlutterSecureStorage();
 
+  /// Get SharedPreferences instance (for background service access)
+  Future<SharedPreferences> getPreferences() async {
+    return await SharedPreferences.getInstance();
+  }
+
   /// Default POI type order (prioritized by user preference)
   static final List<POIType> defaultPoiOrder = [
     // Attractions

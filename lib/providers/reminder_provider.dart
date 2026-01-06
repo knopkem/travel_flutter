@@ -3,12 +3,14 @@ import '../models/poi.dart';
 import '../models/reminder.dart';
 import '../services/reminder_service.dart';
 import '../services/location_monitor_service.dart';
+import '../services/background_geofence_service.dart';
 import '../utils/brand_matcher.dart';
 
 /// Provider for managing shopping reminders
 class ReminderProvider extends ChangeNotifier {
   final ReminderService _reminderService = ReminderService();
   final LocationMonitorService _locationService = LocationMonitorService();
+  final BackgroundGeofenceService _backgroundGeofence = BackgroundGeofenceService();
 
   List<Reminder> _reminders = [];
   bool _isLoading = false;
@@ -26,11 +28,15 @@ class ReminderProvider extends ChangeNotifier {
     notifyListeners();
 
     try {
+      // Initialize background geofencing
+      await _backgroundGeofence.initialize();
+      
       _reminders = await _reminderService.loadReminders();
 
       // Start monitoring if reminders exist
       if (_reminders.isNotEmpty) {
         await _locationService.startMonitoring(_reminders);
+        await _backgroundGeofence.startMonitoring(_reminders);
       }
     } catch (e) {
       _error = 'Failed to load reminders: $e';
@@ -103,6 +109,7 @@ class ReminderProvider extends ChangeNotifier {
         // Restart monitoring with updated reminders
         await _locationService.stopMonitoring();
         await _locationService.startMonitoring(_reminders);
+        await _backgroundGeofence.updateReminders(_reminders);
 
         // Notify location service of new reminder for dynamic geofence management
         await _locationService.onReminderAdded(reminder);
@@ -155,6 +162,7 @@ class ReminderProvider extends ChangeNotifier {
         // Restart monitoring with updated reminders
         await _locationService.stopMonitoring();
         await _locationService.startMonitoring(_reminders);
+        await _backgroundGeofence.updateReminders(_reminders);
 
         // Notify location service of new reminder for dynamic geofence management
         await _locationService.onReminderAdded(reminder);
@@ -187,6 +195,9 @@ class ReminderProvider extends ChangeNotifier {
         await _locationService.stopMonitoring();
         if (_reminders.isNotEmpty) {
           await _locationService.startMonitoring(_reminders);
+          await _backgroundGeofence.updateReminders(_reminders);
+        } else {
+          await _backgroundGeofence.stopMonitoring();
         }
 
         notifyListeners();
