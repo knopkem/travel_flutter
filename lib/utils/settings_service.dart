@@ -17,6 +17,8 @@ class SettingsService {
   static const int defaultDwellTimeMinutes = 1; // Default 1 min for development
   static const String _proximityRadiusMetersKey = 'proximity_radius_meters';
   static const int defaultProximityRadiusMeters = 150; // Default 150 meters
+  static const String _showGpsOnMapKey = 'show_gps_on_map';
+  static const bool defaultShowGpsOnMap = true; // Default enabled
 
   // Secure storage keys for OpenAI API
   static const String _openaiApiKeyKey = 'openai_api_key';
@@ -659,6 +661,26 @@ class SettingsService {
     try {
       final prefs = await SharedPreferences.getInstance();
       return await prefs.setInt(_proximityRadiusMetersKey, meters);
+    } catch (e) {
+      return false;
+    }
+  }
+
+  /// Load show GPS on map setting from persistent storage
+  Future<bool> loadShowGpsOnMap() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      return prefs.getBool(_showGpsOnMapKey) ?? defaultShowGpsOnMap;
+    } catch (e) {
+      return defaultShowGpsOnMap;
+    }
+  }
+
+  /// Save show GPS on map setting to persistent storage
+  Future<bool> saveShowGpsOnMap(bool enabled) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      return await prefs.setBool(_showGpsOnMapKey, enabled);
     } catch (e) {
       return false;
     }

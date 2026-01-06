@@ -1,5 +1,7 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
+import 'package:geolocator/geolocator.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:provider/provider.dart';
 import '../models/location.dart';
@@ -23,15 +25,34 @@ class MapScreen extends StatefulWidget {
   State<MapScreen> createState() => _MapScreenState();
 }
 
-class _MapScreenState extends State<MapScreen> {
+class _MapScreenState extends State<MapScreen> with SingleTickerProviderStateMixin {
   final MapController _mapController = MapController();
   Location? _previousLocation;
   double _currentZoom = 13.0;
   bool _showGeofenceDebug = false;
+  
+  // GPS tracking state
+  Position? _currentGpsPosition;
+  StreamSubscription<Position>? _positionStream;
+  bool _gpsAvailable = false;
+  
+  // Pulse animation for GPS dot
+  late AnimationController _pulseController;
+  late Animation<double> _pulseAnimation;
 
   @override
   void initState() {
     super.initState();
+    
+    // Pulse animation for GPS dot
+    _pulseController = AnimationController(
+      duration: const Duration(milliseconds: 1500),
+      vsync: this,
+    )..repeat(reverse: true);
+    _pulseAnimation = Tween<double>(begin: 0.6, end: 1.0).animate(
+      CurvedAnimation(parent: _pulseController, curve: Curves.easeInOut),
+    );
+    
     _mapController.mapEventStream.listen((event) {
       if (event is MapEventMove || event is MapEventFlingAnimationEnd) {
         setState(() {
@@ -43,6 +64,7 @@ class _MapScreenState extends State<MapScreen> {
     // Listen for map navigation requests
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _listenToMapNavigation();
+      _startGpsTracking();
     });
   }
 
@@ -82,8 +104,93 @@ class _MapScreenState extends State<MapScreen> {
     });
   }
 
+  /// Start continuous GPS position tracking
+  Future<void> _startGpsTracking() async {
+    // Check if GPS tracking is enabled in settings
+    final settingsProvider = Provider.of<SettingsProvider>(
+      context,
+      listen: false,
+    );
+    if (!settingsProvider.showGpsOnMap) {
+      setState(() => _gpsAvailable = false);
+      return;
+    }
+
+    try {
+      // Check permissions
+      final permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied ||
+          permission == LocationPermission.deniedForever) {
+        setState(() => _gpsAvailable = false);
+        return;
+      }
+
+      // Check if location services are enabled
+      final serviceEnabled = await Geolocator.isLocationServiceEnabled();
+      if (!serviceEnabled) {
+        setState(() => _gpsAvailable = false);
+        return;
+      }
+
+      // Get initial position
+      try {
+        final position = await Geolocator.getCurrentPosition(
+          desiredAccuracy: LocationAccuracy.medium,
+          timeLimit: const Duration(seconds: 5),
+        );
+        if (mounted) {
+          setState(() {
+            _currentGpsPosition = position;
+            _gpsAvailable = true;
+          });
+        }
+      } catch (e) {
+        // Try last known position
+        final lastPosition = await Geolocator.getLastKnownPosition();
+        if (lastPosition != null && mounted) {
+          setState(() {
+            _currentGpsPosition = lastPosition;
+            _gpsAvailable = true;
+          });
+        }
+      }
+
+      // Start position stream for continuous updates
+      const locationSettings = LocationSettings(
+        accuracy: LocationAccuracy.medium,
+        distanceFilter: 10, // Update every 10 meters
+      );
+
+      _positionStream = Geolocator.getPositionStream(
+        locationSettings: locationSettings,
+      ).listen(
+        (Position position) {
+          if (mounted) {
+            setState(() {
+              _currentGpsPosition = position;
+              _gpsAvailable = true;
+            });
+          }
+        },
+        onError: (error) {
+          debugPrint('GPS stream error: $error');
+          if (mounted) {
+            setState(() => _gpsAvailable = false);
+          }
+        },
+      );
+    } catch (e) {
+      debugPrint('Failed to start GPS tracking: $e');
+      if (mounted) {
+        setState(() => _gpsAvailable = false);
+      }
+    }
+  }
+
   @override
   void dispose() {
+    _positionStream?.cancel();
+    _pulseController.dispose();
     _mapController.dispose();
     super.dispose();
   }
@@ -181,9 +288,8 @@ class _MapScreenState extends State<MapScreen> {
     );
   }
 
-  /// Creates a marker for the city center
-  Marker _createCityMarker(Location location) {
-    final String cityName = location.name ?? 'Current Location';
+  /// Creates a marker for the search center (selected location)
+  Marker _createSearchCenterMarker(Location location) {
     final bool showLabel = _currentZoom >= 11.0;
 
     return Marker(
@@ -195,9 +301,9 @@ class _MapScreenState extends State<MapScreen> {
               mainAxisSize: MainAxisSize.min,
               children: [
                 const Icon(
-                  Icons.location_city,
-                  color: Colors.blueAccent,
-                  size: 40,
+                  Icons.my_location,
+                  color: Colors.deepPurple,
+                  size: 36,
                   shadows: [
                     Shadow(
                       blurRadius: 4,
@@ -213,7 +319,7 @@ class _MapScreenState extends State<MapScreen> {
                     vertical: 4,
                   ),
                   decoration: BoxDecoration(
-                    color: Colors.blue.withValues(alpha: 0.95),
+                    color: Colors.deepPurple.withValues(alpha: 0.95),
                     borderRadius: BorderRadius.circular(4),
                     boxShadow: const [
                       BoxShadow(
@@ -223,9 +329,9 @@ class _MapScreenState extends State<MapScreen> {
                       ),
                     ],
                   ),
-                  child: Text(
-                    _truncateText(cityName, 18),
-                    style: const TextStyle(
+                  child: const Text(
+                    'Search Center',
+                    style: TextStyle(
                       fontSize: 12,
                       fontWeight: FontWeight.bold,
                       color: Colors.white,
@@ -238,9 +344,9 @@ class _MapScreenState extends State<MapScreen> {
               ],
             )
           : const Icon(
-              Icons.location_city,
-              color: Colors.blueAccent,
-              size: 40,
+              Icons.my_location,
+              color: Colors.deepPurple,
+              size: 36,
               shadows: [
                 Shadow(
                   blurRadius: 4,
@@ -249,6 +355,41 @@ class _MapScreenState extends State<MapScreen> {
                 ),
               ],
             ),
+    );
+  }
+
+  /// Creates a pulsing blue dot marker for current GPS position
+  Widget _buildGpsDotMarker() {
+    return AnimatedBuilder(
+      animation: _pulseAnimation,
+      builder: (context, child) {
+        return Container(
+          width: 24,
+          height: 24,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            color: Colors.blue.withValues(alpha: 0.3 * _pulseAnimation.value),
+          ),
+          child: Center(
+            child: Container(
+              width: 14,
+              height: 14,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: Colors.blue,
+                border: Border.all(color: Colors.white, width: 2),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.blue.withValues(alpha: 0.4),
+                    blurRadius: 4,
+                    spreadRadius: 1,
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
     );
   }
 
@@ -267,6 +408,18 @@ class _MapScreenState extends State<MapScreen> {
     }
   }
 
+  /// Get POI search radius circle with dashed border
+  CircleMarker _getSearchRadiusCircle(Location center, double radiusMeters) {
+    return CircleMarker(
+      point: LatLng(center.latitude, center.longitude),
+      radius: radiusMeters,
+      useRadiusInMeter: true,
+      color: Colors.deepPurple.withValues(alpha: 0.08),
+      borderColor: Colors.deepPurple.withValues(alpha: 0.5),
+      borderStrokeWidth: 2,
+    );
+  }
+
   /// Get geofence circle markers for debug visualization
   List<CircleMarker> _getGeofenceCircles(
       List<Reminder> reminders, double proximityRadius) {
@@ -274,7 +427,8 @@ class _MapScreenState extends State<MapScreen> {
       return CircleMarker(
         point: LatLng(reminder.latitude, reminder.longitude),
         radius: proximityRadius,
-        color: Colors.blue.withOpacity(0.15),
+        useRadiusInMeter: true, // Use geographical radius that scales with zoom
+        color: Colors.blue.withValues(alpha: 0.15),
         borderColor: Colors.blue,
         borderStrokeWidth: 2,
       );
@@ -342,8 +496,8 @@ class _MapScreenState extends State<MapScreen> {
           // Build list of markers
           final List<Marker> markers = [];
 
-          // Add city center marker
-          markers.add(_createCityMarker(selectedCity));
+          // Add search center marker (selected location)
+          markers.add(_createSearchCenterMarker(selectedCity));
 
           // Calculate filtered POIs (same logic as POIListWidget)
           List<POI> poisToShow = [];
@@ -389,13 +543,37 @@ class _MapScreenState extends State<MapScreen> {
             }
           }
 
-          // Get geofence circles if debug mode enabled
-          final geofenceCircles = _showGeofenceDebug 
-              ? _getGeofenceCircles(
-                  reminderProvider.reminders,
-                  settingsProvider.proximityRadiusMeters.toDouble(),
-                ) 
-              : <CircleMarker>[];
+          // Add GPS dot marker on top if available
+          if (_gpsAvailable && _currentGpsPosition != null && settingsProvider.showGpsOnMap) {
+            markers.add(
+              Marker(
+                point: LatLng(
+                  _currentGpsPosition!.latitude,
+                  _currentGpsPosition!.longitude,
+                ),
+                width: 24,
+                height: 24,
+                child: _buildGpsDotMarker(),
+              ),
+            );
+          }
+
+          // Build circle layers
+          final List<CircleMarker> circles = [];
+          
+          // Add POI search radius circle
+          circles.add(_getSearchRadiusCircle(
+            selectedCity,
+            settingsProvider.poiSearchDistance.toDouble(),
+          ));
+
+          // Add geofence circles if debug mode enabled
+          if (_showGeofenceDebug) {
+            circles.addAll(_getGeofenceCircles(
+              reminderProvider.reminders,
+              settingsProvider.proximityRadiusMeters.toDouble(),
+            ));
+          }
 
           return Stack(
             children: [
@@ -417,9 +595,9 @@ class _MapScreenState extends State<MapScreen> {
                     userAgentPackageName: 'com.example.travel_flutter_app',
                     maxZoom: 19,
                   ),
-                  if (_showGeofenceDebug && geofenceCircles.isNotEmpty)
+                  if (circles.isNotEmpty)
                     CircleLayer(
-                      circles: geofenceCircles,
+                      circles: circles,
                     ),
                   MarkerLayer(
                     markers: markers,
@@ -578,11 +756,54 @@ class _MapScreenState extends State<MapScreen> {
                         Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            Icon(Icons.location_city,
-                                color: Colors.blueAccent, size: 20),
+                            Icon(Icons.my_location,
+                                color: Colors.deepPurple, size: 20),
                             const SizedBox(width: 8),
-                            const Text('City Center',
+                            const Text('Search Center',
                                 style: TextStyle(fontSize: 12)),
+                          ],
+                        ),
+                        if (_gpsAvailable && settingsProvider.showGpsOnMap) ...[
+                          const SizedBox(height: 4),
+                          Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Container(
+                                width: 12,
+                                height: 12,
+                                decoration: BoxDecoration(
+                                  shape: BoxShape.circle,
+                                  color: Colors.blue,
+                                  border: Border.all(color: Colors.white, width: 1.5),
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              const Text('GPS Location',
+                                  style: TextStyle(fontSize: 12)),
+                            ],
+                          ),
+                        ],
+                        const SizedBox(height: 4),
+                        Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Container(
+                              width: 18,
+                              height: 18,
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                color: Colors.deepPurple.withValues(alpha: 0.1),
+                                border: Border.all(
+                                  color: Colors.deepPurple.withValues(alpha: 0.5),
+                                  width: 1.5,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            Text(
+                              'Search Radius (${(settingsProvider.poiSearchDistance / 1000).round()}km)',
+                              style: const TextStyle(fontSize: 12),
+                            ),
                           ],
                         ),
                         const SizedBox(height: 4),

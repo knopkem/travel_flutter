@@ -31,6 +31,7 @@ class SettingsProvider extends ChangeNotifier {
   bool _backgroundLocationEnabled = true;
   int _dwellTimeMinutes = SettingsService.defaultDwellTimeMinutes;
   int _proximityRadiusMeters = SettingsService.defaultProximityRadiusMeters;
+  bool _showGpsOnMap = SettingsService.defaultShowGpsOnMap;
 
   SettingsProvider({
     SettingsService? settingsService,
@@ -151,6 +152,9 @@ class SettingsProvider extends ChangeNotifier {
   /// Proximity radius in meters for geofence detection
   int get proximityRadiusMeters => _proximityRadiusMeters;
 
+  /// Whether to show GPS dot on map
+  bool get showGpsOnMap => _showGpsOnMap;
+
   /// Whether settings are currently being loaded
   bool get isLoading => _isLoading;
 
@@ -170,6 +174,7 @@ class SettingsProvider extends ChangeNotifier {
         await _settingsService.loadBackgroundLocationEnabled();
     _dwellTimeMinutes = await _settingsService.loadDwellTimeMinutes();
     _proximityRadiusMeters = await _settingsService.loadProximityRadiusMeters();
+    _showGpsOnMap = await _settingsService.loadShowGpsOnMap();
     _isLoading = true;
     notifyListeners();
 
@@ -491,5 +496,12 @@ class SettingsProvider extends ChangeNotifier {
         await locationService.onReminderAdded(reminder);
       }
     }
+  }
+
+  /// Update show GPS on map setting
+  Future<void> updateShowGpsOnMap(bool enabled) async {
+    await _settingsService.saveShowGpsOnMap(enabled);
+    _showGpsOnMap = enabled;
+    notifyListeners();
   }
 }

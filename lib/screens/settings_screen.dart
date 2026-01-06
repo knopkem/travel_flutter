@@ -8,6 +8,7 @@ import '../models/poi_source.dart';
 import '../models/poi.dart';
 import '../providers/settings_provider.dart';
 import '../providers/reminder_provider.dart';
+import '../providers/location_provider.dart';
 import '../services/location_monitor_service.dart';
 import '../services/notification_service.dart';
 import '../utils/permission_dialog_helper.dart';
@@ -63,6 +64,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               _buildPoiTypesSection(context, settingsProvider),
               _buildInterestsSection(context, settingsProvider),
               _buildDistanceSection(context, settingsProvider),
+              _buildMapDisplaySection(context, settingsProvider),
               _buildAboutSection(context),
             ],
           );
@@ -612,6 +614,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
   Future<void> _createTestReminder(BuildContext context) async {
     final reminderProvider =
         Provider.of<ReminderProvider>(context, listen: false);
+    final locationProvider =
+        Provider.of<LocationProvider>(context, listen: false);
     final settingsProvider =
         Provider.of<SettingsProvider>(context, listen: false);
     final scaffoldMessenger = ScaffoldMessenger.of(context);
@@ -626,32 +630,46 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
     if (!mounted) return;
 
-    // Try to get location quickly - use last known position first
-    Position? position = await Geolocator.getLastKnownPosition();
+    // Try to use the currently selected city location first (to match displayed location)
+    double latitude;
+    double longitude;
 
-    if (position == null) {
-      // Fall back to getting current position with short timeout
-      scaffoldMessenger.showSnackBar(
-        const SnackBar(
-          content: Text('Getting location...'),
-          duration: Duration(seconds: 2),
-        ),
-      );
+    if (locationProvider.selectedCity != null) {
+      // Use the selected city coordinates (may be rounded for GPS locations)
+      latitude = locationProvider.selectedCity!.latitude;
+      longitude = locationProvider.selectedCity!.longitude;
+      debugPrint('Using selected city location: $latitude, $longitude');
+    } else {
+      // Fall back to fetching current GPS position
+      Position? position = await Geolocator.getLastKnownPosition();
 
-      try {
-        position = await Geolocator.getCurrentPosition(
-          desiredAccuracy: LocationAccuracy.medium,
-          timeLimit: const Duration(seconds: 5),
-        );
-      } catch (e) {
+      if (position == null) {
         scaffoldMessenger.showSnackBar(
-          SnackBar(
-            content: Text('Failed to get location: $e'),
-            backgroundColor: Colors.red,
+          const SnackBar(
+            content: Text('Getting location...'),
+            duration: Duration(seconds: 2),
           ),
         );
-        return;
+
+        try {
+          position = await Geolocator.getCurrentPosition(
+            desiredAccuracy: LocationAccuracy.medium,
+            timeLimit: const Duration(seconds: 5),
+          );
+        } catch (e) {
+          scaffoldMessenger.showSnackBar(
+            SnackBar(
+              content: Text('Failed to get location: $e'),
+              backgroundColor: Colors.red,
+            ),
+          );
+          return;
+        }
       }
+
+      latitude = position.latitude;
+      longitude = position.longitude;
+      debugPrint('Using fresh GPS position: $latitude, $longitude');
     }
 
     if (!mounted) return;
@@ -661,14 +679,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
       id: 'test_poi_${DateTime.now().millisecondsSinceEpoch}',
       name: 'Test Location',
       type: POIType.supermarket,
-      latitude: position.latitude,
-      longitude: position.longitude,
+      latitude: latitude,
+      longitude: longitude,
       distanceFromCity: 0,
       sources: [POISource.googlePlaces],
       notabilityScore: 50,
       discoveredAt: DateTime.now(),
       description:
-          'Test POI for background monitoring at coordinates: ${position.latitude.toStringAsFixed(6)}, ${position.longitude.toStringAsFixed(6)}',
+          'Test POI for background monitoring at coordinates: ${latitude.toStringAsFixed(6)}, ${longitude.toStringAsFixed(6)}',
     );
 
     // Default shopping items for testing
@@ -687,7 +705,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       scaffoldMessenger.showSnackBar(
         SnackBar(
           content: Text(
-            'Test reminder created at ${position.latitude.toStringAsFixed(4)}, ${position.longitude.toStringAsFixed(4)}',
+            'Test reminder created at ${latitude.toStringAsFixed(4)}, ${longitude.toStringAsFixed(4)}',
           ),
           backgroundColor: Colors.green,
           duration: const Duration(seconds: 4),
@@ -1279,6 +1297,54 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 padding: const EdgeInsets.symmetric(vertical: 8),
                 child: Text(
                   'Larger distances may take longer to fetch results',
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: Colors.grey[600],
+                      ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildMapDisplaySection(
+    BuildContext context,
+    SettingsProvider settingsProvider,
+  ) {
+    return ExpansionTile(
+      initiallyExpanded: false,
+      leading: const Icon(Icons.map),
+      title: const Text(
+        'Map Display',
+        style: TextStyle(
+          fontSize: 18,
+          fontWeight: FontWeight.bold,
+        ),
+      ),
+      subtitle: const Text('Configure map visualization'),
+      children: [
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              SwitchListTile(
+                title: const Text('Show GPS Location'),
+                subtitle: const Text(
+                  'Display real-time GPS position as a blue dot on the map',
+                ),
+                value: settingsProvider.showGpsOnMap,
+                onChanged: (value) async {
+                  await settingsProvider.updateShowGpsOnMap(value);
+                },
+                secondary: const Icon(Icons.gps_fixed),
+              ),
+              Padding(
+                padding: const EdgeInsets.all(16),
+                child: Text(
+                  'The GPS dot shows your current real-time location, while the search center marker shows the selected location used for POI discovery.',
                   style: Theme.of(context).textTheme.bodySmall?.copyWith(
                         color: Colors.grey[600],
                       ),
