@@ -473,6 +473,20 @@ class SettingsProvider extends ChangeNotifier {
     await _settingsService.saveDwellTimeMinutes(minutes);
     _dwellTimeMinutes = minutes;
     notifyListeners();
+    
+    // Re-register all geofences with new dwell time
+    final locationService = LocationMonitorService();
+    if (locationService.isMonitoringEnabled) {
+      final reminderService = ReminderService();
+      final reminders = await reminderService.loadReminders();
+      
+      // Stop and restart monitoring to pick up new dwell time
+      debugPrint('Dwell time updated to $minutes minutes - re-registering geofences');
+      await locationService.stopMonitoring();
+      if (reminders.isNotEmpty) {
+        await locationService.startMonitoring(reminders);
+      }
+    }
   }
 
   /// Update proximity radius in meters and re-register geofences

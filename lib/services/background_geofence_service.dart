@@ -105,6 +105,14 @@ class BackgroundGeofenceService {
     debugPrint('BackgroundGeofence: Monitoring stopped');
   }
 
+  /// Update check interval when dwell time setting changes
+  Future<void> updateCheckInterval() async {
+    if (!_isMonitoring) return;
+    
+    debugPrint('BackgroundGeofence: Notifying service to update interval');
+    _service.invoke('updateInterval');
+  }
+
   /// Background service entry point
   @pragma('vm:entry-point')
   static void _onStart(ServiceInstance service) async {
@@ -114,18 +122,42 @@ class BackgroundGeofenceService {
       service.stopSelf();
     });
 
-    // Check interval: Android can do 10 min, iOS will be opportunistic
-    final checkInterval = Platform.isIOS 
+    // Load dwell time setting for check interval
+    final prefs = await SharedPreferences.getInstance();
+    int dwellTimeMinutes = prefs.getInt('flutter.dwell_time_minutes') ?? SettingsService.defaultDwellTimeMinutes;
+    
+    // Check interval: Use dwell time setting for Android, iOS uses background fetch minimum
+    Duration checkInterval = Platform.isIOS 
         ? const Duration(minutes: 15)  // iOS background fetch minimum
-        : const Duration(minutes: 10);
+        : Duration(minutes: dwellTimeMinutes);
 
-    debugPrint('BackgroundGeofence: Service started with ${checkInterval.inMinutes} min interval');
+    debugPrint('BackgroundGeofence: Service started with ${checkInterval.inMinutes} min interval (dwell time: $dwellTimeMinutes)');
 
     // Initial check
     await _checkReminders();
 
+    // Create a cancelable timer that can be updated
+    Timer? periodicTimer;
+    
+    // Listen for setting changes to update interval dynamically
+    service.on('updateInterval').listen((event) async {
+      periodicTimer?.cancel();
+      final newPrefs = await SharedPreferences.getInstance();
+      dwellTimeMinutes = newPrefs.getInt('flutter.dwell_time_minutes') ?? SettingsService.defaultDwellTimeMinutes;
+      checkInterval = Platform.isIOS 
+          ? const Duration(minutes: 15)
+          : Duration(minutes: dwellTimeMinutes);
+      debugPrint('BackgroundGeofence: Interval updated to ${checkInterval.inMinutes} min');
+      
+      // Restart periodic checks with new interval
+      periodicTimer = Timer.periodic(checkInterval, (timer) async {
+        debugPrint('BackgroundGeofence: Periodic check triggered');
+        await _checkReminders();
+      });
+    });
+
     // Run periodic checks
-    Timer.periodic(checkInterval, (timer) async {
+    periodicTimer = Timer.periodic(checkInterval, (timer) async {
       debugPrint('BackgroundGeofence: Periodic check triggered');
       await _checkReminders();
     });
