@@ -44,6 +44,8 @@ enum DebugLogType {
   event,
   error,
   strategy,
+  geofenceEnter,
+  geofenceDwell,
 }
 
 class DebugLogEntry {
@@ -71,6 +73,10 @@ class DebugLogEntry {
         return '❌';
       case DebugLogType.strategy:
         return '⚙️';
+      case DebugLogType.geofenceEnter:
+        return '🚶';
+      case DebugLogType.geofenceDwell:
+        return '⏱️';
       case DebugLogType.info:
         return 'ℹ️';
     }
