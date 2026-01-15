@@ -218,23 +218,42 @@ class DynamicGeofenceManager {
       final prefs = await SharedPreferences.getInstance();
       final ids = prefs.getStringList('registered_geofence_ids') ?? [];
       _registeredGeofenceIds = ids.toSet();
-      debugPrint('DynamicGeofenceManager: Loaded ${_registeredGeofenceIds.length} registered IDs');
+      debugPrint('DynamicGeofenceManager: Loaded ${_registeredGeofenceIds.length} registered IDs from storage');
       
       if (_registeredGeofenceIds.isNotEmpty) {
+        DebugLogService().log(
+          'Found ${_registeredGeofenceIds.length} previously registered geofences',
+          type: DebugLogType.info,
+        );
+        
         // Log existing registrations with brand names
         for (final id in _registeredGeofenceIds) {
-          final reminder = _allReminders.firstWhere(
-            (r) => r.id == id,
-            orElse: () => _allReminders.first, // fallback
-          );
-          DebugLogService().log(
-            'Already registered: ${reminder.brandName}',
-            type: DebugLogType.info,
-          );
+          try {
+            final reminder = _allReminders.firstWhere((r) => r.id == id);
+            DebugLogService().log(
+              'Already registered: ${reminder.brandName}',
+              type: DebugLogType.info,
+            );
+          } catch (e) {
+            // ID might be stale if reminder was deleted
+            DebugLogService().log(
+              'Found stale geofence ID in storage: $id',
+              type: DebugLogType.info,
+            );
+          }
         }
+      } else {
+        DebugLogService().log(
+          'No previously registered geofences found',
+          type: DebugLogType.info,
+        );
       }
     } catch (e) {
       debugPrint('DynamicGeofenceManager: Error loading registered IDs: $e');
+      DebugLogService().log(
+        'Error loading registered IDs: $e',
+        type: DebugLogType.error,
+      );
     }
   }
 
