@@ -10,7 +10,7 @@ import '../services/debug_log_service.dart';
 class GeofenceDebugOverlay extends StatefulWidget {
   final bool showDebug;
   final VoidCallback onToggleDebug;
-  
+
   const GeofenceDebugOverlay({
     super.key,
     required this.showDebug,
@@ -46,7 +46,7 @@ class _GeofenceDebugOverlayState extends State<GeofenceDebugOverlay> {
   Widget build(BuildContext context) {
     final debugLogService = DebugLogService();
     final eventLogs = debugLogService.getLogs();
-    
+
     return Consumer2<ReminderProvider, SettingsProvider>(
       builder: (context, reminderProvider, settingsProvider, child) {
         final reminders = reminderProvider.reminders;
@@ -57,15 +57,18 @@ class _GeofenceDebugOverlayState extends State<GeofenceDebugOverlay> {
           children: [
             // Debug toggle FAB
             Positioned(
-              bottom: 80,
+              top: 16,
               right: 16,
               child: FloatingActionButton(
                 mini: true,
                 heroTag: 'debug_toggle',
                 onPressed: widget.onToggleDebug,
-                backgroundColor: widget.showDebug ? Colors.orange : Colors.grey[700],
+                backgroundColor:
+                    widget.showDebug ? Colors.orange : Colors.grey[700],
                 child: Icon(
-                  widget.showDebug ? Icons.bug_report : Icons.bug_report_outlined,
+                  widget.showDebug
+                      ? Icons.bug_report
+                      : Icons.bug_report_outlined,
                   size: 20,
                 ),
               ),
@@ -160,7 +163,8 @@ class _GeofenceDebugOverlayState extends State<GeofenceDebugOverlay> {
                               ],
                             ),
                             const SizedBox(height: 8),
-                            if (stats != null && stats['total']! > stats['active']!)
+                            if (stats != null &&
+                                stats['total']! > stats['active']!)
                               Container(
                                 padding: const EdgeInsets.all(8),
                                 decoration: BoxDecoration(
@@ -226,7 +230,8 @@ class _GeofenceDebugOverlayState extends State<GeofenceDebugOverlay> {
                                     style: TextButton.styleFrom(
                                       padding: EdgeInsets.zero,
                                       minimumSize: const Size(0, 0),
-                                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                      tapTargetSize:
+                                          MaterialTapTargetSize.shrinkWrap,
                                     ),
                                     child: const Text(
                                       'Clear',
@@ -237,7 +242,8 @@ class _GeofenceDebugOverlayState extends State<GeofenceDebugOverlay> {
                               ),
                               const SizedBox(height: 4),
                               Container(
-                                constraints: const BoxConstraints(maxHeight: 120),
+                                constraints:
+                                    const BoxConstraints(maxHeight: 120),
                                 child: ListView.builder(
                                   shrinkWrap: true,
                                   itemCount: eventLogs.length,
@@ -263,15 +269,17 @@ class _GeofenceDebugOverlayState extends State<GeofenceDebugOverlay> {
                                       default:
                                         logColor = Colors.grey[700]!;
                                     }
-                                    
+
                                     return Padding(
                                       padding: const EdgeInsets.only(bottom: 3),
                                       child: Row(
-                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
                                         children: [
                                           Text(
                                             log.typeIcon,
-                                            style: const TextStyle(fontSize: 10),
+                                            style:
+                                                const TextStyle(fontSize: 10),
                                           ),
                                           const SizedBox(width: 4),
                                           Text(

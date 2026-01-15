@@ -247,11 +247,22 @@ class DynamicGeofenceManager {
           dwellTimeMinutes * 60 * 1000, // Convert to milliseconds
         );
         _registeredGeofenceIds.add(id);
+      }
 
-        // Check if already inside this geofence
+      // After all registrations, check if we're already inside any of the newly registered geofences
+      for (final id in toRegister) {
+        final reminder = nearestReminders.firstWhere((r) => r.id == id);
+        final distance =
+            remindersWithDistance.firstWhere((e) => e.key.id == id).value;
+
         if (distance <= proximityRadius) {
+          // Skip if already pending to prevent duplicates
+          if (_pendingInitialChecks.contains(id)) {
+            continue;
+          }
+
           debugPrint(
-              'DynamicGeofenceManager: Already inside geofence: ${reminder.brandName}');
+              'DynamicGeofenceManager: Already inside newly registered geofence: ${reminder.brandName}');
           DebugLogService().log(
             'Already inside: ${reminder.brandName} (${distance.toStringAsFixed(0)}m)',
             type: DebugLogType.geofenceEnter,
