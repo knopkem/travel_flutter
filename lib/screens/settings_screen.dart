@@ -11,6 +11,7 @@ import '../providers/reminder_provider.dart';
 import '../providers/location_provider.dart';
 import '../services/location_monitor_service.dart';
 import '../services/notification_service.dart';
+import '../services/geofence_strategy_manager.dart';
 import '../utils/permission_dialog_helper.dart';
 import '../utils/battery_optimization_helper.dart';
 import 'reminders_overview_screen.dart';
@@ -458,6 +459,65 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           ),
                         ],
                       ),
+                    ),
+                    const SizedBox(height: 16),
+                    // Geofence strategy status indicator
+                    StreamBuilder<GeofenceStrategy>(
+                      stream: GeofenceStrategyManager().strategyStream,
+                      initialData: GeofenceStrategyManager().currentStrategy,
+                      builder: (context, snapshot) {
+                        final strategyManager = GeofenceStrategyManager();
+                        final strategy = snapshot.data ?? GeofenceStrategy.native;
+                        final isNative = strategy == GeofenceStrategy.native;
+                        final fallbackReason = strategyManager.fallbackReason;
+
+                        return Container(
+                          margin: const EdgeInsets.symmetric(horizontal: 16),
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: isNative ? Colors.green[50] : Colors.orange[50],
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(
+                              color: isNative ? Colors.green[200]! : Colors.orange[200]!,
+                            ),
+                          ),
+                          child: Row(
+                            children: [
+                              Icon(
+                                isNative ? Icons.check_circle : Icons.info,
+                                color: isNative ? Colors.green[700] : Colors.orange[700],
+                                size: 24,
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      'Using: ${strategyManager.getStrategyDescription()}',
+                                      style: TextStyle(
+                                        fontWeight: FontWeight.bold,
+                                        color: isNative ? Colors.green[900] : Colors.orange[900],
+                                        fontSize: 14,
+                                      ),
+                                    ),
+                                    if (!isNative && fallbackReason != null) ...[
+                                      const SizedBox(height: 4),
+                                      Text(
+                                        'Reason: $fallbackReason',
+                                        style: TextStyle(
+                                          color: Colors.orange[800],
+                                          fontSize: 11,
+                                        ),
+                                      ),
+                                    ],
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                        );
+                      },
                     ),
                     const SizedBox(height: 16),
                     // Battery optimization status card

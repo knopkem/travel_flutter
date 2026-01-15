@@ -3,7 +3,7 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:geolocator/geolocator.dart';
-import 'package:permission_handler/permission_handler.dart';
+import 'package:permission_handler/permission_handler.dart' as permission_handler;
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/poi.dart';
 import '../models/reminder.dart';
@@ -13,6 +13,7 @@ import 'dwell_time_tracker.dart';
 import 'notification_service.dart';
 import 'reminder_service.dart';
 import 'foreground_notification_service.dart';
+import 'geofence_strategy_manager.dart';
 
 /// Unified service for monitoring location and triggering reminders on both platforms
 /// Uses native geofencing for both iOS and Android
@@ -22,6 +23,7 @@ class LocationMonitorService {
   factory LocationMonitorService() => _instance;
   LocationMonitorService._internal() {
     _setupMethodCallHandler();
+    _setupPermissionListener();
   }
 
   static const MethodChannel _channel =
@@ -37,6 +39,10 @@ class LocationMonitorService {
 
   // Dynamic geofence manager for Android only
   DynamicGeofenceManager? _dynamicGeofenceManager;
+
+  // Permission monitoring
+  StreamSubscription<ServiceStatus>? _locationServiceSubscription;
+  Timer? _permissionCheckTimer;
 
   bool get isMonitoringEnabled => _isMonitoring;
 
@@ -366,7 +372,7 @@ class LocationMonitorService {
   /// Check if has background location permission
   Future<bool> hasBackgroundPermission() async {
     if (Platform.isAndroid) {
-      final backgroundStatus = await Permission.locationAlways.status;
+      final backgroundStatus = await permission_handler.Permission.locationAlways.status;
       return backgroundStatus.isGranted;
     } else {
       final permission = await Geolocator.checkPermission();
@@ -431,7 +437,7 @@ class LocationMonitorService {
 
     if (Platform.isIOS) {
       debugPrint('iOS: Opening settings for Always permission');
-      await openAppSettings();
+      await permission_handler.openAppSettings();
       await Future.delayed(const Duration(milliseconds: 500));
       final newPermission = await Geolocator.checkPermission();
       debugPrint('iOS: Permission after settings: $newPermission');
@@ -439,7 +445,7 @@ class LocationMonitorService {
     }
 
     // Android
-    final currentAlwaysStatus = await Permission.locationAlways.status;
+    final currentAlwaysStatus = await permission_handler.Permission.locationAlways.status;
     debugPrint('Android locationAlways status: $currentAlwaysStatus');
 
     if (currentAlwaysStatus.isGranted) {
@@ -449,14 +455,79 @@ class LocationMonitorService {
 
     if (currentAlwaysStatus.isPermanentlyDenied) {
       debugPrint('Always permission permanently denied, opening settings');
-      await openAppSettings();
+      await permission_handler.openAppSettings();
       return false;
     }
 
     debugPrint('Android: Requesting locationAlways permission...');
-    final backgroundStatus = await Permission.locationAlways.request();
+    final backgroundStatus = await permission_handler.Permission.locationAlways.request();
     debugPrint('Android: Background location status: $backgroundStatus');
 
     return backgroundStatus.isGranted;
+  }
+
+  /// Check if Google Play Services is available (Android only)
+  Future<bool> isPlayServicesAvailable() async {
+    if (!Platform.isAndroid) {
+      return true; // iOS always uses native Core Location
+    }
+
+    try {
+      final result = await _channel.invokeMethod<bool>('checkPlayServicesAvailable');
+      return result ?? false;
+    } catch (e) {
+      debugPrint('Error checking Play Services availability: $e');
+      return false;
+    }
+  }
+
+  /// Set up permission revocation listener
+  void _setupPermissionListener() {
+    // Listen to location service status changes
+    _locationServiceSubscription = Geolocator.getServiceStatusStream().listen((status) {
+      debugPrint('Location service status changed: $status');
+      if (status == ServiceStatus.disabled) {
+        _handlePermissionRevocation('Location services disabled');
+      }
+    });
+
+    // Periodically check background permission (every 30 seconds when monitoring)
+    _permissionCheckTimer = Timer.periodic(const Duration(seconds: 30), (_) async {
+      if (!_isMonitoring) return;
+
+      final hasBackgroundPerm = await hasBackgroundPermission();
+      if (!hasBackgroundPerm) {
+        debugPrint('Background location permission revoked');
+        await _handlePermissionRevocation('Background location permission revoked');
+      }
+    });
+  }
+
+  /// Handle permission revocation by falling back to polling
+  Future<void> _handlePermissionRevocation(String reason) async {
+    if (!_isMonitoring) return;
+
+    final strategyManager = GeofenceStrategyManager();
+    if (!strategyManager.isUsingNativeGeofencing) {
+      return; // Already using polling, nothing to do
+    }
+
+    debugPrint('Permission revoked: $reason. Falling back to polling.');
+    
+    // Fall back to polling
+    await strategyManager.fallbackToPolling(reason);
+    
+    // Stop native monitoring
+    await stopMonitoring();
+    
+    // The ReminderProvider will handle starting polling on next app launch
+    // For now, just log the situation
+    debugPrint('Native monitoring stopped. Polling will start on next app launch.');
+  }
+
+  /// Dispose resources
+  void dispose() {
+    _locationServiceSubscription?.cancel();
+    _permissionCheckTimer?.cancel();
   }
 }

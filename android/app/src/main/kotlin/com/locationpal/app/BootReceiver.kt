@@ -27,49 +27,57 @@ class BootReceiver : BroadcastReceiver() {
         Log.d(TAG, "Device boot completed (action: $action), re-registering geofences")
 
         try {
-            // Load persisted geofence IDs and details from SharedPreferences
+            // Load persisted geofence strategy from SharedPreferences
             val sharedPrefs = context.getSharedPreferences("FlutterSharedPreferences", Context.MODE_PRIVATE)
+            val strategy = sharedPrefs.getString("flutter.geofence_strategy", "native")
             val remindersJson = sharedPrefs.getString("flutter.shopping_reminders", null)
             val dwellTimeMinutes = sharedPrefs.getInt("flutter.dwell_time_minutes", 1)
             val proximityRadius = sharedPrefs.getInt("flutter.proximity_radius_meters", 150)
+            val monitoringEnabled = sharedPrefs.getBoolean("flutter.monitoring_enabled", false)
 
-            if (remindersJson == null) {
-                Log.d(TAG, "No reminders to re-register")
+            if (remindersJson == null || !monitoringEnabled) {
+                Log.d(TAG, "No reminders to re-register or monitoring disabled")
                 return
             }
 
-            // Parse reminders JSON
-            val remindersArray = JSONArray(remindersJson)
-            val geofenceManager = GeofenceManager(context)
+            // Restart service based on persisted strategy
+            if (strategy == "native") {
+                Log.d(TAG, "Using native geofencing strategy")
+                
+                // Parse reminders JSON and re-register geofences
+                val remindersArray = JSONArray(remindersJson)
+                val geofenceManager = GeofenceManager(context)
 
-            for (i in 0 until remindersArray.length()) {
-                val reminder = remindersArray.getJSONObject(i)
-                val id = reminder.getString("id")
-                val latitude = reminder.getDouble("latitude")
-                val longitude = reminder.getDouble("longitude")
+                for (i in 0 until remindersArray.length()) {
+                    val reminder = remindersArray.getJSONObject(i)
+                    val id = reminder.getString("id")
+                    val latitude = reminder.getDouble("latitude")
+                    val longitude = reminder.getDouble("longitude")
 
-                // Re-register geofence
-                geofenceManager.registerGeofence(
-                    id = id,
-                    latitude = latitude,
-                    longitude = longitude,
-                    radius = proximityRadius.toFloat(),
-                    dwellTimeMs = dwellTimeMinutes * 60 * 1000,
-                    onSuccess = {
-                        Log.d(TAG, "Re-registered geofence: $id")
-                    },
-                    onFailure = { error ->
-                        Log.e(TAG, "Failed to re-register geofence $id: $error")
-                    }
-                )
-            }
+                    // Re-register geofence
+                    geofenceManager.registerGeofence(
+                        id = id,
+                        latitude = latitude,
+                        longitude = longitude,
+                        radius = proximityRadius.toFloat(),
+                        dwellTimeMs = dwellTimeMinutes * 60 * 1000,
+                        onSuccess = {
+                            Log.d(TAG, "Re-registered geofence: $id")
+                        },
+                        onFailure = { error ->
+                            Log.e(TAG, "Failed to re-register geofence $id: $error")
+                        }
+                    )
+                }
 
-            Log.d(TAG, "Finished re-registering ${remindersArray.length()} geofences")
-            
-            // Restart the background service if monitoring was active
-            val monitoringEnabled = sharedPrefs.getBoolean("flutter.monitoring_enabled", false)
-            if (monitoringEnabled && remindersArray.length() > 0) {
+                Log.d(TAG, "Finished re-registering ${remindersArray.length()} native geofences")
+                
+                // Restart the foreground notification service
                 restartBackgroundService(context)
+            } else {
+                Log.d(TAG, "Using polling strategy - Flutter background service will auto-restart")
+                // Polling service (flutter_background_service) auto-restarts on boot
+                // No need to manually restart here
             }
         } catch (e: Exception) {
             Log.e(TAG, "Error re-registering geofences: ${e.message}", e)

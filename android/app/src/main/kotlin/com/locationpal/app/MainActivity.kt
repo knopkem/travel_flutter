@@ -4,6 +4,8 @@ import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.os.Build
 import android.os.Bundle
+import com.google.android.gms.common.ConnectionResult
+import com.google.android.gms.common.GoogleApiAvailability
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
@@ -43,6 +45,12 @@ class MainActivity : FlutterActivity() {
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, GEOFENCE_CHANNEL)
             .setMethodCallHandler { call, result ->
                 when (call.method) {
+                    "checkPlayServicesAvailable" -> {
+                        val availability = GoogleApiAvailability.getInstance()
+                        val resultCode = availability.isGooglePlayServicesAvailable(applicationContext)
+                        val isAvailable = resultCode == ConnectionResult.SUCCESS
+                        result.success(isAvailable)
+                    }
                     "registerGeofence" -> {
                         val id = call.argument<String>("id")
                         val latitude = call.argument<Double>("latitude")

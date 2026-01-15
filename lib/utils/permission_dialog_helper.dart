@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 /// Helper for showing permission rationale dialogs
 class PermissionDialogHelper {
@@ -192,5 +193,48 @@ class PermissionDialogHelper {
         duration: const Duration(seconds: 8),
       ),
     );
+  }
+
+  /// Show Google Play Services update dialog
+  static Future<bool> showPlayServicesUpdateDialog(BuildContext context) async {
+    final result = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: Row(
+            children: [
+              Icon(Icons.warning, color: Colors.orange[700]),
+              const SizedBox(width: 8),
+              const Text('Google Play Services Required'),
+            ],
+          ),
+          content: const Text(
+            'Location reminders require Google Play Services to work efficiently.\n\n'
+            'You can update Google Play Services from the Play Store, or continue with basic polling-based monitoring (uses more battery).',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: const Text('Use Basic Monitoring'),
+            ),
+            ElevatedButton(
+              onPressed: () async {
+                // Open Play Store to Google Play Services
+                final uri = Uri.parse('https://play.google.com/store/apps/details?id=com.google.android.gms');
+                if (await canLaunchUrl(uri)) {
+                  await launchUrl(uri, mode: LaunchMode.externalApplication);
+                }
+                Navigator.of(context).pop(true);
+              },
+              style: ElevatedButton.styleFrom(backgroundColor: Colors.orange),
+              child: const Text('Update Play Services'),
+            ),
+          ],
+        );
+      },
+    );
+
+    return result ?? false;
   }
 }

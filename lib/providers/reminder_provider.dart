@@ -1,9 +1,11 @@
+import 'dart:io';
 import 'package:flutter/foundation.dart';
 import '../models/poi.dart';
 import '../models/reminder.dart';
 import '../services/reminder_service.dart';
 import '../services/location_monitor_service.dart';
 import '../services/background_geofence_service.dart';
+import '../services/geofence_strategy_manager.dart';
 import '../utils/brand_matcher.dart';
 
 /// Provider for managing shopping reminders
@@ -11,6 +13,7 @@ class ReminderProvider extends ChangeNotifier {
   final ReminderService _reminderService = ReminderService();
   final LocationMonitorService _locationService = LocationMonitorService();
   final BackgroundGeofenceService _backgroundGeofence = BackgroundGeofenceService();
+  final GeofenceStrategyManager _strategyManager = GeofenceStrategyManager();
 
   List<Reminder> _reminders = [];
   bool _isLoading = false;
@@ -28,21 +31,64 @@ class ReminderProvider extends ChangeNotifier {
     notifyListeners();
 
     try {
-      // Initialize background geofencing
+      // Initialize strategy manager and background service
+      await _strategyManager.initialize();
       await _backgroundGeofence.initialize();
       
       _reminders = await _reminderService.loadReminders();
 
       // Start monitoring if reminders exist
       if (_reminders.isNotEmpty) {
-        await _locationService.startMonitoring(_reminders);
-        await _backgroundGeofence.startMonitoring(_reminders);
+        await _startMonitoringWithStrategy();
       }
     } catch (e) {
       _error = 'Failed to load reminders: $e';
     } finally {
       _isLoading = false;
       notifyListeners();
+    }
+  }
+
+  /// Start monitoring using the appropriate strategy based on availability
+  Future<void> _startMonitoringWithStrategy() async {
+    if (_reminders.isEmpty) return;
+
+    // Always re-evaluate strategy on app launch to allow recovery
+    bool canUseNative = true;
+    String? fallbackReason;
+
+    // Check 1: Platform support (iOS always uses native, Android needs Play Services)
+    if (Platform.isAndroid) {
+      final hasPlayServices = await _locationService.isPlayServicesAvailable();
+      if (!hasPlayServices) {
+        canUseNative = false;
+        fallbackReason = 'Google Play Services unavailable';
+      }
+    }
+
+    // Check 2: Background location permission
+    if (canUseNative) {
+      final hasBackgroundPermission = await _locationService.hasBackgroundPermission();
+      if (!hasBackgroundPermission) {
+        canUseNative = false;
+        fallbackReason = 'Background location permission denied';
+      }
+    }
+
+    // Apply the appropriate strategy
+    if (canUseNative) {
+      debugPrint('Starting native geofencing monitoring');
+      await _strategyManager.useNativeGeofencing();
+      await _locationService.startMonitoring(_reminders);
+      // Stop polling if it was running
+      await _backgroundGeofence.stopMonitoring();
+    } else {
+      debugPrint('Falling back to polling monitoring: $fallbackReason');
+      await _strategyManager.fallbackToPolling(fallbackReason!);
+      // Stop native monitoring if it was running
+      await _locationService.stopMonitoring();
+      // Start polling
+      await _backgroundGeofence.startMonitoring(_reminders);
     }
   }
 
@@ -106,13 +152,15 @@ class ReminderProvider extends ChangeNotifier {
       if (success) {
         _reminders.add(reminder);
 
-        // Restart monitoring with updated reminders
-        await _locationService.stopMonitoring();
-        await _locationService.startMonitoring(_reminders);
-        await _backgroundGeofence.updateReminders(_reminders);
-
-        // Notify location service of new reminder for dynamic geofence management
-        await _locationService.onReminderAdded(reminder);
+        // Restart monitoring with updated reminders using current strategy
+        if (_strategyManager.isUsingNativeGeofencing) {
+          await _locationService.stopMonitoring();
+          await _locationService.startMonitoring(_reminders);
+          // Notify location service of new reminder for dynamic geofence management
+          await _locationService.onReminderAdded(reminder);
+        } else {
+          await _backgroundGeofence.updateReminders(_reminders);
+        }
 
         notifyListeners();
         return true;
@@ -159,13 +207,15 @@ class ReminderProvider extends ChangeNotifier {
       if (success) {
         _reminders.add(reminder);
 
-        // Restart monitoring with updated reminders
-        await _locationService.stopMonitoring();
-        await _locationService.startMonitoring(_reminders);
-        await _backgroundGeofence.updateReminders(_reminders);
-
-        // Notify location service of new reminder for dynamic geofence management
-        await _locationService.onReminderAdded(reminder);
+        // Restart monitoring with updated reminders using current strategy
+        if (_strategyManager.isUsingNativeGeofencing) {
+          await _locationService.stopMonitoring();
+          await _locationService.startMonitoring(_reminders);
+          // Notify location service of new reminder for dynamic geofence management
+          await _locationService.onReminderAdded(reminder);
+        } else {
+          await _backgroundGeofence.updateReminders(_reminders);
+        }
 
         notifyListeners();
         return true;
@@ -188,16 +238,20 @@ class ReminderProvider extends ChangeNotifier {
       if (success) {
         _reminders.removeWhere((r) => r.id == id);
 
-        // Notify location service of reminder removal
-        await _locationService.onReminderRemoved(id);
-
-        // Restart monitoring or stop if no reminders left
-        await _locationService.stopMonitoring();
-        if (_reminders.isNotEmpty) {
-          await _locationService.startMonitoring(_reminders);
-          await _backgroundGeofence.updateReminders(_reminders);
+        // Restart monitoring or stop if no reminders left using current strategy
+        if (_strategyManager.isUsingNativeGeofencing) {
+          // Notify location service of reminder removal
+          await _locationService.onReminderRemoved(id);
+          await _locationService.stopMonitoring();
+          if (_reminders.isNotEmpty) {
+            await _locationService.startMonitoring(_reminders);
+          }
         } else {
-          await _backgroundGeofence.stopMonitoring();
+          if (_reminders.isNotEmpty) {
+            await _backgroundGeofence.updateReminders(_reminders);
+          } else {
+            await _backgroundGeofence.stopMonitoring();
+          }
         }
 
         notifyListeners();

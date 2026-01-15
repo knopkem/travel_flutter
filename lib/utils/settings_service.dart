@@ -3,6 +3,7 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import '../models/poi_category.dart';
 import '../models/poi_type.dart';
 import '../models/poi_source.dart';
+import '../services/geofence_strategy_manager.dart';
 
 /// Service for persisting user settings using SharedPreferences
 class SettingsService {
@@ -17,6 +18,10 @@ class SettingsService {
   static const int defaultDwellTimeMinutes = 1; // Default 1 min for development
   static const String _proximityRadiusMetersKey = 'proximity_radius_meters';
   static const int defaultProximityRadiusMeters = 150; // Default 150 meters
+  
+  // Geofence strategy keys
+  static const String _geofenceStrategyKey = 'geofence_strategy';
+  static const String _geofenceFallbackReasonKey = 'geofence_fallback_reason';
 
   // Secure storage keys for OpenAI API
   static const String _openaiApiKeyKey = 'openai_api_key';
@@ -676,6 +681,56 @@ class SettingsService {
       return prefs.getInt(_proximityRadiusMetersKey) ?? defaultProximityRadiusMeters;
     } catch (e) {
       return defaultProximityRadiusMeters;
+    }
+  }
+
+  /// Save geofence strategy
+  Future<bool> saveGeofenceStrategy(GeofenceStrategy strategy) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      return await prefs.setString(_geofenceStrategyKey, strategy.name);
+    } catch (e) {
+      return false;
+    }
+  }
+
+  /// Load geofence strategy
+  Future<GeofenceStrategy> loadGeofenceStrategy() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final strategyName = prefs.getString(_geofenceStrategyKey);
+      if (strategyName == null) {
+        return GeofenceStrategy.native; // Default to native
+      }
+      return GeofenceStrategy.values.firstWhere(
+        (s) => s.name == strategyName,
+        orElse: () => GeofenceStrategy.native,
+      );
+    } catch (e) {
+      return GeofenceStrategy.native;
+    }
+  }
+
+  /// Save geofence fallback reason
+  Future<bool> saveGeofenceFallbackReason(String? reason) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      if (reason == null) {
+        return await prefs.remove(_geofenceFallbackReasonKey);
+      }
+      return await prefs.setString(_geofenceFallbackReasonKey, reason);
+    } catch (e) {
+      return false;
+    }
+  }
+
+  /// Load geofence fallback reason
+  Future<String?> loadGeofenceFallbackReason() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      return prefs.getString(_geofenceFallbackReasonKey);
+    } catch (e) {
+      return null;
     }
   }
 }
