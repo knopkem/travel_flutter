@@ -6,6 +6,7 @@ import '../services/reminder_service.dart';
 import '../services/location_monitor_service.dart';
 import '../services/background_geofence_service.dart';
 import '../services/geofence_strategy_manager.dart';
+import '../services/debug_log_service.dart';
 import '../utils/brand_matcher.dart';
 
 /// Provider for managing shopping reminders
@@ -78,12 +79,14 @@ class ReminderProvider extends ChangeNotifier {
     // Apply the appropriate strategy
     if (canUseNative) {
       debugPrint('Starting native geofencing monitoring');
+      DebugLogService().log('Started native geofencing monitoring', type: DebugLogType.strategy);
       await _strategyManager.useNativeGeofencing();
       await _locationService.startMonitoring(_reminders);
       // Stop polling if it was running
       await _backgroundGeofence.stopMonitoring();
     } else {
       debugPrint('Falling back to polling monitoring: $fallbackReason');
+      DebugLogService().log('Fallback to polling: $fallbackReason', type: DebugLogType.strategy);
       await _strategyManager.fallbackToPolling(fallbackReason!);
       // Stop native monitoring if it was running
       await _locationService.stopMonitoring();

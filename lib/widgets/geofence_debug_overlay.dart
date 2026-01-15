@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import '../providers/reminder_provider.dart';
 import '../providers/settings_provider.dart';
 import '../services/location_monitor_service.dart';
+import '../services/debug_log_service.dart';
 
 /// Info panel for geofence debugging
 class GeofenceDebugOverlay extends StatefulWidget {
@@ -22,14 +23,13 @@ class GeofenceDebugOverlay extends StatefulWidget {
 
 class _GeofenceDebugOverlayState extends State<GeofenceDebugOverlay> {
   bool _showInfoPanel = true;
-  final List<String> _eventLog = [];
   Timer? _statsUpdateTimer;
 
   @override
   void initState() {
     super.initState();
     // Update stats periodically when debug is enabled
-    _statsUpdateTimer = Timer.periodic(const Duration(seconds: 5), (_) {
+    _statsUpdateTimer = Timer.periodic(const Duration(seconds: 2), (_) {
       if (widget.showDebug && mounted) {
         setState(() {});
       }
@@ -42,23 +42,16 @@ class _GeofenceDebugOverlayState extends State<GeofenceDebugOverlay> {
     super.dispose();
   }
 
-  void _addLogEntry(String message) {
-    setState(() {
-      _eventLog.insert(0, '${DateTime.now().toString().substring(11, 19)}: $message');
-      if (_eventLog.length > 10) {
-        _eventLog.removeLast();
-      }
-    });
-  }
-
   @override
   Widget build(BuildContext context) {
+    final debugLogService = DebugLogService();
+    final eventLogs = debugLogService.getLogs();
+    
     return Consumer2<ReminderProvider, SettingsProvider>(
       builder: (context, reminderProvider, settingsProvider, child) {
         final reminders = reminderProvider.reminders;
         final locationService = LocationMonitorService();
         final stats = locationService.getGeofenceStats();
-        final proximityRadius = settingsProvider.proximityRadiusMeters;
 
         return Stack(
           children: [
@@ -69,12 +62,7 @@ class _GeofenceDebugOverlayState extends State<GeofenceDebugOverlay> {
               child: FloatingActionButton(
                 mini: true,
                 heroTag: 'debug_toggle',
-                onPressed: () {
-                  widget.onToggleDebug();
-                  if (!widget.showDebug) {
-                    _addLogEntry('Debug mode enabled');
-                  }
-                },
+                onPressed: widget.onToggleDebug,
                 backgroundColor: widget.showDebug ? Colors.orange : Colors.grey[700],
                 child: Icon(
                   widget.showDebug ? Icons.bug_report : Icons.bug_report_outlined,
@@ -205,7 +193,7 @@ class _GeofenceDebugOverlayState extends State<GeofenceDebugOverlay> {
                       ),
 
                       // Event log
-                      if (_eventLog.isNotEmpty) ...[
+                      if (eventLogs.isNotEmpty) ...[
                         const Divider(height: 1),
                         Container(
                           padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
@@ -221,12 +209,19 @@ class _GeofenceDebugOverlayState extends State<GeofenceDebugOverlay> {
                                       fontSize: 12,
                                     ),
                                   ),
+                                  const SizedBox(width: 4),
+                                  Text(
+                                    '(${eventLogs.length})',
+                                    style: TextStyle(
+                                      fontSize: 11,
+                                      color: Colors.grey[600],
+                                    ),
+                                  ),
                                   const Spacer(),
                                   TextButton(
                                     onPressed: () {
-                                      setState(() {
-                                        _eventLog.clear();
-                                      });
+                                      debugLogService.clear();
+                                      setState(() {});
                                     },
                                     style: TextButton.styleFrom(
                                       padding: EdgeInsets.zero,
@@ -242,20 +237,62 @@ class _GeofenceDebugOverlayState extends State<GeofenceDebugOverlay> {
                               ),
                               const SizedBox(height: 4),
                               Container(
-                                constraints: const BoxConstraints(maxHeight: 100),
+                                constraints: const BoxConstraints(maxHeight: 120),
                                 child: ListView.builder(
                                   shrinkWrap: true,
-                                  itemCount: _eventLog.length,
+                                  itemCount: eventLogs.length,
                                   itemBuilder: (context, index) {
+                                    final log = eventLogs[index];
+                                    Color logColor;
+                                    switch (log.type) {
+                                      case DebugLogType.register:
+                                        logColor = Colors.green[700]!;
+                                        break;
+                                      case DebugLogType.unregister:
+                                        logColor = Colors.orange[700]!;
+                                        break;
+                                      case DebugLogType.event:
+                                        logColor = Colors.blue[700]!;
+                                        break;
+                                      case DebugLogType.error:
+                                        logColor = Colors.red[700]!;
+                                        break;
+                                      case DebugLogType.strategy:
+                                        logColor = Colors.purple[700]!;
+                                        break;
+                                      default:
+                                        logColor = Colors.grey[700]!;
+                                    }
+                                    
                                     return Padding(
-                                      padding: const EdgeInsets.only(bottom: 2),
-                                      child: Text(
-                                        _eventLog[index],
-                                        style: TextStyle(
-                                          fontSize: 10,
-                                          fontFamily: 'monospace',
-                                          color: Colors.grey[700],
-                                        ),
+                                      padding: const EdgeInsets.only(bottom: 3),
+                                      child: Row(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          Text(
+                                            log.typeIcon,
+                                            style: const TextStyle(fontSize: 10),
+                                          ),
+                                          const SizedBox(width: 4),
+                                          Text(
+                                            log.formattedTime,
+                                            style: TextStyle(
+                                              fontSize: 9,
+                                              fontFamily: 'monospace',
+                                              color: Colors.grey[600],
+                                            ),
+                                          ),
+                                          const SizedBox(width: 6),
+                                          Expanded(
+                                            child: Text(
+                                              log.message,
+                                              style: TextStyle(
+                                                fontSize: 10,
+                                                color: logColor,
+                                              ),
+                                            ),
+                                          ),
+                                        ],
                                       ),
                                     );
                                   },

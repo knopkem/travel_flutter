@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/reminder.dart';
+import 'debug_log_service.dart';
 
 /// Manages dynamic geofence registration to handle the 100 geofence limit
 /// Only registers the nearest 95 geofences (buffer below limit)
@@ -27,6 +28,10 @@ class DynamicGeofenceManager {
   /// Initialize and start monitoring location for dynamic geofence updates
   Future<void> initialize(List<Reminder> reminders) async {
     _allReminders = List.from(reminders);
+    DebugLogService().log(
+      'Initializing dynamic geofence manager with ${reminders.length} reminders',
+      type: DebugLogType.info,
+    );
     
     // Load previously registered IDs from SharedPreferences
     await _loadRegisteredIds();
@@ -108,11 +113,13 @@ class DynamicGeofenceManager {
     }
 
     _lastUpdatePosition = position;
+    DebugLogService().log('Location changed significantly, updating geofences', type: DebugLogType.info);
     await _updateGeofences();
   }
 
   /// Re-evaluate and update registered geofences based on current location
   Future<void> _updateGeofences() async {
+    DebugLogService().log('Evaluating geofences...', type: DebugLogType.info);
     try {
       // Get current position
       Position? currentPosition;
@@ -160,12 +167,17 @@ class DynamicGeofenceManager {
       final toUnregister = _registeredGeofenceIds.difference(nearestIds);
       for (final id in toUnregister) {
         debugPrint('DynamicGeofenceManager: Unregistering far geofence: $id');
+        DebugLogService().log('Unregistered far geofence: $id', type: DebugLogType.unregister);
         await unregisterGeofenceCallback(id);
         _registeredGeofenceIds.remove(id);
       }
 
       // Register new geofences that are now in the nearest set
       final toRegister = nearestIds.difference(_registeredGeofenceIds);
+      
+      if (toRegister.isEmpty && toUnregister.isEmpty) {
+        DebugLogService().log('No geofence changes needed', type: DebugLogType.info);
+      }
       
       // Get settings for registration
       final prefs = await SharedPreferences.getInstance();
@@ -175,6 +187,7 @@ class DynamicGeofenceManager {
       for (final id in toRegister) {
         final reminder = nearestReminders.firstWhere((r) => r.id == id);
         debugPrint('DynamicGeofenceManager: Registering near geofence: $id');
+        DebugLogService().log('Registered near geofence: ${reminder.brandName}', type: DebugLogType.register);
         
         await registerGeofenceCallback(
           id,
@@ -190,6 +203,10 @@ class DynamicGeofenceManager {
       await _saveRegisteredIds();
 
       debugPrint('DynamicGeofenceManager: Active geofences: ${_registeredGeofenceIds.length}/${_allReminders.length}');
+      DebugLogService().log(
+        'Active geofences: ${_registeredGeofenceIds.length}/${_allReminders.length}',
+        type: DebugLogType.info,
+      );
     } catch (e) {
       debugPrint('DynamicGeofenceManager: Error updating geofences: $e');
     }
@@ -202,6 +219,20 @@ class DynamicGeofenceManager {
       final ids = prefs.getStringList('registered_geofence_ids') ?? [];
       _registeredGeofenceIds = ids.toSet();
       debugPrint('DynamicGeofenceManager: Loaded ${_registeredGeofenceIds.length} registered IDs');
+      
+      if (_registeredGeofenceIds.isNotEmpty) {
+        // Log existing registrations with brand names
+        for (final id in _registeredGeofenceIds) {
+          final reminder = _allReminders.firstWhere(
+            (r) => r.id == id,
+            orElse: () => _allReminders.first, // fallback
+          );
+          DebugLogService().log(
+            'Already registered: ${reminder.brandName}',
+            type: DebugLogType.info,
+          );
+        }
+      }
     } catch (e) {
       debugPrint('DynamicGeofenceManager: Error loading registered IDs: $e');
     }

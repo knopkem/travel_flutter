@@ -14,6 +14,7 @@ import 'notification_service.dart';
 import 'reminder_service.dart';
 import 'foreground_notification_service.dart';
 import 'geofence_strategy_manager.dart';
+import 'debug_log_service.dart';
 
 /// Unified service for monitoring location and triggering reminders on both platforms
 /// Uses native geofencing for both iOS and Android
@@ -59,6 +60,7 @@ class LocationMonitorService {
         case 'onGeofenceEnter':
           final args = call.arguments as Map<dynamic, dynamic>;
           final id = args['id'] as String;
+          DebugLogService().log('Entered geofence: $id', type: DebugLogType.event);
           await _handleGeofenceEnter(id);
           break;
         case 'onGeofenceDwell':
@@ -67,17 +69,20 @@ class LocationMonitorService {
           // On Android, dwell event means notification already sent by native receiver
           // Just mark as notified to prevent duplicates
           _notifiedReminders.add(id);
+          DebugLogService().log('Dwell event for $id (notification sent)', type: DebugLogType.event);
           debugPrint('Geofence dwell event for $id (notification sent by native)');
           break;
         case 'onGeofenceExit':
           final args = call.arguments as Map<dynamic, dynamic>;
           final id = args['id'] as String;
+          DebugLogService().log('Exited geofence: $id', type: DebugLogType.event);
           await _handleGeofenceExit(id);
           break;
         case 'onGeofenceError':
           final args = call.arguments as Map<dynamic, dynamic>;
           final id = args['id'] as String;
           final error = args['error'] as String;
+          DebugLogService().log('Geofence error: $id - $error', type: DebugLogType.error);
           debugPrint('Geofence error for $id: $error');
           break;
       }
@@ -210,6 +215,7 @@ class LocationMonitorService {
     if (_isMonitoring) return;
 
     debugPrint('Starting monitoring with ${reminders.length} reminders');
+    DebugLogService().log('Starting monitoring with ${reminders.length} reminders', type: DebugLogType.info);
 
     if (Platform.isAndroid) {
       // Start foreground service first for persistent notification
@@ -231,6 +237,7 @@ class LocationMonitorService {
     if (!_isMonitoring) return;
 
     debugPrint('Stopping location monitoring');
+    DebugLogService().log('Stopped location monitoring', type: DebugLogType.info);
 
     if (Platform.isAndroid) {
       await _stopAndroidGeofencing();
@@ -250,6 +257,7 @@ class LocationMonitorService {
   /// Android: Start dynamic geofence management
   Future<void> _startAndroidGeofencing(List<Reminder> reminders) async {
     try {
+      DebugLogService().log('Initializing Android geofencing', type: DebugLogType.info);
       _dynamicGeofenceManager = DynamicGeofenceManager(
         registerGeofenceCallback: (id, lat, lng, radius, dwellTimeMs) async {
           await AndroidGeofenceService.registerGeofence(
@@ -269,6 +277,7 @@ class LocationMonitorService {
       debugPrint('Android geofencing initialized');
     } catch (e) {
       debugPrint('Error starting Android geofencing: $e');
+      DebugLogService().log('Error starting Android geofencing: $e', type: DebugLogType.error);
     }
   }
 
@@ -287,11 +296,13 @@ class LocationMonitorService {
   /// iOS: Register geofences via native platform channel
   Future<void> _startIOSGeofencing(List<Reminder> reminders) async {
     try {
+      DebugLogService().log('Initializing iOS geofencing', type: DebugLogType.info);
       final prefs = await SharedPreferences.getInstance();
       final proximityRadius = prefs.getInt('proximity_radius_meters') ?? 150;
 
       for (final reminder in reminders) {
         debugPrint('Registering iOS geofence for ${reminder.brandName}');
+        DebugLogService().log('Registered geofence: ${reminder.brandName}', type: DebugLogType.register);
         await _channel.invokeMethod('registerGeofence', {
           'id': reminder.id,
           'latitude': reminder.latitude,
@@ -300,8 +311,10 @@ class LocationMonitorService {
         });
       }
       debugPrint('iOS geofencing started');
+      DebugLogService().log('iOS geofencing started with ${reminders.length} geofences', type: DebugLogType.info);
     } catch (e) {
       debugPrint('Error starting iOS geofencing: $e');
+      DebugLogService().log('Error starting iOS geofencing: $e', type: DebugLogType.error);
     }
   }
 
