@@ -429,16 +429,21 @@ class SettingsProvider extends ChangeNotifier {
 
   /// Update background location enabled setting
   Future<void> updateBackgroundLocationEnabled(bool enabled) async {
+    debugPrint(
+        'SettingsProvider: Updating background location enabled to: $enabled');
     await _settingsService.saveBackgroundLocationEnabled(enabled);
     _backgroundLocationEnabled = enabled;
 
     // Control the background service based on setting
     if (enabled) {
+      debugPrint('SettingsProvider: Starting background service');
       // Start the service if there are reminders
       await _restartBackgroundServiceIfNeeded();
     } else {
+      debugPrint('SettingsProvider: Stopping background service');
       // Stop the service
       await _stopBackgroundService();
+      debugPrint('SettingsProvider: Background service stopped successfully');
     }
 
     notifyListeners();
@@ -473,15 +478,16 @@ class SettingsProvider extends ChangeNotifier {
     await _settingsService.saveDwellTimeMinutes(minutes);
     _dwellTimeMinutes = minutes;
     notifyListeners();
-    
+
     // Re-register all geofences with new dwell time
     final locationService = LocationMonitorService();
     if (locationService.isMonitoringEnabled) {
       final reminderService = ReminderService();
       final reminders = await reminderService.loadReminders();
-      
+
       // Stop and restart monitoring to pick up new dwell time
-      debugPrint('Dwell time updated to $minutes minutes - re-registering geofences');
+      debugPrint(
+          'Dwell time updated to $minutes minutes - re-registering geofences');
       await locationService.stopMonitoring();
       if (reminders.isNotEmpty) {
         await locationService.startMonitoring(reminders);
@@ -494,7 +500,7 @@ class SettingsProvider extends ChangeNotifier {
     await _settingsService.saveProximityRadiusMeters(meters);
     _proximityRadiusMeters = meters;
     notifyListeners();
-    
+
     // Re-register all geofences with new radius
     final locationService = LocationMonitorService();
     if (locationService.isMonitoringEnabled) {

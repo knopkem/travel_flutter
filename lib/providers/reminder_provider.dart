@@ -8,13 +8,16 @@ import '../services/background_geofence_service.dart';
 import '../services/geofence_strategy_manager.dart';
 import '../services/debug_log_service.dart';
 import '../utils/brand_matcher.dart';
+import '../utils/settings_service.dart';
 
 /// Provider for managing shopping reminders
 class ReminderProvider extends ChangeNotifier {
   final ReminderService _reminderService = ReminderService();
   final LocationMonitorService _locationService = LocationMonitorService();
-  final BackgroundGeofenceService _backgroundGeofence = BackgroundGeofenceService();
+  final BackgroundGeofenceService _backgroundGeofence =
+      BackgroundGeofenceService();
   final GeofenceStrategyManager _strategyManager = GeofenceStrategyManager();
+  final SettingsService _settingsService = SettingsService();
 
   List<Reminder> _reminders = [];
   bool _isLoading = false;
@@ -35,12 +38,24 @@ class ReminderProvider extends ChangeNotifier {
       // Initialize strategy manager and background service
       await _strategyManager.initialize();
       await _backgroundGeofence.initialize();
-      
+
       _reminders = await _reminderService.loadReminders();
 
-      // Start monitoring if reminders exist
+      // Start monitoring if reminders exist AND background location is enabled
       if (_reminders.isNotEmpty) {
-        await _startMonitoringWithStrategy();
+        final backgroundLocationEnabled =
+            await _settingsService.loadBackgroundLocationEnabled();
+        if (backgroundLocationEnabled) {
+          debugPrint(
+              'ReminderProvider: Background location enabled, starting monitoring');
+          await _startMonitoringWithStrategy();
+        } else {
+          debugPrint(
+              'ReminderProvider: Background location disabled, skipping monitoring');
+          DebugLogService().log(
+              'Background location disabled - monitoring not started',
+              type: DebugLogType.info);
+        }
       }
     } catch (e) {
       _error = 'Failed to load reminders: $e';
@@ -69,7 +84,8 @@ class ReminderProvider extends ChangeNotifier {
 
     // Check 2: Background location permission
     if (canUseNative) {
-      final hasBackgroundPermission = await _locationService.hasBackgroundPermission();
+      final hasBackgroundPermission =
+          await _locationService.hasBackgroundPermission();
       if (!hasBackgroundPermission) {
         canUseNative = false;
         fallbackReason = 'Background location permission denied';
@@ -79,14 +95,16 @@ class ReminderProvider extends ChangeNotifier {
     // Apply the appropriate strategy
     if (canUseNative) {
       debugPrint('Starting native geofencing monitoring');
-      DebugLogService().log('Started native geofencing monitoring', type: DebugLogType.strategy);
+      DebugLogService().log('Started native geofencing monitoring',
+          type: DebugLogType.strategy);
       await _strategyManager.useNativeGeofencing();
       await _locationService.startMonitoring(_reminders);
       // Stop polling if it was running
       await _backgroundGeofence.stopMonitoring();
     } else {
       debugPrint('Falling back to polling monitoring: $fallbackReason');
-      DebugLogService().log('Fallback to polling: $fallbackReason', type: DebugLogType.strategy);
+      DebugLogService().log('Fallback to polling: $fallbackReason',
+          type: DebugLogType.strategy);
       await _strategyManager.fallbackToPolling(fallbackReason!);
       // Stop native monitoring if it was running
       await _locationService.stopMonitoring();
@@ -156,13 +174,21 @@ class ReminderProvider extends ChangeNotifier {
         _reminders.add(reminder);
 
         // Restart monitoring with updated reminders using current strategy
-        if (_strategyManager.isUsingNativeGeofencing) {
-          await _locationService.stopMonitoring();
-          await _locationService.startMonitoring(_reminders);
-          // Notify location service of new reminder for dynamic geofence management
-          await _locationService.onReminderAdded(reminder);
+        // Only if background location is enabled
+        final backgroundLocationEnabled =
+            await _settingsService.loadBackgroundLocationEnabled();
+        if (backgroundLocationEnabled) {
+          if (_strategyManager.isUsingNativeGeofencing) {
+            await _locationService.stopMonitoring();
+            await _locationService.startMonitoring(_reminders);
+            // Notify location service of new reminder for dynamic geofence management
+            await _locationService.onReminderAdded(reminder);
+          } else {
+            await _backgroundGeofence.updateReminders(_reminders);
+          }
         } else {
-          await _backgroundGeofence.updateReminders(_reminders);
+          debugPrint(
+              'ReminderProvider: Background location disabled, not starting monitoring');
         }
 
         notifyListeners();
@@ -211,13 +237,21 @@ class ReminderProvider extends ChangeNotifier {
         _reminders.add(reminder);
 
         // Restart monitoring with updated reminders using current strategy
-        if (_strategyManager.isUsingNativeGeofencing) {
-          await _locationService.stopMonitoring();
-          await _locationService.startMonitoring(_reminders);
-          // Notify location service of new reminder for dynamic geofence management
-          await _locationService.onReminderAdded(reminder);
+        // Only if background location is enabled
+        final backgroundLocationEnabled =
+            await _settingsService.loadBackgroundLocationEnabled();
+        if (backgroundLocationEnabled) {
+          if (_strategyManager.isUsingNativeGeofencing) {
+            await _locationService.stopMonitoring();
+            await _locationService.startMonitoring(_reminders);
+            // Notify location service of new reminder for dynamic geofence management
+            await _locationService.onReminderAdded(reminder);
+          } else {
+            await _backgroundGeofence.updateReminders(_reminders);
+          }
         } else {
-          await _backgroundGeofence.updateReminders(_reminders);
+          debugPrint(
+              'ReminderProvider: Background location disabled, not starting monitoring');
         }
 
         notifyListeners();
@@ -242,19 +276,27 @@ class ReminderProvider extends ChangeNotifier {
         _reminders.removeWhere((r) => r.id == id);
 
         // Restart monitoring or stop if no reminders left using current strategy
-        if (_strategyManager.isUsingNativeGeofencing) {
-          // Notify location service of reminder removal
-          await _locationService.onReminderRemoved(id);
-          await _locationService.stopMonitoring();
-          if (_reminders.isNotEmpty) {
-            await _locationService.startMonitoring(_reminders);
+        // Only if background location is enabled
+        final backgroundLocationEnabled =
+            await _settingsService.loadBackgroundLocationEnabled();
+        if (backgroundLocationEnabled) {
+          if (_strategyManager.isUsingNativeGeofencing) {
+            // Notify location service of reminder removal
+            await _locationService.onReminderRemoved(id);
+            await _locationService.stopMonitoring();
+            if (_reminders.isNotEmpty) {
+              await _locationService.startMonitoring(_reminders);
+            }
+          } else {
+            if (_reminders.isNotEmpty) {
+              await _backgroundGeofence.updateReminders(_reminders);
+            } else {
+              await _backgroundGeofence.stopMonitoring();
+            }
           }
         } else {
-          if (_reminders.isNotEmpty) {
-            await _backgroundGeofence.updateReminders(_reminders);
-          } else {
-            await _backgroundGeofence.stopMonitoring();
-          }
+          debugPrint(
+              'ReminderProvider: Background location disabled, not restarting monitoring');
         }
 
         notifyListeners();

@@ -58,7 +58,7 @@ class _GeofenceDebugOverlayState extends State<GeofenceDebugOverlay> {
             // Debug toggle FAB
             Positioned(
               top: 16,
-              right: 16,
+              left: 16,
               child: FloatingActionButton(
                 mini: true,
                 heroTag: 'debug_toggle',

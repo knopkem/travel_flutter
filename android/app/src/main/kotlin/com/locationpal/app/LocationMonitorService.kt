@@ -66,7 +66,8 @@ class LocationMonitorService : Service() {
             handler.postDelayed(notificationReinforcer, 30000)
         }
         
-        return START_STICKY
+        // Use START_NOT_STICKY to prevent automatic restart when disabled by user
+        return START_NOT_STICKY
     }
 
     override fun onBind(intent: Intent?): IBinder? = null
@@ -74,7 +75,14 @@ class LocationMonitorService : Service() {
     override fun onDestroy() {
         super.onDestroy()
         handler.removeCallbacks(notificationReinforcer)
-        Log.d(TAG, "Service destroyed")
+        // Remove foreground notification
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+            stopForeground(STOP_FOREGROUND_REMOVE)
+        } else {
+            @Suppress("DEPRECATION")
+            stopForeground(true)
+        }
+        Log.d(TAG, "Service destroyed and foreground notification removed")
     }
 
     private fun createNotificationChannel() {

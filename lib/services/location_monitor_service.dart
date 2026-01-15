@@ -3,7 +3,8 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:geolocator/geolocator.dart';
-import 'package:permission_handler/permission_handler.dart' as permission_handler;
+import 'package:permission_handler/permission_handler.dart'
+    as permission_handler;
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/poi.dart';
 import '../models/reminder.dart';
@@ -27,8 +28,7 @@ class LocationMonitorService {
     _setupPermissionListener();
   }
 
-  static const MethodChannel _channel =
-      MethodChannel('com.app/geofence');
+  static const MethodChannel _channel = MethodChannel('com.app/geofence');
 
   bool _isMonitoring = false;
   bool _isHandlerSetup = false;
@@ -60,7 +60,8 @@ class LocationMonitorService {
         case 'onGeofenceEnter':
           final args = call.arguments as Map<dynamic, dynamic>;
           final id = args['id'] as String;
-          DebugLogService().log('Entered geofence: $id', type: DebugLogType.event);
+          DebugLogService()
+              .log('Entered geofence: $id', type: DebugLogType.event);
           await _handleGeofenceEnter(id);
           break;
         case 'onGeofenceDwell':
@@ -69,20 +70,24 @@ class LocationMonitorService {
           // On Android, dwell event means notification already sent by native receiver
           // Just mark as notified to prevent duplicates
           _notifiedReminders.add(id);
-          DebugLogService().log('Dwell event for $id (notification sent)', type: DebugLogType.event);
-          debugPrint('Geofence dwell event for $id (notification sent by native)');
+          DebugLogService().log('Dwell event for $id (notification sent)',
+              type: DebugLogType.event);
+          debugPrint(
+              'Geofence dwell event for $id (notification sent by native)');
           break;
         case 'onGeofenceExit':
           final args = call.arguments as Map<dynamic, dynamic>;
           final id = args['id'] as String;
-          DebugLogService().log('Exited geofence: $id', type: DebugLogType.event);
+          DebugLogService()
+              .log('Exited geofence: $id', type: DebugLogType.event);
           await _handleGeofenceExit(id);
           break;
         case 'onGeofenceError':
           final args = call.arguments as Map<dynamic, dynamic>;
           final id = args['id'] as String;
           final error = args['error'] as String;
-          DebugLogService().log('Geofence error: $id - $error', type: DebugLogType.error);
+          DebugLogService()
+              .log('Geofence error: $id - $error', type: DebugLogType.error);
           debugPrint('Geofence error for $id: $error');
           break;
       }
@@ -184,7 +189,7 @@ class LocationMonitorService {
       final reminderService = ReminderService();
       final reminders = await reminderService.loadReminders();
       final reminder = reminders.where((r) => r.id == reminderId).firstOrNull;
-      
+
       if (reminder == null) {
         debugPrint('Reminder not found for id: $reminderId');
         return;
@@ -215,7 +220,9 @@ class LocationMonitorService {
     if (_isMonitoring) return;
 
     debugPrint('Starting monitoring with ${reminders.length} reminders');
-    DebugLogService().log('Starting monitoring with ${reminders.length} reminders', type: DebugLogType.info);
+    DebugLogService().log(
+        'Starting monitoring with ${reminders.length} reminders',
+        type: DebugLogType.info);
 
     if (Platform.isAndroid) {
       // Start foreground service first for persistent notification
@@ -226,7 +233,7 @@ class LocationMonitorService {
     }
 
     _isMonitoring = true;
-    
+
     // Persist monitoring state for boot receiver
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool('monitoring_enabled', true);
@@ -234,30 +241,40 @@ class LocationMonitorService {
 
   /// Stop location monitoring
   Future<void> stopMonitoring() async {
-    if (!_isMonitoring) return;
+    if (!_isMonitoring) {
+      debugPrint('LocationMonitorService: Already stopped, ignoring');
+      return;
+    }
 
-    debugPrint('Stopping location monitoring');
-    DebugLogService().log('Stopped location monitoring', type: DebugLogType.info);
+    debugPrint('LocationMonitorService: Stopping location monitoring');
+    DebugLogService()
+        .log('Stopped location monitoring', type: DebugLogType.info);
 
     if (Platform.isAndroid) {
+      debugPrint('LocationMonitorService: Stopping Android geofencing');
       await _stopAndroidGeofencing();
+      debugPrint('LocationMonitorService: Stopping foreground service');
       // Stop foreground service and remove notification
       await ForegroundNotificationService.stop();
+      debugPrint('LocationMonitorService: Foreground service stopped');
     } else if (Platform.isIOS) {
+      debugPrint('LocationMonitorService: Stopping iOS geofencing');
       await _stopIOSGeofencing();
     }
 
     _isMonitoring = false;
-    
+
     // Persist monitoring state
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool('monitoring_enabled', false);
+    debugPrint('LocationMonitorService: Monitoring completely stopped');
   }
 
   /// Android: Start dynamic geofence management
   Future<void> _startAndroidGeofencing(List<Reminder> reminders) async {
     try {
-      DebugLogService().log('Initializing Android geofencing', type: DebugLogType.info);
+      DebugLogService()
+          .log('Initializing Android geofencing', type: DebugLogType.info);
       _dynamicGeofenceManager = DynamicGeofenceManager(
         registerGeofenceCallback: (id, lat, lng, radius, dwellTimeMs) async {
           await AndroidGeofenceService.registerGeofence(
@@ -277,7 +294,8 @@ class LocationMonitorService {
       debugPrint('Android geofencing initialized');
     } catch (e) {
       debugPrint('Error starting Android geofencing: $e');
-      DebugLogService().log('Error starting Android geofencing: $e', type: DebugLogType.error);
+      DebugLogService().log('Error starting Android geofencing: $e',
+          type: DebugLogType.error);
     }
   }
 
@@ -296,13 +314,15 @@ class LocationMonitorService {
   /// iOS: Register geofences via native platform channel
   Future<void> _startIOSGeofencing(List<Reminder> reminders) async {
     try {
-      DebugLogService().log('Initializing iOS geofencing', type: DebugLogType.info);
+      DebugLogService()
+          .log('Initializing iOS geofencing', type: DebugLogType.info);
       final prefs = await SharedPreferences.getInstance();
       final proximityRadius = prefs.getInt('proximity_radius_meters') ?? 150;
 
       for (final reminder in reminders) {
         debugPrint('Registering iOS geofence for ${reminder.brandName}');
-        DebugLogService().log('Registered geofence: ${reminder.brandName}', type: DebugLogType.register);
+        DebugLogService().log('Registered geofence: ${reminder.brandName}',
+            type: DebugLogType.register);
         await _channel.invokeMethod('registerGeofence', {
           'id': reminder.id,
           'latitude': reminder.latitude,
@@ -311,10 +331,13 @@ class LocationMonitorService {
         });
       }
       debugPrint('iOS geofencing started');
-      DebugLogService().log('iOS geofencing started with ${reminders.length} geofences', type: DebugLogType.info);
+      DebugLogService().log(
+          'iOS geofencing started with ${reminders.length} geofences',
+          type: DebugLogType.info);
     } catch (e) {
       debugPrint('Error starting iOS geofencing: $e');
-      DebugLogService().log('Error starting iOS geofencing: $e', type: DebugLogType.error);
+      DebugLogService()
+          .log('Error starting iOS geofencing: $e', type: DebugLogType.error);
     }
   }
 
@@ -322,13 +345,13 @@ class LocationMonitorService {
   Future<void> _stopIOSGeofencing() async {
     try {
       await _channel.invokeMethod('removeAllGeofences');
-      
+
       // Cancel all iOS dwell timers
       for (final timer in _activeDwellTimers.values) {
         timer.cancel();
       }
       _activeDwellTimers.clear();
-      
+
       debugPrint('iOS geofencing stopped');
     } catch (e) {
       debugPrint('Error stopping iOS geofencing: $e');
@@ -385,7 +408,8 @@ class LocationMonitorService {
   /// Check if has background location permission
   Future<bool> hasBackgroundPermission() async {
     if (Platform.isAndroid) {
-      final backgroundStatus = await permission_handler.Permission.locationAlways.status;
+      final backgroundStatus =
+          await permission_handler.Permission.locationAlways.status;
       return backgroundStatus.isGranted;
     } else {
       final permission = await Geolocator.checkPermission();
@@ -458,7 +482,8 @@ class LocationMonitorService {
     }
 
     // Android
-    final currentAlwaysStatus = await permission_handler.Permission.locationAlways.status;
+    final currentAlwaysStatus =
+        await permission_handler.Permission.locationAlways.status;
     debugPrint('Android locationAlways status: $currentAlwaysStatus');
 
     if (currentAlwaysStatus.isGranted) {
@@ -473,7 +498,8 @@ class LocationMonitorService {
     }
 
     debugPrint('Android: Requesting locationAlways permission...');
-    final backgroundStatus = await permission_handler.Permission.locationAlways.request();
+    final backgroundStatus =
+        await permission_handler.Permission.locationAlways.request();
     debugPrint('Android: Background location status: $backgroundStatus');
 
     return backgroundStatus.isGranted;
@@ -486,7 +512,8 @@ class LocationMonitorService {
     }
 
     try {
-      final result = await _channel.invokeMethod<bool>('checkPlayServicesAvailable');
+      final result =
+          await _channel.invokeMethod<bool>('checkPlayServicesAvailable');
       return result ?? false;
     } catch (e) {
       debugPrint('Error checking Play Services availability: $e');
@@ -497,7 +524,8 @@ class LocationMonitorService {
   /// Set up permission revocation listener
   void _setupPermissionListener() {
     // Listen to location service status changes
-    _locationServiceSubscription = Geolocator.getServiceStatusStream().listen((status) {
+    _locationServiceSubscription =
+        Geolocator.getServiceStatusStream().listen((status) {
       debugPrint('Location service status changed: $status');
       if (status == ServiceStatus.disabled) {
         _handlePermissionRevocation('Location services disabled');
@@ -505,13 +533,15 @@ class LocationMonitorService {
     });
 
     // Periodically check background permission (every 30 seconds when monitoring)
-    _permissionCheckTimer = Timer.periodic(const Duration(seconds: 30), (_) async {
+    _permissionCheckTimer =
+        Timer.periodic(const Duration(seconds: 30), (_) async {
       if (!_isMonitoring) return;
 
       final hasBackgroundPerm = await hasBackgroundPermission();
       if (!hasBackgroundPerm) {
         debugPrint('Background location permission revoked');
-        await _handlePermissionRevocation('Background location permission revoked');
+        await _handlePermissionRevocation(
+            'Background location permission revoked');
       }
     });
   }
@@ -526,16 +556,17 @@ class LocationMonitorService {
     }
 
     debugPrint('Permission revoked: $reason. Falling back to polling.');
-    
+
     // Fall back to polling
     await strategyManager.fallbackToPolling(reason);
-    
+
     // Stop native monitoring
     await stopMonitoring();
-    
+
     // The ReminderProvider will handle starting polling on next app launch
     // For now, just log the situation
-    debugPrint('Native monitoring stopped. Polling will start on next app launch.');
+    debugPrint(
+        'Native monitoring stopped. Polling will start on next app launch.');
   }
 
   /// Dispose resources
