@@ -330,11 +330,18 @@ class LocationProvider extends ChangeNotifier {
         );
       }
 
-      // Get current position with 30 second timeout
-      final Position position = await Geolocator.getCurrentPosition(
-        desiredAccuracy: LocationAccuracy.high,
-        timeLimit: const Duration(seconds: 30),
-      );
+      // Try to get last known position first (instant on iOS)
+      Position? position = await Geolocator.getLastKnownPosition();
+
+      // If no cached position, get current position with platform-specific settings
+      if (position == null) {
+        position = await Geolocator.getCurrentPosition(
+          // Use medium accuracy for faster initial fix on iOS
+          desiredAccuracy: LocationAccuracy.medium,
+          // iOS can take longer for initial GPS fix, especially in cold start
+          timeLimit: const Duration(seconds: 60),
+        );
+      }
 
       debugPrint('GPS position: ${position.latitude}, ${position.longitude}');
 
@@ -404,7 +411,8 @@ class LocationProvider extends ChangeNotifier {
   /// ```dart
   /// await provider.setLocationFromMapCenter(48.8566, 2.3522);
   /// ```
-  Future<void> setLocationFromMapCenter(double latitude, double longitude) async {
+  Future<void> setLocationFromMapCenter(
+      double latitude, double longitude) async {
     _isLoading = true;
     _errorMessage = null;
     notifyListeners();

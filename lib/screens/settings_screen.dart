@@ -29,6 +29,7 @@ class SettingsScreen extends StatefulWidget {
 
 class _SettingsScreenState extends State<SettingsScreen> {
   String _version = 'Loading...';
+  bool _isTogglingBackgroundLocation = false;
 
   @override
   void initState() {
@@ -45,31 +46,58 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Settings'),
-        backgroundColor: Theme.of(context).colorScheme.inversePrimary,
-      ),
-      body: Consumer<SettingsProvider>(
-        builder: (context, settingsProvider, child) {
-          if (settingsProvider.isLoading) {
-            return const Center(child: CircularProgressIndicator());
-          }
+    return Stack(
+      children: [
+        Scaffold(
+          appBar: AppBar(
+            title: const Text('Settings'),
+            backgroundColor: Theme.of(context).colorScheme.inversePrimary,
+          ),
+          body: Consumer<SettingsProvider>(
+            builder: (context, settingsProvider, child) {
+              if (settingsProvider.isLoading) {
+                return const Center(child: CircularProgressIndicator());
+              }
 
-          return ListView(
-            children: [
-              _buildAIGuidanceSection(context, settingsProvider),
-              _buildGooglePlacesSection(context, settingsProvider),
-              _buildProvidersSection(context, settingsProvider),
-              _buildRemindersSection(context, settingsProvider),
-              _buildPoiTypesSection(context, settingsProvider),
-              _buildInterestsSection(context, settingsProvider),
-              _buildDistanceSection(context, settingsProvider),
-              _buildAboutSection(context),
-            ],
-          );
-        },
-      ),
+              return ListView(
+                children: [
+                  _buildAIGuidanceSection(context, settingsProvider),
+                  _buildGooglePlacesSection(context, settingsProvider),
+                  _buildProvidersSection(context, settingsProvider),
+                  _buildRemindersSection(context, settingsProvider),
+                  _buildPoiTypesSection(context, settingsProvider),
+                  _buildInterestsSection(context, settingsProvider),
+                  _buildDistanceSection(context, settingsProvider),
+                  _buildAboutSection(context),
+                ],
+              );
+            },
+          ),
+        ),
+        // Loading overlay when toggling background location
+        if (_isTogglingBackgroundLocation)
+          Container(
+            color: Colors.black54,
+            child: const Center(
+              child: Card(
+                child: Padding(
+                  padding: EdgeInsets.all(24.0),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      CircularProgressIndicator(),
+                      SizedBox(height: 16),
+                      Text(
+                        'Updating background location service...',
+                        style: TextStyle(fontSize: 16),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+      ],
     );
   }
 
@@ -81,7 +109,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final totalCount = POISource.values.length;
 
     return ExpansionTile(
-      initiallyExpanded: true,
+      initiallyExpanded: false,
       leading: const Icon(Icons.cloud_sync),
       title: const Text(
         'POI Data Sources',
@@ -315,22 +343,37 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         ),
                       ),
                       value: settingsProvider.backgroundLocationEnabled,
-                      onChanged: (value) async {
-                        await settingsProvider
-                            .updateBackgroundLocationEnabled(value);
-                        if (context.mounted) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(
-                              content: Text(
-                                value
-                                    ? 'Background location enabled'
-                                    : 'Background location disabled',
-                              ),
-                              backgroundColor: value ? Colors.green : null,
-                            ),
-                          );
-                        }
-                      },
+                      onChanged: _isTogglingBackgroundLocation
+                          ? null
+                          : (value) async {
+                              setState(() {
+                                _isTogglingBackgroundLocation = true;
+                              });
+
+                              try {
+                                await settingsProvider
+                                    .updateBackgroundLocationEnabled(value);
+                                if (context.mounted) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(
+                                      content: Text(
+                                        value
+                                            ? 'Background location enabled'
+                                            : 'Background location disabled',
+                                      ),
+                                      backgroundColor:
+                                          value ? Colors.green : null,
+                                    ),
+                                  );
+                                }
+                              } finally {
+                                if (mounted) {
+                                  setState(() {
+                                    _isTogglingBackgroundLocation = false;
+                                  });
+                                }
+                              }
+                            },
                     ),
                     const SizedBox(height: 8),
                     ListTile(
@@ -415,7 +458,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           ),
                           const SizedBox(height: 8),
                           Slider(
-                            value: settingsProvider.proximityRadiusMeters.toDouble(),
+                            value: settingsProvider.proximityRadiusMeters
+                                .toDouble(),
                             min: 50,
                             max: 500,
                             divisions: 9,
@@ -467,7 +511,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       initialData: GeofenceStrategyManager().currentStrategy,
                       builder: (context, snapshot) {
                         final strategyManager = GeofenceStrategyManager();
-                        final strategy = snapshot.data ?? GeofenceStrategy.native;
+                        final strategy =
+                            snapshot.data ?? GeofenceStrategy.native;
                         final isNative = strategy == GeofenceStrategy.native;
                         final fallbackReason = strategyManager.fallbackReason;
 
@@ -475,17 +520,22 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           margin: const EdgeInsets.symmetric(horizontal: 16),
                           padding: const EdgeInsets.all(12),
                           decoration: BoxDecoration(
-                            color: isNative ? Colors.green[50] : Colors.orange[50],
+                            color:
+                                isNative ? Colors.green[50] : Colors.orange[50],
                             borderRadius: BorderRadius.circular(8),
                             border: Border.all(
-                              color: isNative ? Colors.green[200]! : Colors.orange[200]!,
+                              color: isNative
+                                  ? Colors.green[200]!
+                                  : Colors.orange[200]!,
                             ),
                           ),
                           child: Row(
                             children: [
                               Icon(
                                 isNative ? Icons.check_circle : Icons.info,
-                                color: isNative ? Colors.green[700] : Colors.orange[700],
+                                color: isNative
+                                    ? Colors.green[700]
+                                    : Colors.orange[700],
                                 size: 24,
                               ),
                               const SizedBox(width: 12),
@@ -497,11 +547,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
                                       'Using: ${strategyManager.getStrategyDescription()}',
                                       style: TextStyle(
                                         fontWeight: FontWeight.bold,
-                                        color: isNative ? Colors.green[900] : Colors.orange[900],
+                                        color: isNative
+                                            ? Colors.green[900]
+                                            : Colors.orange[900],
                                         fontSize: 14,
                                       ),
                                     ),
-                                    if (!isNative && fallbackReason != null) ...[
+                                    if (!isNative &&
+                                        fallbackReason != null) ...[
                                       const SizedBox(height: 4),
                                       Text(
                                         'Reason: $fallbackReason',
@@ -522,7 +575,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     const SizedBox(height: 16),
                     // Battery optimization status card
                     FutureBuilder<bool>(
-                      future: BatteryOptimizationHelper.isIgnoringBatteryOptimizations(),
+                      future: BatteryOptimizationHelper
+                          .isIgnoringBatteryOptimizations(),
                       builder: (context, snapshot) {
                         if (!snapshot.hasData) {
                           return const SizedBox.shrink();
@@ -579,11 +633,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
                                   icon: const Icon(Icons.settings, size: 18),
                                   label: const Text('Fix Battery Settings'),
                                   onPressed: () async {
-                                    final result = await BatteryOptimizationHelper
-                                        .requestBatteryOptimizationExemption(context);
+                                    final result =
+                                        await BatteryOptimizationHelper
+                                            .requestBatteryOptimizationExemption(
+                                                context);
                                     if (result && context.mounted) {
                                       setState(() {}); // Refresh to hide banner
-                                      ScaffoldMessenger.of(context).showSnackBar(
+                                      ScaffoldMessenger.of(context)
+                                          .showSnackBar(
                                         const SnackBar(
                                           content: Text(
                                             'Battery optimization disabled successfully',
@@ -1102,7 +1159,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     SettingsProvider settingsProvider,
   ) {
     return ExpansionTile(
-      initiallyExpanded: true,
+      initiallyExpanded: false,
       leading: const Icon(Icons.attractions),
       title: const Text(
         'Attraction Interests',
@@ -1305,7 +1362,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final distanceKm = (settingsProvider.poiSearchDistance / 1000).round();
 
     return ExpansionTile(
-      initiallyExpanded: true,
+      initiallyExpanded: false,
       leading: const Icon(Icons.near_me),
       title: const Text(
         'Search Distance',

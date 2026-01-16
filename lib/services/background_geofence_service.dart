@@ -10,18 +10,20 @@ import '../services/notification_service.dart';
 import '../utils/settings_service.dart';
 
 /// Background geofence monitoring that survives app termination
-/// 
+///
 /// Android: Uses FlutterBackgroundService with periodic location checks
 /// iOS: Uses background fetch and significant location change (limited but works)
+@pragma('vm:entry-point')
 class BackgroundGeofenceService {
-  static final BackgroundGeofenceService _instance = BackgroundGeofenceService._internal();
+  static final BackgroundGeofenceService _instance =
+      BackgroundGeofenceService._internal();
   factory BackgroundGeofenceService() => _instance;
   BackgroundGeofenceService._internal();
 
   final FlutterBackgroundService _service = FlutterBackgroundService();
   bool _isInitialized = false;
   bool _isMonitoring = false;
-  
+
   static const Duration _notificationCooldown = Duration(hours: 1);
 
   /// Initialize the background service
@@ -31,7 +33,8 @@ class BackgroundGeofenceService {
       return;
     }
 
-    debugPrint('BackgroundGeofence: Initializing for ${Platform.isIOS ? "iOS" : "Android"}');
+    debugPrint(
+        'BackgroundGeofence: Initializing for ${Platform.isIOS ? "iOS" : "Android"}');
 
     await _service.configure(
       iosConfiguration: IosConfiguration(
@@ -66,7 +69,8 @@ class BackgroundGeofenceService {
 
     await initialize();
 
-    debugPrint('BackgroundGeofence: Setting up monitoring for ${reminders.length} reminders');
+    debugPrint(
+        'BackgroundGeofence: Setting up monitoring for ${reminders.length} reminders');
 
     final prefs = await SharedPreferences.getInstance();
     final settingsService = SettingsService();
@@ -74,7 +78,8 @@ class BackgroundGeofenceService {
     final reminderIds = <String>[];
 
     for (final reminder in reminders) {
-      final reminderData = '${reminder.id}|${reminder.originalPoiId}|${reminder.originalPoiName}|${reminder.brandName}|${reminder.latitude}|${reminder.longitude}|$searchDistanceKm|${reminder.items.map((i) => i.text).join(',')}';
+      final reminderData =
+          '${reminder.id}|${reminder.originalPoiId}|${reminder.originalPoiName}|${reminder.brandName}|${reminder.latitude}|${reminder.longitude}|$searchDistanceKm|${reminder.items.map((i) => i.text).join(',')}';
       await prefs.setString('reminder_${reminder.id}', reminderData);
       reminderIds.add(reminder.id);
     }
@@ -83,7 +88,8 @@ class BackgroundGeofenceService {
     await _service.startService();
 
     _isMonitoring = true;
-    debugPrint('BackgroundGeofence: Started monitoring ${reminders.length} reminders');
+    debugPrint(
+        'BackgroundGeofence: Started monitoring ${reminders.length} reminders');
   }
 
   /// Update monitored reminders
@@ -108,7 +114,7 @@ class BackgroundGeofenceService {
   /// Update check interval when dwell time setting changes
   Future<void> updateCheckInterval() async {
     if (!_isMonitoring) return;
-    
+
     debugPrint('BackgroundGeofence: Notifying service to update interval');
     _service.invoke('updateInterval');
   }
@@ -124,31 +130,35 @@ class BackgroundGeofenceService {
 
     // Load dwell time setting for check interval
     final prefs = await SharedPreferences.getInstance();
-    int dwellTimeMinutes = prefs.getInt('flutter.dwell_time_minutes') ?? SettingsService.defaultDwellTimeMinutes;
-    
+    int dwellTimeMinutes = prefs.getInt('flutter.dwell_time_minutes') ??
+        SettingsService.defaultDwellTimeMinutes;
+
     // Check interval: Use dwell time setting for Android, iOS uses background fetch minimum
-    Duration checkInterval = Platform.isIOS 
-        ? const Duration(minutes: 15)  // iOS background fetch minimum
+    Duration checkInterval = Platform.isIOS
+        ? const Duration(minutes: 15) // iOS background fetch minimum
         : Duration(minutes: dwellTimeMinutes);
 
-    debugPrint('BackgroundGeofence: Service started with ${checkInterval.inMinutes} min interval (dwell time: $dwellTimeMinutes)');
+    debugPrint(
+        'BackgroundGeofence: Service started with ${checkInterval.inMinutes} min interval (dwell time: $dwellTimeMinutes)');
 
     // Initial check
     await _checkReminders();
 
     // Create a cancelable timer that can be updated
     Timer? periodicTimer;
-    
+
     // Listen for setting changes to update interval dynamically
     service.on('updateInterval').listen((event) async {
       periodicTimer?.cancel();
       final newPrefs = await SharedPreferences.getInstance();
-      dwellTimeMinutes = newPrefs.getInt('flutter.dwell_time_minutes') ?? SettingsService.defaultDwellTimeMinutes;
-      checkInterval = Platform.isIOS 
+      dwellTimeMinutes = newPrefs.getInt('flutter.dwell_time_minutes') ??
+          SettingsService.defaultDwellTimeMinutes;
+      checkInterval = Platform.isIOS
           ? const Duration(minutes: 15)
           : Duration(minutes: dwellTimeMinutes);
-      debugPrint('BackgroundGeofence: Interval updated to ${checkInterval.inMinutes} min');
-      
+      debugPrint(
+          'BackgroundGeofence: Interval updated to ${checkInterval.inMinutes} min');
+
       // Restart periodic checks with new interval
       periodicTimer = Timer.periodic(checkInterval, (timer) async {
         debugPrint('BackgroundGeofence: Periodic check triggered');
@@ -168,7 +178,7 @@ class BackgroundGeofenceService {
     try {
       final prefs = await SharedPreferences.getInstance();
       final reminderIds = prefs.getStringList('active_reminder_ids') ?? [];
-      
+
       if (reminderIds.isEmpty) {
         debugPrint('BackgroundGeofence: No active reminders');
         return;
@@ -184,7 +194,8 @@ class BackgroundGeofenceService {
           ),
         ).timeout(const Duration(seconds: 15));
       } catch (e) {
-        debugPrint('BackgroundGeofence: Failed to get position, trying last known: $e');
+        debugPrint(
+            'BackgroundGeofence: Failed to get position, trying last known: $e');
         position = await Geolocator.getLastKnownPosition();
       }
 
@@ -193,7 +204,8 @@ class BackgroundGeofenceService {
         return;
       }
 
-      debugPrint('BackgroundGeofence: Checking ${reminderIds.length} reminders at ${position.latitude}, ${position.longitude}');
+      debugPrint(
+          'BackgroundGeofence: Checking ${reminderIds.length} reminders at ${position.latitude}, ${position.longitude}');
 
       final notificationService = NotificationService();
       await notificationService.initialize();
@@ -223,12 +235,15 @@ class BackgroundGeofenceService {
         final distanceKm = distance / 1000;
 
         if (distanceKm <= radiusKm) {
-          debugPrint('BackgroundGeofence: Inside radius for ${parts[3]} (${distanceKm.toStringAsFixed(2)} km)');
+          debugPrint(
+              'BackgroundGeofence: Inside radius for ${parts[3]} (${distanceKm.toStringAsFixed(2)} km)');
 
           // Check cooldown
-          final lastNotificationTime = prefs.getInt('last_notification_$reminderId');
+          final lastNotificationTime =
+              prefs.getInt('last_notification_$reminderId');
           if (lastNotificationTime != null) {
-            final lastTime = DateTime.fromMillisecondsSinceEpoch(lastNotificationTime);
+            final lastTime =
+                DateTime.fromMillisecondsSinceEpoch(lastNotificationTime);
             if (now.difference(lastTime) < _notificationCooldown) {
               debugPrint('BackgroundGeofence: Cooldown active for ${parts[3]}');
               continue;
@@ -244,8 +259,9 @@ class BackgroundGeofenceService {
           );
 
           // Update cooldown
-          await prefs.setInt('last_notification_$reminderId', now.millisecondsSinceEpoch);
-          
+          await prefs.setInt(
+              'last_notification_$reminderId', now.millisecondsSinceEpoch);
+
           debugPrint('BackgroundGeofence: Notification sent for ${parts[3]}');
         }
       }
@@ -263,10 +279,10 @@ class BackgroundGeofenceService {
   @pragma('vm:entry-point')
   static Future<bool> _onIosBackground(ServiceInstance service) async {
     DartPluginRegistrant.ensureInitialized();
-    
+
     debugPrint('BackgroundGeofence: iOS background wakeup');
     await _checkReminders();
-    
+
     return true;
   }
 }

@@ -11,7 +11,7 @@ class GeofenceManager: NSObject, CLLocationManagerDelegate {
     
     func setup(with messenger: FlutterBinaryMessenger) {
         methodChannel = FlutterMethodChannel(
-            name: "com.travel_flutter.geofencing",
+            name: "com.app/geofence",
             binaryMessenger: messenger
         )
         
@@ -52,10 +52,6 @@ class GeofenceManager: NSObject, CLLocationManagerDelegate {
             removeAllGeofences()
             result(nil)
             
-        case "sendDebugNotification":
-            sendDebugNotification()
-            result(nil)
-            
         default:
             result(FlutterMethodNotImplemented)
         }
@@ -78,8 +74,10 @@ class GeofenceManager: NSObject, CLLocationManagerDelegate {
         registeredGeofences[id] = region
         locationManager?.startMonitoring(for: region)
         
-        // Send debug notification when geofence is registered
-        sendDebugNotification(message: "Registered geofence: \(id.prefix(8))... at \(String(format: "%.4f", latitude)), \(String(format: "%.4f", longitude))")
+        // Log geofence registration
+        let latStr = String(format: "%.4f", latitude)
+        let lonStr = String(format: "%.4f", longitude)
+        print("Registered geofence: \(id.prefix(8))... at \(latStr), \(lonStr)")
     }
     
     private func removeGeofence(id: String) {
@@ -98,42 +96,20 @@ class GeofenceManager: NSObject, CLLocationManagerDelegate {
         enteredRegions.removeAll()
     }
     
-    private func sendDebugNotification(message: String? = nil) {
-        let content = UNMutableNotificationContent()
-        content.title = "🔍 iOS Geofence Debug"
-        
-        let dateFormatter = DateFormatter()
-        dateFormatter.dateFormat = "HH:mm:ss"
-        let timeStr = dateFormatter.string(from: Date())
-        
-        if let msg = message {
-            content.body = "[\(timeStr)] \(msg)"
-        } else {
-            content.body = "[\(timeStr)] Monitoring \(registeredGeofences.count) geofences"
-        }
-        content.sound = nil
-        
-        let request = UNNotificationRequest(
-            identifier: "geofence_debug_\(Date().timeIntervalSince1970)",
-            content: content,
-            trigger: nil
-        )
-        
-        UNUserNotificationCenter.current().add(request)
-    }
+
     
     // CLLocationManagerDelegate methods
     func locationManager(_ manager: CLLocationManager, didEnterRegion region: CLRegion) {
         if let circularRegion = region as? CLCircularRegion {
             // Check if we've already sent an enter event for this region
             guard !enteredRegions.contains(circularRegion.identifier) else {
-                sendDebugNotification(message: "ENTER (duplicate, skipping): \(circularRegion.identifier.prefix(8))...")
+                print("ENTER (duplicate, skipping): \(circularRegion.identifier.prefix(8))...")
                 return
             }
             enteredRegions.insert(circularRegion.identifier)
             
-            // Send debug notification
-            sendDebugNotification(message: "ENTERED region: \(circularRegion.identifier.prefix(8))...")
+            // Log region entry
+            print("ENTERED region: \(circularRegion.identifier.prefix(8))...")
             
             // Notify Flutter about region entry
             methodChannel?.invokeMethod("onGeofenceEnter", arguments: ["id": circularRegion.identifier])
@@ -145,8 +121,8 @@ class GeofenceManager: NSObject, CLLocationManagerDelegate {
             // Clear the entered state so we can trigger again on next entry
             enteredRegions.remove(circularRegion.identifier)
             
-            // Send debug notification
-            sendDebugNotification(message: "EXITED region: \(circularRegion.identifier.prefix(8))...")
+            // Log region exit
+            print("EXITED region: \(circularRegion.identifier.prefix(8))...")
             
             // Notify Flutter about region exit
             methodChannel?.invokeMethod("onGeofenceExit", arguments: ["id": circularRegion.identifier])
@@ -155,7 +131,6 @@ class GeofenceManager: NSObject, CLLocationManagerDelegate {
     
     func locationManager(_ manager: CLLocationManager, monitoringDidFailFor region: CLRegion?, withError error: Error) {
         print("Geofence monitoring failed: \(error.localizedDescription)")
-        sendDebugNotification(message: "ERROR: \(error.localizedDescription)")
         if let region = region {
             methodChannel?.invokeMethod("onGeofenceError", arguments: [
                 "id": region.identifier,
@@ -178,18 +153,18 @@ class GeofenceManager: NSObject, CLLocationManagerDelegate {
             // If already inside when registering, trigger the enter event (but only if not already sent)
             if let circularRegion = region as? CLCircularRegion {
                 guard !enteredRegions.contains(circularRegion.identifier) else {
-                    sendDebugNotification(message: "Already INSIDE \(region.identifier.prefix(8))... (already notified)")
+                    print("Already INSIDE \(region.identifier.prefix(8))... (already notified)")
                     return
                 }
                 enteredRegions.insert(circularRegion.identifier)
-                sendDebugNotification(message: "Already INSIDE \(region.identifier.prefix(8))..., triggering enter")
+                print("Already INSIDE \(region.identifier.prefix(8))..., triggering enter")
                 methodChannel?.invokeMethod("onGeofenceEnter", arguments: ["id": circularRegion.identifier])
             }
         case .outside: stateStr = "outside"
         case .unknown: stateStr = "unknown"
         }
         if state != .inside {
-            sendDebugNotification(message: "State for \(region.identifier.prefix(8))...: \(stateStr)")
+            print("State for \(region.identifier.prefix(8))...: \(stateStr)")
         }
     }
 }

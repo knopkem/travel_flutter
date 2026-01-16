@@ -31,7 +31,8 @@ class POIProvider extends ChangeNotifier {
   final int _totalSources = 3; // Wikipedia, Overpass, Wikidata
   Set<POIType> _selectedFilters = {}; // Active POI type filters
   int? _tempSearchDistance; // Temporary distance override from UI slider
-  POICategory _currentCategory = POICategory.attraction; // Current active category
+  POICategory _currentCategory =
+      POICategory.attraction; // Current active category
   String _searchQuery = ''; // Search query for filtering POIs by name
 
   // In-memory cache: "cityId_category" -> POI list
@@ -119,6 +120,7 @@ class POIProvider extends ChangeNotifier {
     if (_settingsProvider?.allProvidersDisabled ?? false) {
       _pois = [];
       _currentCityId = cityId;
+      _currentCategory = targetCategory;
       _error = null;
       _isLoading = false;
       _successfulSources = 0;
@@ -135,6 +137,7 @@ class POIProvider extends ChangeNotifier {
     if (enabledTypes.isEmpty) {
       _pois = [];
       _currentCityId = cityId;
+      _currentCategory = targetCategory;
       _error =
           'Please enable at least one ${targetCategory.displayName} type in settings';
       _isLoading = false;
@@ -145,7 +148,8 @@ class POIProvider extends ChangeNotifier {
 
     // Get enabled sources (skip Wikipedia/Wikidata for commercial)
     Set<POISource> enabledSources =
-        _settingsProvider?.enabledPoiSources.toSet() ?? POISource.values.toSet();
+        _settingsProvider?.enabledPoiSources.toSet() ??
+            POISource.values.toSet();
     if (targetCategory == POICategory.commercial) {
       enabledSources = enabledSources
           .where((source) =>
@@ -204,8 +208,9 @@ class POIProvider extends ChangeNotifier {
         if (wikipediaPOIs.isNotEmpty) _successfulSources++;
       }
 
-      // Check if city changed during fetch
-      if (_currentCityId != cityId) return;
+      // Check if city or category changed during fetch
+      if (_currentCityId != cityId || _currentCategory != targetCategory)
+        return;
 
       _pois = _sortAndDeduplicate([wikipediaPOIs]);
       _isLoadingPhase1 = false;
@@ -257,8 +262,9 @@ class POIProvider extends ChangeNotifier {
 
       final results = await Future.wait(futures);
 
-      // Check if city changed during fetch
-      if (_currentCityId != cityId) return;
+      // Check if city or category changed during fetch
+      if (_currentCityId != cityId || _currentCategory != targetCategory)
+        return;
 
       List<POI> overpassPOIs = [];
       List<POI> wikidataPOIs = [];
@@ -286,7 +292,7 @@ class POIProvider extends ChangeNotifier {
 
       notifyListeners();
     } catch (e) {
-      if (_currentCityId == cityId) {
+      if (_currentCityId == cityId && _currentCategory == targetCategory) {
         debugPrint('POI discovery error: $e');
         _error = 'Unable to discover nearby places. Please try again.';
         _isLoading = false;
@@ -513,8 +519,8 @@ class POIProvider extends ChangeNotifier {
       formattedAddress: details['formatted_address'] as String?,
       formattedPhoneNumber: details['formatted_phone_number'] as String?,
       priceLevel: details['price_level'] as int? ?? poi.priceLevel,
-      isOpenNow: (details['opening_hours']
-              as Map<String, dynamic>?)?['openNow'] as bool? ??
+      isOpenNow: (details['opening_hours'] as Map<String, dynamic>?)?['openNow']
+              as bool? ??
           poi.isOpenNow,
     );
   }

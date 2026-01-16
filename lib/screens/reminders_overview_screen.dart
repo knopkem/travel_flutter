@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../models/reminder.dart';
 import '../models/poi.dart';
 import '../models/poi_source.dart';
@@ -132,7 +133,7 @@ class _RemindersOverviewScreenState extends State<RemindersOverviewScreen> {
       // ignore: use_build_context_synchronously
       final provider = Provider.of<ReminderProvider>(context, listen: false);
       final success = await provider.removeReminder(reminder.id);
-      
+
       if (mounted) {
         if (success) {
           scaffoldMessenger.showSnackBar(
@@ -220,7 +221,7 @@ class _RemindersOverviewScreenState extends State<RemindersOverviewScreen> {
       listen: false,
     );
     mapNavProvider.navigateToPoiOnMap(poi);
-    
+
     // Return to main screen (which will auto-switch to map tab)
     Navigator.pop(context);
   }
@@ -337,6 +338,33 @@ class _ReminderCardState extends State<_ReminderCard> {
                   ),
                   const SizedBox(height: 16),
 
+                  // Reminder Settings
+                  Text(
+                    'Reminder Settings',
+                    style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                          fontWeight: FontWeight.bold,
+                        ),
+                  ),
+                  const SizedBox(height: 8),
+                  OutlinedButton.icon(
+                    onPressed: () => _resetCooldown(context),
+                    icon: const Icon(Icons.refresh, size: 18),
+                    label: const Text('Reset Notification Cooldown'),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: Colors.orange,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'The cooldown prevents duplicate notifications within 24 hours. Reset it to allow immediate notifications.',
+                    style: TextStyle(
+                      fontSize: 11,
+                      color: Colors.grey[600],
+                      fontStyle: FontStyle.italic,
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+
                   // Shopping list
                   Text(
                     'Shopping List',
@@ -402,6 +430,32 @@ class _ReminderCardState extends State<_ReminderCard> {
     final provider = Provider.of<ReminderProvider>(context, listen: false);
     provider.addItem(widget.reminder.id, text);
     _newItemController.clear();
+  }
+
+  Future<void> _resetCooldown(BuildContext context) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final key = 'last_notification_${widget.reminder.id}';
+      await prefs.remove(key);
+
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Cooldown reset for ${widget.reminder.brandName}'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error resetting cooldown: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
   }
 }
 
