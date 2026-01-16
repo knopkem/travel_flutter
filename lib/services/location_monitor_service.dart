@@ -37,6 +37,9 @@ class LocationMonitorService {
   final Map<String, Timer> _activeDwellTimers = {};
   // Track reminders that have been notified to prevent duplicates
   final Set<String> _notifiedReminders = {};
+  // Track registered iOS geofences for stats
+  int _iosRegisteredGeofenceCount = 0;
+  int _iosTotalReminderCount = 0;
 
   // Dynamic geofence manager for Android only
   DynamicGeofenceManager? _dynamicGeofenceManager;
@@ -103,6 +106,8 @@ class LocationMonitorService {
     // Check if already notified
     if (_notifiedReminders.contains(reminderId)) {
       debugPrint('Already notified for $reminderId, ignoring');
+      DebugLogService()
+          .log('Already notified, ignoring entry', type: DebugLogType.info);
       return;
     }
 
@@ -116,8 +121,16 @@ class LocationMonitorService {
     // Check if we already have an active timer
     if (_activeDwellTimers.containsKey(reminderId)) {
       debugPrint('Timer already active for $reminderId, ignoring duplicate');
+      DebugLogService()
+          .log('iOS: Timer already active, ignoring', type: DebugLogType.info);
       return;
     }
+
+    // Get reminder info for logging
+    final reminderService = ReminderService();
+    final reminders = await reminderService.loadReminders();
+    final reminder = reminders.where((r) => r.id == reminderId).firstOrNull;
+    final brandName = reminder?.brandName ?? reminderId;
 
     final dwellTracker = DwellTimeTracker();
     await dwellTracker.recordEntry(reminderId);
@@ -125,9 +138,21 @@ class LocationMonitorService {
     // Check if we've already dwelled long enough
     final hasDwelled = await dwellTracker.hasDwelledLongEnough(reminderId);
     if (hasDwelled) {
-      debugPrint('Already dwelled at $reminderId, skipping');
+      debugPrint('Already dwelled at $reminderId, sending notification');
+      DebugLogService().log('iOS: Already dwelled at $brandName',
+          type: DebugLogType.geofenceDwell);
+      await _sendReminderNotification(reminderId);
       return;
     }
+
+    // Get dwell time from settings for logging
+    final prefs = await SharedPreferences.getInstance();
+    final dwellTimeMinutes = prefs.getInt('dwell_time_minutes') ?? 1;
+
+    DebugLogService().log(
+      'iOS: Waiting ${dwellTimeMinutes}min dwell time for $brandName',
+      type: DebugLogType.info,
+    );
 
     // Start iOS dwell timer
     _startDwellTimer(reminderId);
@@ -162,7 +187,20 @@ class LocationMonitorService {
       if (hasDwelled) {
         timer.cancel();
         _activeDwellTimers.remove(reminderId);
+
+        // Get reminder info for logging
+        final reminderService = ReminderService();
+        final reminders = await reminderService.loadReminders();
+        final reminder = reminders.where((r) => r.id == reminderId).firstOrNull;
+        final brandName = reminder?.brandName ?? reminderId;
+
+        DebugLogService().log(
+          'iOS: Dwell complete for $brandName (sending notification)',
+          type: DebugLogType.geofenceDwell,
+        );
+
         await _sendReminderNotification(reminderId);
+        return;
       }
 
       // Check if we're still in the geofence
@@ -171,21 +209,41 @@ class LocationMonitorService {
         timer.cancel();
         _activeDwellTimers.remove(reminderId);
         debugPrint('User left geofence $reminderId, stopping timer');
+        DebugLogService()
+            .log('iOS: User left during dwell wait', type: DebugLogType.info);
       }
     });
 
     _activeDwellTimers[reminderId] = timer;
   }
 
-  /// Send notification for a reminder
+  /// Send notification for a reminder (iOS dwell completion)
   Future<void> _sendReminderNotification(String reminderId) async {
     if (_notifiedReminders.contains(reminderId)) {
       debugPrint('Already notified for $reminderId, skipping');
       return;
     }
-    _notifiedReminders.add(reminderId);
 
     try {
+      // Check cooldown period (24 hours) - same as Android
+      final prefs = await SharedPreferences.getInstance();
+      final lastNotificationKey = 'last_notification_$reminderId';
+      final lastNotificationTime = prefs.getInt(lastNotificationKey) ?? 0;
+      final now = DateTime.now().millisecondsSinceEpoch;
+
+      const cooldownMs = 24 * 60 * 60 * 1000;
+      if (now - lastNotificationTime < cooldownMs) {
+        debugPrint(
+            'iOS: Skipping notification for $reminderId (cooldown period)');
+        DebugLogService().log(
+          'Skipped notification (cooldown)',
+          type: DebugLogType.info,
+        );
+        return;
+      }
+
+      _notifiedReminders.add(reminderId);
+
       final reminderService = ReminderService();
       final reminders = await reminderService.loadReminders();
       final reminder = reminders.where((r) => r.id == reminderId).firstOrNull;
@@ -194,6 +252,9 @@ class LocationMonitorService {
         debugPrint('Reminder not found for id: $reminderId');
         return;
       }
+
+      // Save notification time
+      await prefs.setInt(lastNotificationKey, now);
 
       final notificationService = NotificationService();
       await notificationService.initialize();
@@ -205,8 +266,14 @@ class LocationMonitorService {
       );
 
       debugPrint('Sent notification for reminder: ${reminder.brandName}');
+      DebugLogService().log(
+        'iOS: Notification sent for ${reminder.brandName}',
+        type: DebugLogType.geofenceDwell,
+      );
     } catch (e) {
       debugPrint('Error sending reminder notification: $e');
+      DebugLogService()
+          .log('iOS: Error sending notification: $e', type: DebugLogType.error);
     }
   }
 
@@ -330,9 +397,17 @@ class LocationMonitorService {
           'radius': proximityRadius.toDouble(),
         });
       }
+
+      // Track iOS geofence count for stats
+      _iosRegisteredGeofenceCount = reminders.length;
+      _iosTotalReminderCount = reminders.length;
+
       debugPrint('iOS geofencing started');
       DebugLogService().log(
           'iOS geofencing started with ${reminders.length} geofences',
+          type: DebugLogType.info);
+      DebugLogService().log(
+          'Active geofences: ${reminders.length}/${reminders.length}',
           type: DebugLogType.info);
     } catch (e) {
       debugPrint('Error starting iOS geofencing: $e');
@@ -351,6 +426,10 @@ class LocationMonitorService {
         timer.cancel();
       }
       _activeDwellTimers.clear();
+
+      // Reset iOS stats
+      _iosRegisteredGeofenceCount = 0;
+      _iosTotalReminderCount = 0;
 
       debugPrint('iOS geofencing stopped');
     } catch (e) {
@@ -384,12 +463,17 @@ class LocationMonitorService {
     }
   }
 
-  /// Get dynamic geofence stats (Android only)
+  /// Get dynamic geofence stats (Android and iOS)
   Map<String, int>? getGeofenceStats() {
     if (Platform.isAndroid && _dynamicGeofenceManager != null) {
       return {
         'active': _dynamicGeofenceManager!.getActiveCount(),
         'total': _dynamicGeofenceManager!.getTotalCount(),
+      };
+    } else if (Platform.isIOS && _isMonitoring) {
+      return {
+        'active': _iosRegisteredGeofenceCount,
+        'total': _iosTotalReminderCount,
       };
     }
     return null;

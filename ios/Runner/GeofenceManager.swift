@@ -62,6 +62,13 @@ class GeofenceManager: NSObject, CLLocationManagerDelegate {
     }
     
     private func registerGeofence(id: String, latitude: Double, longitude: Double, radius: Double) {
+        // Clear any existing state for this geofence to allow fresh "already inside" detection
+        if registeredGeofences[id] != nil {
+            locationManager?.stopMonitoring(for: registeredGeofences[id]!)
+            registeredGeofences.removeValue(forKey: id)
+        }
+        enteredRegions.remove(id)  // Clear so didDetermineState can re-trigger if inside
+        
         let center = CLLocationCoordinate2D(latitude: latitude, longitude: longitude)
         let region = CLCircularRegion(center: center, radius: radius, identifier: id)
         
