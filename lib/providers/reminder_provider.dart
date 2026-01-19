@@ -268,6 +268,36 @@ class ReminderProvider extends ChangeNotifier {
     }
   }
 
+  /// Sync geofencing services with current reminder list
+  Future<void> _syncGeofencingServices() async {
+    final backgroundLocationEnabled =
+        await _settingsService.loadBackgroundLocationEnabled();
+    if (!backgroundLocationEnabled) {
+      debugPrint(
+          'ReminderProvider: Background location disabled, skipping sync');
+      return;
+    }
+
+    try {
+      if (_strategyManager.isUsingNativeGeofencing) {
+        // Native geofencing: restart monitoring with updated reminders
+        await _locationService.stopMonitoring();
+        if (_reminders.isNotEmpty) {
+          await _locationService.startMonitoring(_reminders);
+        }
+      } else {
+        // Background service: update with current reminders
+        if (_reminders.isNotEmpty) {
+          await _backgroundGeofence.updateReminders(_reminders);
+        } else {
+          await _backgroundGeofence.stopMonitoring();
+        }
+      }
+    } catch (e) {
+      debugPrint('ReminderProvider: Error syncing geofencing services: $e');
+    }
+  }
+
   /// Remove a reminder
   Future<bool> removeReminder(String id) async {
     try {
@@ -339,6 +369,12 @@ class ReminderProvider extends ChangeNotifier {
       final success = await _reminderService.updateReminder(updatedReminder);
       if (success) {
         _reminders[reminderIndex] = updatedReminder;
+        // Sync with geofencing services to update items list
+        await _syncGeofencingServices();
+
+        // Sync with geofencing services to update items list
+        await _syncGeofencingServices();
+
         notifyListeners();
         return true;
       }
@@ -368,6 +404,10 @@ class ReminderProvider extends ChangeNotifier {
       final success = await _reminderService.updateReminder(updatedReminder);
       if (success) {
         _reminders[reminderIndex] = updatedReminder;
+
+        // Sync with geofencing services
+        await _syncGeofencingServices();
+
         notifyListeners();
         return true;
       }
@@ -400,6 +440,10 @@ class ReminderProvider extends ChangeNotifier {
       final success = await _reminderService.updateReminder(updatedReminder);
       if (success) {
         _reminders[reminderIndex] = updatedReminder;
+
+        // Sync with geofencing services
+        await _syncGeofencingServices();
+
         notifyListeners();
         return true;
       }

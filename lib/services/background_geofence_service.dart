@@ -7,6 +7,7 @@ import 'package:geolocator/geolocator.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/reminder.dart';
 import '../services/notification_service.dart';
+import '../services/reminder_service.dart';
 import '../utils/settings_service.dart';
 
 /// Background geofence monitoring that survives app termination
@@ -211,32 +212,37 @@ class BackgroundGeofenceService {
       await notificationService.initialize();
       final now = DateTime.now();
 
+      // Load fresh reminder data from database
+      final reminderService = ReminderService();
+      final reminders = await reminderService.loadReminders();
+      final reminderMap = {for (var r in reminders) r.id: r};
+
+      // Load search distance from settings
+      final settingsService = SettingsService();
+      final searchDistanceKm = await settingsService.loadPoiDistance();
+
       // Check each reminder
       for (final reminderId in reminderIds) {
-        final reminderJson = prefs.getString('reminder_$reminderId');
-        if (reminderJson == null) continue;
-
-        final parts = reminderJson.split('|');
-        if (parts.length < 8) continue;
-
-        final latitude = double.tryParse(parts[4]);
-        final longitude = double.tryParse(parts[5]);
-        final radiusKm = double.tryParse(parts[6]) ?? 5.0;
-
-        if (latitude == null || longitude == null) continue;
+        // Get fresh reminder data from database
+        final reminder = reminderMap[reminderId];
+        if (reminder == null) {
+          debugPrint(
+              'BackgroundGeofence: Reminder $reminderId not found in database');
+          continue;
+        }
 
         final distance = Geolocator.distanceBetween(
           position.latitude,
           position.longitude,
-          latitude,
-          longitude,
+          reminder.latitude,
+          reminder.longitude,
         );
 
         final distanceKm = distance / 1000;
 
-        if (distanceKm <= radiusKm) {
+        if (distanceKm <= searchDistanceKm) {
           debugPrint(
-              'BackgroundGeofence: Inside radius for ${parts[3]} (${distanceKm.toStringAsFixed(2)} km)');
+              'BackgroundGeofence: Inside radius for ${reminder.brandName} (${distanceKm.toStringAsFixed(2)} km)');
 
           // Check cooldown
           final lastNotificationTime =
@@ -245,24 +251,26 @@ class BackgroundGeofenceService {
             final lastTime =
                 DateTime.fromMillisecondsSinceEpoch(lastNotificationTime);
             if (now.difference(lastTime) < _notificationCooldown) {
-              debugPrint('BackgroundGeofence: Cooldown active for ${parts[3]}');
+              debugPrint(
+                  'BackgroundGeofence: Cooldown active for ${reminder.brandName}');
               continue;
             }
           }
 
-          // Send notification
+          // Send notification with fresh item data
           await notificationService.showReminderNotification(
-            poiId: parts[1],
-            poiName: parts[2],
-            brandName: parts[3],
-            items: parts[7].split(',').where((s) => s.isNotEmpty).toList(),
+            poiId: reminder.id,
+            poiName: reminder.originalPoiName,
+            brandName: reminder.brandName,
+            items: reminder.items.map((item) => item.text).toList(),
           );
 
           // Update cooldown
           await prefs.setInt(
               'last_notification_$reminderId', now.millisecondsSinceEpoch);
 
-          debugPrint('BackgroundGeofence: Notification sent for ${parts[3]}');
+          debugPrint(
+              'BackgroundGeofence: Notification sent for ${reminder.brandName}');
         }
       }
 
