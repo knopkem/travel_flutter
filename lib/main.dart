@@ -6,11 +6,13 @@ import 'repositories/repositories.dart';
 import 'screens/tab_navigation_screen.dart';
 import 'screens/poi_detail_screen.dart';
 import 'screens/reminders_overview_screen.dart';
+import 'screens/permissions_disclosure_screen.dart';
 import 'services/openai_service.dart';
 import 'services/notification_service.dart';
 import 'services/location_monitor_service.dart';
 import 'services/dwell_time_tracker.dart';
 import 'utils/settings_service.dart';
+import 'utils/onboarding_service.dart';
 
 // Global navigator key for deep linking from notifications
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
@@ -137,10 +139,11 @@ void _handleNotificationTap(String payload) {
     }
 
     // Try to get the reminder by ID first (for geofence notifications)
-    final reminderProvider = Provider.of<ReminderProvider>(context, listen: false);
+    final reminderProvider =
+        Provider.of<ReminderProvider>(context, listen: false);
     final reminders = reminderProvider.reminders;
     final reminder = reminders.where((r) => r.id == payload).firstOrNull;
-    
+
     if (reminder != null) {
       // Found a reminder - show dialog with shopping list
       debugPrint('Showing shopping list for reminder: ${reminder.brandName}');
@@ -225,16 +228,40 @@ void _handleNotificationTap(String payload) {
   });
 }
 
-class MyApp extends StatelessWidget {
+class MyApp extends StatefulWidget {
   const MyApp({super.key});
 
   @override
-  Widget build(BuildContext context) {
+  State<MyApp> createState() => _MyAppState();
+}
+
+class _MyAppState extends State<MyApp> {
+  @override
+  void initState() {
+    super.initState();
     // Capture POI provider reference for deep linking
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _poiProviderRef = Provider.of<POIProvider>(context, listen: false);
+      // Check and show disclosure if needed
+      _checkAndShowDisclosure();
     });
+  }
 
+  Future<void> _checkAndShowDisclosure() async {
+    final hasShown = await OnboardingService.hasShownDisclosure();
+    if (!hasShown && mounted) {
+      // Show disclosure screen as a modal
+      await Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (context) => const PermissionsDisclosureScreen(),
+          fullscreenDialog: true,
+        ),
+      );
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
     return MaterialApp(
       title: 'LocationPal',
       navigatorKey: navigatorKey,
