@@ -19,7 +19,8 @@ class RemindersSettingsScreen extends StatefulWidget {
   const RemindersSettingsScreen({super.key});
 
   @override
-  State<RemindersSettingsScreen> createState() => _RemindersSettingsScreenState();
+  State<RemindersSettingsScreen> createState() =>
+      _RemindersSettingsScreenState();
 }
 
 class _RemindersSettingsScreenState extends State<RemindersSettingsScreen> {
@@ -158,6 +159,33 @@ class _RemindersSettingsScreenState extends State<RemindersSettingsScreen> {
                 ),
               ),
             ],
+          ),
+          const SizedBox(height: 16),
+          SwitchListTile(
+            title: const Text('Enable Notifications'),
+            subtitle: Text(
+              'Show notifications when near stores with shopping reminders',
+              style: TextStyle(
+                fontSize: 12,
+                color: Colors.grey[600],
+              ),
+            ),
+            value: settingsProvider.notificationsEnabled,
+            onChanged: (value) async {
+              await settingsProvider.updateNotificationsEnabled(value);
+              if (context.mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text(
+                      value
+                          ? 'Notifications enabled'
+                          : 'Notifications disabled',
+                    ),
+                    backgroundColor: value ? Colors.green : null,
+                  ),
+                );
+              }
+            },
           ),
           const SizedBox(height: 16),
           SwitchListTile(
@@ -367,16 +395,14 @@ class _RemindersSettingsScreenState extends State<RemindersSettingsScreen> {
                   color: isNative ? Colors.green[50] : Colors.orange[50],
                   borderRadius: BorderRadius.circular(8),
                   border: Border.all(
-                    color:
-                        isNative ? Colors.green[200]! : Colors.orange[200]!,
+                    color: isNative ? Colors.green[200]! : Colors.orange[200]!,
                   ),
                 ),
                 child: Row(
                   children: [
                     Icon(
                       isNative ? Icons.check_circle : Icons.info,
-                      color:
-                          isNative ? Colors.green[700] : Colors.orange[700],
+                      color: isNative ? Colors.green[700] : Colors.orange[700],
                       size: 24,
                     ),
                     const SizedBox(width: 12),
@@ -414,8 +440,7 @@ class _RemindersSettingsScreenState extends State<RemindersSettingsScreen> {
           ),
           const SizedBox(height: 16),
           FutureBuilder<bool>(
-            future:
-                BatteryOptimizationHelper.isIgnoringBatteryOptimizations(),
+            future: BatteryOptimizationHelper.isIgnoringBatteryOptimizations(),
             builder: (context, snapshot) {
               if (!snapshot.hasData) {
                 return const SizedBox.shrink();

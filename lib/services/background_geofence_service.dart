@@ -288,13 +288,21 @@ class BackgroundGeofenceService {
             }
           }
 
-          // Send notification with fresh item data
-          await notificationService.showReminderNotification(
-            poiId: reminder.id,
-            poiName: reminder.originalPoiName,
-            brandName: reminder.brandName,
-            items: reminder.items.map((item) => item.text).toList(),
-          );
+          // Check if notifications are enabled before showing
+          final notificationsEnabled =
+              prefs.getBool('notifications_enabled') ?? true;
+          if (notificationsEnabled) {
+            // Send notification with fresh item data
+            await notificationService.showReminderNotification(
+              poiId: reminder.id,
+              poiName: reminder.originalPoiName,
+              brandName: reminder.brandName,
+              items: reminder.items.map((item) => item.text).toList(),
+            );
+          } else {
+            debugPrint(
+                'BackgroundGeofence: Notifications disabled, skipping notification for ${reminder.brandName}');
+          }
 
           // Update cooldown
           await prefs.setInt(

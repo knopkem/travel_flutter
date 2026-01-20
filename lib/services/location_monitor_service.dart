@@ -256,14 +256,22 @@ class LocationMonitorService {
       // Save notification time
       await prefs.setInt(lastNotificationKey, now);
 
-      final notificationService = NotificationService();
-      await notificationService.initialize();
-      await notificationService.showReminderNotification(
-        poiId: reminder.id,
-        poiName: reminder.originalPoiName,
-        brandName: reminder.brandName,
-        items: reminder.items.map((item) => item.text).toList(),
-      );
+      // Check if notifications are enabled before showing
+      final notificationsEnabled =
+          prefs.getBool('notifications_enabled') ?? true;
+      if (notificationsEnabled) {
+        final notificationService = NotificationService();
+        await notificationService.initialize();
+        await notificationService.showReminderNotification(
+          poiId: reminder.id,
+          poiName: reminder.originalPoiName,
+          brandName: reminder.brandName,
+          items: reminder.items.map((item) => item.text).toList(),
+        );
+      } else {
+        debugPrint(
+            'Notifications disabled, skipping notification for ${reminder.brandName}');
+      }
 
       debugPrint('Sent notification for reminder: ${reminder.brandName}');
       DebugLogService().log(

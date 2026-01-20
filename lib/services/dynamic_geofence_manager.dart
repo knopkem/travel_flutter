@@ -467,13 +467,21 @@ class DynamicGeofenceManager {
           // Save notification time
           await prefs.setInt(lastNotificationKey, now);
 
-          // Send actual notification
-          await NotificationService().showReminderNotification(
-            poiId: reminder.id,
-            poiName: reminder.originalPoiName,
-            brandName: reminder.brandName,
-            items: reminder.items.map((item) => item.text).toList(),
-          );
+          // Check if notifications are enabled before showing
+          final notificationsEnabled =
+              prefs.getBool('notifications_enabled') ?? true;
+          if (notificationsEnabled) {
+            // Send actual notification
+            await NotificationService().showReminderNotification(
+              poiId: reminder.id,
+              poiName: reminder.originalPoiName,
+              brandName: reminder.brandName,
+              items: reminder.items.map((item) => item.text).toList(),
+            );
+          } else {
+            debugPrint(
+                'DynamicGeofenceManager: Notifications disabled, skipping notification for ${reminder.brandName}');
+          }
         } else {
           debugPrint(
               'DynamicGeofenceManager: User left ${reminder.brandName} during dwell wait');

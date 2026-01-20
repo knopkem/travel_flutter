@@ -13,12 +13,14 @@ class SettingsService {
   static const String _poiDistanceKey = 'poi_search_distance';
   static const String _poiProvidersEnabledKey = 'poi_providers_enabled';
   static const String _defaultPoiCategoryKey = 'default_poi_category';
-  static const String _backgroundLocationEnabledKey = 'background_location_enabled';
+  static const String _backgroundLocationEnabledKey =
+      'background_location_enabled';
+  static const String _notificationsEnabledKey = 'notifications_enabled';
   static const String _dwellTimeMinutesKey = 'dwell_time_minutes';
   static const int defaultDwellTimeMinutes = 1; // Default 1 min for development
   static const String _proximityRadiusMetersKey = 'proximity_radius_meters';
   static const int defaultProximityRadiusMeters = 150; // Default 150 meters
-  
+
   // Geofence strategy keys
   static const String _geofenceStrategyKey = 'geofence_strategy';
   static const String _geofenceFallbackReasonKey = 'geofence_fallback_reason';
@@ -638,7 +640,28 @@ class SettingsService {
   Future<bool> loadBackgroundLocationEnabled() async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      return prefs.getBool(_backgroundLocationEnabledKey) ?? true; // Default enabled
+      return prefs.getBool(_backgroundLocationEnabledKey) ??
+          true; // Default enabled
+    } catch (e) {
+      return true;
+    }
+  }
+
+  /// Save notifications enabled setting
+  Future<bool> saveNotificationsEnabled(bool enabled) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      return await prefs.setBool(_notificationsEnabledKey, enabled);
+    } catch (e) {
+      return false;
+    }
+  }
+
+  /// Load notifications enabled setting
+  Future<bool> loadNotificationsEnabled() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      return prefs.getBool(_notificationsEnabledKey) ?? true; // Default enabled
     } catch (e) {
       return true;
     }
@@ -678,7 +701,8 @@ class SettingsService {
   Future<int> loadProximityRadiusMeters() async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      return prefs.getInt(_proximityRadiusMetersKey) ?? defaultProximityRadiusMeters;
+      return prefs.getInt(_proximityRadiusMetersKey) ??
+          defaultProximityRadiusMeters;
     } catch (e) {
       return defaultProximityRadiusMeters;
     }

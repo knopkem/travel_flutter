@@ -78,7 +78,7 @@ class PermissionsDisclosureScreen extends StatelessWidget {
                 dataUsage: [
                   'Notifications are generated locally on your device',
                   'No personal data is sent to servers',
-                  'You can customize or disable notifications in Settings',
+                  'You can enable or disable notifications in Shopping Reminders settings',
                 ],
               ),
               const SizedBox(height: 24),

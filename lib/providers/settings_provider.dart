@@ -29,6 +29,7 @@ class SettingsProvider extends ChangeNotifier {
   int _googlePlacesRequestCount = 0;
   POICategory _defaultPoiCategory = POICategory.attraction;
   bool _backgroundLocationEnabled = true;
+  bool _notificationsEnabled = true;
   int _dwellTimeMinutes = SettingsService.defaultDwellTimeMinutes;
   int _proximityRadiusMeters = SettingsService.defaultProximityRadiusMeters;
 
@@ -145,6 +146,9 @@ class SettingsProvider extends ChangeNotifier {
   /// Whether background location monitoring is enabled for reminders
   bool get backgroundLocationEnabled => _backgroundLocationEnabled;
 
+  /// Whether notifications are enabled for shopping reminders
+  bool get notificationsEnabled => _notificationsEnabled;
+
   /// Dwell time in minutes before triggering notification
   int get dwellTimeMinutes => _dwellTimeMinutes;
 
@@ -170,6 +174,7 @@ class SettingsProvider extends ChangeNotifier {
         await _settingsService.loadBackgroundLocationEnabled();
     _dwellTimeMinutes = await _settingsService.loadDwellTimeMinutes();
     _proximityRadiusMeters = await _settingsService.loadProximityRadiusMeters();
+    _notificationsEnabled = await _settingsService.loadNotificationsEnabled();
     _isLoading = true;
     notifyListeners();
 
@@ -438,6 +443,14 @@ class SettingsProvider extends ChangeNotifier {
     await _settingsService.saveGooglePlacesRequestCount(
         _googlePlacesRequestCount, DateTime.now());
     notifyListeners();
+  }
+
+  /// Update notifications enabled setting
+  Future<void> updateNotificationsEnabled(bool enabled) async {
+    _notificationsEnabled = enabled;
+    notifyListeners();
+
+    await _settingsService.saveNotificationsEnabled(enabled);
   }
 
   /// Update background location enabled setting
