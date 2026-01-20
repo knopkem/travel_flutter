@@ -330,9 +330,9 @@ class DynamicGeofenceManager {
       await _saveRegisteredIds();
 
       debugPrint(
-          'DynamicGeofenceManager: Active geofences: ${_registeredGeofenceIds.length}/${_allReminders.length}');
+          'DynamicGeofenceManager: Active geofences: ${_registeredGeofenceIds.length} locations');
       DebugLogService().log(
-        'Active geofences: ${_registeredGeofenceIds.length}/${_allReminders.length}',
+        'Active geofences: ${_registeredGeofenceIds.length} locations',
         type: DebugLogType.info,
       );
     } catch (e) {

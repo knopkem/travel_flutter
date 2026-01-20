@@ -443,7 +443,7 @@ class LocationMonitorService {
           'iOS geofencing started with $_iosRegisteredGeofenceCount geofences',
           type: DebugLogType.info);
       DebugLogService().log(
-          'Active geofences: $_iosRegisteredGeofenceCount for $_iosTotalReminderCount reminders',
+          'Active geofences: $_iosRegisteredGeofenceCount locations',
           type: DebugLogType.info);
     } catch (e) {
       debugPrint('Error starting iOS geofencing: $e');
@@ -509,7 +509,8 @@ class LocationMonitorService {
     } else if (Platform.isIOS && _isMonitoring) {
       return {
         'active': _iosRegisteredGeofenceCount,
-        'total': _iosTotalReminderCount,
+        'total':
+            _iosRegisteredGeofenceCount, // Total = active on iOS (all locations tracked)
       };
     }
     return null;

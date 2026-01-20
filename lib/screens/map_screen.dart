@@ -25,17 +25,18 @@ class MapScreen extends StatefulWidget {
   State<MapScreen> createState() => _MapScreenState();
 }
 
-class _MapScreenState extends State<MapScreen> with SingleTickerProviderStateMixin {
+class _MapScreenState extends State<MapScreen>
+    with SingleTickerProviderStateMixin {
   final MapController _mapController = MapController();
   Location? _previousLocation;
   double _currentZoom = 13.0;
   bool _showGeofenceDebug = false;
-  
+
   // GPS tracking state
   Position? _currentGpsPosition;
   StreamSubscription<Position>? _positionStream;
   bool _gpsAvailable = false;
-  
+
   // Pulse animation for GPS dot
   late AnimationController _pulseController;
   late Animation<double> _pulseAnimation;
@@ -43,7 +44,7 @@ class _MapScreenState extends State<MapScreen> with SingleTickerProviderStateMix
   @override
   void initState() {
     super.initState();
-    
+
     // Pulse animation for GPS dot
     _pulseController = AnimationController(
       duration: const Duration(milliseconds: 1500),
@@ -52,7 +53,7 @@ class _MapScreenState extends State<MapScreen> with SingleTickerProviderStateMix
     _pulseAnimation = Tween<double>(begin: 0.6, end: 1.0).animate(
       CurvedAnimation(parent: _pulseController, curve: Curves.easeInOut),
     );
-    
+
     _mapController.mapEventStream.listen((event) {
       if (event is MapEventMove || event is MapEventFlingAnimationEnd) {
         setState(() {
@@ -413,16 +414,33 @@ class _MapScreenState extends State<MapScreen> with SingleTickerProviderStateMix
   /// Get geofence circle markers for debug visualization
   List<CircleMarker> _getGeofenceCircles(
       List<Reminder> reminders, double proximityRadius) {
-    return reminders.map((reminder) {
-      return CircleMarker(
-        point: LatLng(reminder.latitude, reminder.longitude),
-        radius: proximityRadius,
-        useRadiusInMeter: true, // Use geographical radius that scales with zoom
-        color: Colors.blue.withValues(alpha: 0.15),
-        borderColor: Colors.blue,
-        borderStrokeWidth: 2,
-      );
-    }).toList();
+    final circles = <CircleMarker>[];
+    for (final reminder in reminders) {
+      // Add circles for all tracked locations
+      if (reminder.locations.isNotEmpty) {
+        for (final location in reminder.locations) {
+          circles.add(CircleMarker(
+            point: LatLng(location.latitude, location.longitude),
+            radius: proximityRadius,
+            useRadiusInMeter: true,
+            color: Colors.blue.withValues(alpha: 0.15),
+            borderColor: Colors.blue,
+            borderStrokeWidth: 2,
+          ));
+        }
+      } else {
+        // Fallback for old format (single location)
+        circles.add(CircleMarker(
+          point: LatLng(reminder.latitude, reminder.longitude),
+          radius: proximityRadius,
+          useRadiusInMeter: true,
+          color: Colors.blue.withValues(alpha: 0.15),
+          borderColor: Colors.blue,
+          borderStrokeWidth: 2,
+        ));
+      }
+    }
+    return circles;
   }
 
   @override
@@ -446,8 +464,10 @@ class _MapScreenState extends State<MapScreen> with SingleTickerProviderStateMix
           ),
         ],
       ),
-      body: Consumer5<LocationProvider, POIProvider, AIGuidanceProvider, SettingsProvider, ReminderProvider>(
-        builder: (context, locationProvider, poiProvider, aiGuidanceProvider, settingsProvider, reminderProvider, child) {
+      body: Consumer5<LocationProvider, POIProvider, AIGuidanceProvider,
+          SettingsProvider, ReminderProvider>(
+        builder: (context, locationProvider, poiProvider, aiGuidanceProvider,
+            settingsProvider, reminderProvider, child) {
           final selectedCity = locationProvider.selectedCity;
 
           // Auto-recenter when location changes
@@ -517,7 +537,8 @@ class _MapScreenState extends State<MapScreen> with SingleTickerProviderStateMix
             // Apply type filters (from POIProvider)
             if (poiProvider.selectedFilters.isNotEmpty) {
               poisToShow = poisToShow
-                  .where((poi) => poiProvider.selectedFilters.contains(poi.type))
+                  .where(
+                      (poi) => poiProvider.selectedFilters.contains(poi.type))
                   .toList();
             }
 
@@ -550,7 +571,7 @@ class _MapScreenState extends State<MapScreen> with SingleTickerProviderStateMix
 
           // Build circle layers
           final List<CircleMarker> circles = [];
-          
+
           // Add POI search radius circle
           circles.add(_getSearchRadiusCircle(
             selectedCity,
@@ -764,7 +785,8 @@ class _MapScreenState extends State<MapScreen> with SingleTickerProviderStateMix
                                 decoration: BoxDecoration(
                                   shape: BoxShape.circle,
                                   color: Colors.blue,
-                                  border: Border.all(color: Colors.white, width: 1.5),
+                                  border: Border.all(
+                                      color: Colors.white, width: 1.5),
                                 ),
                               ),
                               const SizedBox(width: 8),
@@ -784,7 +806,8 @@ class _MapScreenState extends State<MapScreen> with SingleTickerProviderStateMix
                                 shape: BoxShape.circle,
                                 color: Colors.deepPurple.withValues(alpha: 0.1),
                                 border: Border.all(
-                                  color: Colors.deepPurple.withValues(alpha: 0.5),
+                                  color:
+                                      Colors.deepPurple.withValues(alpha: 0.5),
                                   width: 1.5,
                                 ),
                               ),
@@ -802,8 +825,7 @@ class _MapScreenState extends State<MapScreen> with SingleTickerProviderStateMix
                           children: [
                             Icon(Icons.place, color: Colors.grey, size: 20),
                             const SizedBox(width: 8),
-                            Text(
-                                'POIs (${poisToShow.length})',
+                            Text('POIs (${poisToShow.length})',
                                 style: const TextStyle(fontSize: 12)),
                           ],
                         ),
