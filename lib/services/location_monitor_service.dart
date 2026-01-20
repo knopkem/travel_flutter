@@ -386,28 +386,64 @@ class LocationMonitorService {
       final prefs = await SharedPreferences.getInstance();
       final proximityRadius = prefs.getInt('proximity_radius_meters') ?? 150;
 
-      for (final reminder in reminders) {
-        debugPrint('Registering iOS geofence for ${reminder.brandName}');
-        DebugLogService().log('Registered geofence: ${reminder.brandName}',
-            type: DebugLogType.register);
-        await _channel.invokeMethod('registerGeofence', {
-          'id': reminder.id,
-          'latitude': reminder.latitude,
-          'longitude': reminder.longitude,
-          'radius': proximityRadius.toDouble(),
-        });
-      }
-
-      // Track iOS geofence count for stats
-      _iosRegisteredGeofenceCount = reminders.length;
+      _iosRegisteredGeofenceCount = 0;
       _iosTotalReminderCount = reminders.length;
 
-      debugPrint('iOS geofencing started');
+      // Register geofences for all locations of each reminder
+      for (final reminder in reminders) {
+        // If reminder has multiple locations, register each one
+        if (reminder.locations.isNotEmpty) {
+          for (final location in reminder.locations) {
+            try {
+              debugPrint(
+                  'Registering iOS geofence for ${location.poiName} (${reminder.brandName})');
+              DebugLogService().log('Registered geofence: ${location.poiName}',
+                  type: DebugLogType.register);
+              await _channel.invokeMethod('registerGeofence', {
+                'id': '${reminder.id}_${location.poiId}',
+                'latitude': location.latitude,
+                'longitude': location.longitude,
+                'radius': proximityRadius.toDouble(),
+              });
+              _iosRegisteredGeofenceCount++;
+            } catch (e) {
+              debugPrint(
+                  'Error registering geofence for ${location.poiName}: $e');
+              DebugLogService().log(
+                  'Error registering geofence for ${location.poiName}: $e',
+                  type: DebugLogType.error);
+            }
+          }
+        } else {
+          // Fallback for old format (single location)
+          try {
+            debugPrint('Registering iOS geofence for ${reminder.brandName}');
+            DebugLogService().log('Registered geofence: ${reminder.brandName}',
+                type: DebugLogType.register);
+            await _channel.invokeMethod('registerGeofence', {
+              'id': reminder.id,
+              'latitude': reminder.latitude,
+              'longitude': reminder.longitude,
+              'radius': proximityRadius.toDouble(),
+            });
+            _iosRegisteredGeofenceCount++;
+          } catch (e) {
+            debugPrint(
+                'Error registering geofence for ${reminder.brandName}: $e');
+            DebugLogService().log(
+                'Error registering geofence for ${reminder.brandName}: $e',
+                type: DebugLogType.error);
+          }
+        }
+      }
+
+      debugPrint(
+          'iOS geofencing started: $_iosRegisteredGeofenceCount geofences for $_iosTotalReminderCount reminders');
       DebugLogService().log(
-          'iOS geofencing started with ${reminders.length} geofences',
+          'iOS geofencing started with $_iosRegisteredGeofenceCount geofences',
           type: DebugLogType.info);
       DebugLogService().log(
-          'Active geofences: ${reminders.length}/${reminders.length}',
+          'Active geofences: $_iosRegisteredGeofenceCount for $_iosTotalReminderCount reminders',
           type: DebugLogType.info);
     } catch (e) {
       debugPrint('Error starting iOS geofencing: $e');

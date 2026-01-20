@@ -140,7 +140,8 @@ class ReminderProvider extends ChangeNotifier {
   }
 
   /// Add a new reminder
-  Future<bool> addReminder(POI poi, List<String> shoppingItems) async {
+  Future<bool> addReminder(POI poi, List<String> shoppingItems,
+      {List<POI>? allAvailablePOIs}) async {
     try {
       final brandName = BrandMatcher.extractBrand(poi.name);
       if (brandName == null) {
@@ -159,8 +160,36 @@ class ReminderProvider extends ChangeNotifier {
       final items =
           shoppingItems.map((text) => ShoppingItem(text: text)).toList();
 
+      // Find all POIs matching this brand
+      final List<TrackedLocation> locations = [];
+      if (allAvailablePOIs != null) {
+        for (final availablePOI in allAvailablePOIs) {
+          if (BrandMatcher.doesPoiMatchBrand(availablePOI, brandName)) {
+            locations.add(TrackedLocation(
+              poiId: availablePOI.id,
+              poiName: availablePOI.name,
+              latitude: availablePOI.latitude,
+              longitude: availablePOI.longitude,
+            ));
+          }
+        }
+        debugPrint(
+            'ReminderProvider: Found ${locations.length} locations for brand $brandName');
+      }
+
+      // If no locations found (shouldn't happen), add at least the clicked POI
+      if (locations.isEmpty) {
+        locations.add(TrackedLocation(
+          poiId: poi.id,
+          poiName: poi.name,
+          latitude: poi.latitude,
+          longitude: poi.longitude,
+        ));
+      }
+
       final reminder = Reminder(
         brandName: brandName,
+        locations: locations,
         originalPoiId: poi.id,
         originalPoiName: poi.name,
         poiType: poi.type,
@@ -222,8 +251,19 @@ class ReminderProvider extends ChangeNotifier {
       final items =
           shoppingItems.map((text) => ShoppingItem(text: text)).toList();
 
+      // For test POI, create single location
+      final locations = [
+        TrackedLocation(
+          poiId: poi.id,
+          poiName: poi.name,
+          latitude: poi.latitude,
+          longitude: poi.longitude,
+        )
+      ];
+
       final reminder = Reminder(
         brandName: brandName,
+        locations: locations,
         originalPoiId: poi.id,
         originalPoiName: poi.name,
         poiType: poi.type,

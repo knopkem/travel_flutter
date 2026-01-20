@@ -7,6 +7,23 @@ import '../models/reminder.dart';
 import 'debug_log_service.dart';
 import 'notification_service.dart';
 
+/// Helper class to represent a geofence entry with reminder metadata
+class _GeofenceEntry {
+  final String reminderId;
+  final String locationId;
+  final double latitude;
+  final double longitude;
+  final double distance;
+
+  _GeofenceEntry({
+    required this.reminderId,
+    required this.locationId,
+    required this.latitude,
+    required this.longitude,
+    required this.distance,
+  });
+}
+
 /// Manages dynamic geofence registration to handle the 100 geofence limit
 /// Only registers the nearest 95 geofences (buffer below limit)
 class DynamicGeofenceManager {
@@ -155,27 +172,57 @@ class DynamicGeofenceManager {
         return;
       }
 
-      // Calculate distances to all reminders
-      final remindersWithDistance = _allReminders.map((reminder) {
-        final distance = Geolocator.distanceBetween(
-          currentPosition!.latitude,
-          currentPosition.longitude,
-          reminder.latitude,
-          reminder.longitude,
-        );
-        return MapEntry(reminder, distance);
-      }).toList();
+      // Flatten reminders into individual location entries
+      final List<MapEntry<String, _GeofenceEntry>> locationEntries = [];
+      for (final reminder in _allReminders) {
+        if (reminder.locations.isNotEmpty) {
+          // New format: multiple locations per reminder
+          for (final location in reminder.locations) {
+            final distance = Geolocator.distanceBetween(
+              currentPosition.latitude,
+              currentPosition.longitude,
+              location.latitude,
+              location.longitude,
+            );
+            final geofenceId = '${reminder.id}_${location.poiId}';
+            locationEntries.add(MapEntry(
+                geofenceId,
+                _GeofenceEntry(
+                  reminderId: reminder.id,
+                  locationId: location.poiId,
+                  latitude: location.latitude,
+                  longitude: location.longitude,
+                  distance: distance,
+                )));
+          }
+        } else {
+          // Fallback for old format: single location
+          final distance = Geolocator.distanceBetween(
+            currentPosition.latitude,
+            currentPosition.longitude,
+            reminder.latitude,
+            reminder.longitude,
+          );
+          locationEntries.add(MapEntry(
+              reminder.id,
+              _GeofenceEntry(
+                reminderId: reminder.id,
+                locationId: reminder.id,
+                latitude: reminder.latitude,
+                longitude: reminder.longitude,
+                distance: distance,
+              )));
+        }
+      }
 
       // Sort by distance (nearest first)
-      remindersWithDistance.sort((a, b) => a.value.compareTo(b.value));
+      locationEntries
+          .sort((a, b) => a.value.distance.compareTo(b.value.distance));
 
-      // Take the nearest N reminders
-      final nearestReminders = remindersWithDistance
-          .take(_maxGeofences)
-          .map((entry) => entry.key)
-          .toList();
+      // Take the nearest N locations
+      final nearestEntries = locationEntries.take(_maxGeofences).toList();
 
-      final nearestIds = nearestReminders.map((r) => r.id).toSet();
+      final nearestIds = nearestEntries.map((e) => e.key).toSet();
 
       // Get settings for registration
       final prefs = await SharedPreferences.getInstance();
@@ -202,47 +249,51 @@ class DynamicGeofenceManager {
             .log('No geofence changes needed', type: DebugLogType.info);
 
         // Check if already inside any existing geofences
-        for (final reminder in nearestReminders) {
-          if (_registeredGeofenceIds.contains(reminder.id)) {
-            final distance = remindersWithDistance
-                .firstWhere((e) => e.key.id == reminder.id)
-                .value;
+        for (final entry in nearestEntries) {
+          final geofenceId = entry.key;
+          final geofenceEntry = entry.value;
 
-            if (distance <= proximityRadius) {
+          if (_registeredGeofenceIds.contains(geofenceId)) {
+            if (geofenceEntry.distance <= proximityRadius) {
               // Skip if already pending to prevent duplicates
-              if (_pendingInitialChecks.contains(reminder.id)) {
+              if (_pendingInitialChecks.contains(geofenceId)) {
                 continue;
               }
 
+              // Find the reminder to get brand name
+              final reminder = _allReminders
+                  .firstWhere((r) => r.id == geofenceEntry.reminderId);
+
               debugPrint(
-                  'DynamicGeofenceManager: Already inside existing geofence: ${reminder.brandName} (${distance.toStringAsFixed(0)}m)');
+                  'DynamicGeofenceManager: Already inside existing geofence: ${reminder.brandName} (${geofenceEntry.distance.toStringAsFixed(0)}m)');
               DebugLogService().log(
-                'Already inside: ${reminder.brandName} (${distance.toStringAsFixed(0)}m)',
+                'Already inside: ${reminder.brandName} (${geofenceEntry.distance.toStringAsFixed(0)}m)',
                 type: DebugLogType.geofenceEnter,
               );
 
               // Check if we should trigger initial state notification
               _handleInitialGeofenceState(
-                  reminder, dwellTimeMinutes, proximityRadius);
+                  geofenceId, reminder, dwellTimeMinutes, proximityRadius);
             }
           }
         }
       }
 
       for (final id in toRegister) {
-        final reminder = nearestReminders.firstWhere((r) => r.id == id);
-        final distance =
-            remindersWithDistance.firstWhere((e) => e.key.id == id).value;
+        final entry = nearestEntries.firstWhere((e) => e.key == id);
+        final geofenceEntry = entry.value;
+        final reminder =
+            _allReminders.firstWhere((r) => r.id == geofenceEntry.reminderId);
 
         debugPrint(
-            'DynamicGeofenceManager: Registering near geofence: $id (distance: ${distance.toStringAsFixed(0)}m)');
+            'DynamicGeofenceManager: Registering near geofence: $id (distance: ${geofenceEntry.distance.toStringAsFixed(0)}m)');
         DebugLogService().log('Registered near geofence: ${reminder.brandName}',
             type: DebugLogType.register);
 
         await registerGeofenceCallback(
           id,
-          reminder.latitude,
-          reminder.longitude,
+          geofenceEntry.latitude,
+          geofenceEntry.longitude,
           proximityRadius.toDouble(),
           dwellTimeMinutes * 60 * 1000, // Convert to milliseconds
         );
@@ -251,11 +302,12 @@ class DynamicGeofenceManager {
 
       // After all registrations, check if we're already inside any of the newly registered geofences
       for (final id in toRegister) {
-        final reminder = nearestReminders.firstWhere((r) => r.id == id);
-        final distance =
-            remindersWithDistance.firstWhere((e) => e.key.id == id).value;
+        final entry = nearestEntries.firstWhere((e) => e.key == id);
+        final geofenceEntry = entry.value;
+        final reminder =
+            _allReminders.firstWhere((r) => r.id == geofenceEntry.reminderId);
 
-        if (distance <= proximityRadius) {
+        if (geofenceEntry.distance <= proximityRadius) {
           // Skip if already pending to prevent duplicates
           if (_pendingInitialChecks.contains(id)) {
             continue;
@@ -264,13 +316,13 @@ class DynamicGeofenceManager {
           debugPrint(
               'DynamicGeofenceManager: Already inside newly registered geofence: ${reminder.brandName}');
           DebugLogService().log(
-            'Already inside: ${reminder.brandName} (${distance.toStringAsFixed(0)}m)',
+            'Already inside: ${reminder.brandName} (${geofenceEntry.distance.toStringAsFixed(0)}m)',
             type: DebugLogType.geofenceEnter,
           );
 
           // Trigger immediate notification for initial state
           _handleInitialGeofenceState(
-              reminder, dwellTimeMinutes, proximityRadius);
+              id, reminder, dwellTimeMinutes, proximityRadius);
         }
       }
 
@@ -346,17 +398,17 @@ class DynamicGeofenceManager {
   }
 
   /// Handle initial geofence state when user is already inside a POI
-  void _handleInitialGeofenceState(
-      Reminder reminder, int dwellTimeMinutes, int proximityRadius) {
-    // Prevent duplicate checks for the same reminder
-    if (_pendingInitialChecks.contains(reminder.id)) {
+  void _handleInitialGeofenceState(String geofenceId, Reminder reminder,
+      int dwellTimeMinutes, int proximityRadius) {
+    // Prevent duplicate checks for the same geofence
+    if (_pendingInitialChecks.contains(geofenceId)) {
       debugPrint(
           'DynamicGeofenceManager: Initial check already pending for ${reminder.brandName}');
       return;
     }
 
     // Mark as pending
-    _pendingInitialChecks.add(reminder.id);
+    _pendingInitialChecks.add(geofenceId);
 
     // Run asynchronously without blocking
     Future(() async {

@@ -231,18 +231,49 @@ class BackgroundGeofenceService {
           continue;
         }
 
-        final distance = Geolocator.distanceBetween(
-          position.latitude,
-          position.longitude,
-          reminder.latitude,
-          reminder.longitude,
-        );
+        // Check all tracked locations for this reminder
+        bool isInsideAnyLocation = false;
+        String? nearestLocationName;
+        double nearestDistance = double.infinity;
 
-        final distanceKm = distance / 1000;
+        if (reminder.locations.isNotEmpty) {
+          // New format: check all tracked locations
+          for (final location in reminder.locations) {
+            final distance = Geolocator.distanceBetween(
+              position.latitude,
+              position.longitude,
+              location.latitude,
+              location.longitude,
+            );
+            final distanceKm = distance / 1000;
 
-        if (distanceKm <= searchDistanceKm) {
+            if (distanceKm < nearestDistance) {
+              nearestDistance = distanceKm;
+              nearestLocationName = location.poiName;
+            }
+
+            if (distanceKm <= searchDistanceKm) {
+              isInsideAnyLocation = true;
+              break; // Found at least one nearby location
+            }
+          }
+        } else {
+          // Fallback for old format: single location
+          final distance = Geolocator.distanceBetween(
+            position.latitude,
+            position.longitude,
+            reminder.latitude,
+            reminder.longitude,
+          );
+          final distanceKm = distance / 1000;
+          nearestDistance = distanceKm;
+          nearestLocationName = reminder.originalPoiName;
+          isInsideAnyLocation = distanceKm <= searchDistanceKm;
+        }
+
+        if (isInsideAnyLocation) {
           debugPrint(
-              'BackgroundGeofence: Inside radius for ${reminder.brandName} (${distanceKm.toStringAsFixed(2)} km)');
+              'BackgroundGeofence: Inside radius for ${reminder.brandName} at $nearestLocationName (${nearestDistance.toStringAsFixed(2)} km)');
 
           // Check cooldown
           final lastNotificationTime =

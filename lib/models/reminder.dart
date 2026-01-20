@@ -45,10 +45,46 @@ class ShoppingItem {
   }
 }
 
+/// Represents a tracked POI location for a brand reminder
+class TrackedLocation {
+  final String poiId;
+  final String poiName;
+  final double latitude;
+  final double longitude;
+
+  TrackedLocation({
+    required this.poiId,
+    required this.poiName,
+    required this.latitude,
+    required this.longitude,
+  });
+
+  /// Convert to JSON
+  Map<String, dynamic> toJson() {
+    return {
+      'poiId': poiId,
+      'poiName': poiName,
+      'latitude': latitude,
+      'longitude': longitude,
+    };
+  }
+
+  /// Create from JSON
+  factory TrackedLocation.fromJson(Map<String, dynamic> json) {
+    return TrackedLocation(
+      poiId: json['poiId'] as String,
+      poiName: json['poiName'] as String,
+      latitude: (json['latitude'] as num).toDouble(),
+      longitude: (json['longitude'] as num).toDouble(),
+    );
+  }
+}
+
 /// Represents a shopping reminder for a brand
 class Reminder {
   final String id;
   final String brandName;
+  final List<TrackedLocation> locations;
   final String originalPoiId;
   final String originalPoiName;
   final POIType poiType;
@@ -60,14 +96,32 @@ class Reminder {
   Reminder({
     String? id,
     required this.brandName,
-    required this.originalPoiId,
-    required this.originalPoiName,
+    List<TrackedLocation>? locations,
+    String? originalPoiId,
+    String? originalPoiName,
     required this.poiType,
-    required this.latitude,
-    required this.longitude,
+    double? latitude,
+    double? longitude,
     required this.items,
     DateTime? createdAt,
   })  : id = id ?? const Uuid().v4(),
+        locations = locations ?? [],
+        originalPoiId = originalPoiId ??
+            (locations != null && locations.isNotEmpty
+                ? locations.first.poiId
+                : ''),
+        originalPoiName = originalPoiName ??
+            (locations != null && locations.isNotEmpty
+                ? locations.first.poiName
+                : ''),
+        latitude = latitude ??
+            (locations != null && locations.isNotEmpty
+                ? locations.first.latitude
+                : 0.0),
+        longitude = longitude ??
+            (locations != null && locations.isNotEmpty
+                ? locations.first.longitude
+                : 0.0),
         createdAt = createdAt ?? DateTime.now();
 
   /// Check if all shopping items are checked
@@ -80,6 +134,7 @@ class Reminder {
   Reminder copyWith({
     String? id,
     String? brandName,
+    List<TrackedLocation>? locations,
     String? originalPoiId,
     String? originalPoiName,
     POIType? poiType,
@@ -91,6 +146,7 @@ class Reminder {
     return Reminder(
       id: id ?? this.id,
       brandName: brandName ?? this.brandName,
+      locations: locations ?? this.locations,
       originalPoiId: originalPoiId ?? this.originalPoiId,
       originalPoiName: originalPoiName ?? this.originalPoiName,
       poiType: poiType ?? this.poiType,
@@ -106,6 +162,7 @@ class Reminder {
     return {
       'id': id,
       'brandName': brandName,
+      'locations': locations.map((loc) => loc.toJson()).toList(),
       'originalPoiId': originalPoiId,
       'originalPoiName': originalPoiName,
       'poiType': poiType.toString().split('.').last,
@@ -121,6 +178,12 @@ class Reminder {
     return Reminder(
       id: json['id'] as String,
       brandName: json['brandName'] as String,
+      locations: json['locations'] != null
+          ? (json['locations'] as List<dynamic>)
+              .map((loc) =>
+                  TrackedLocation.fromJson(loc as Map<String, dynamic>))
+              .toList()
+          : [],
       originalPoiId: json['originalPoiId'] as String,
       originalPoiName: json['originalPoiName'] as String,
       poiType: POIType.values.firstWhere(

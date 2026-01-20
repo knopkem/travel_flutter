@@ -699,8 +699,15 @@ class _POIDetailScreenState extends State<POIDetailScreen> {
 
     if (items == null || items.isEmpty) return;
 
+    // Get all available POIs to find brand matches
+    final poiProvider = Provider.of<POIProvider>(context, listen: false);
+
     // Create the reminder
-    final success = await reminderProvider.addReminder(_currentPOI, items);
+    final success = await reminderProvider.addReminder(
+      _currentPOI,
+      items,
+      allAvailablePOIs: poiProvider.allPois,
+    );
     if (!mounted) return;
 
     if (success) {
