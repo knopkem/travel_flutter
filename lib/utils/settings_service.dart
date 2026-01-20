@@ -17,7 +17,7 @@ class SettingsService {
       'background_location_enabled';
   static const String _notificationsEnabledKey = 'notifications_enabled';
   static const String _dwellTimeMinutesKey = 'dwell_time_minutes';
-  static const int defaultDwellTimeMinutes = 1; // Default 1 min for development
+  static const int defaultDwellTimeMinutes = 2; // Default 2 min
   static const String _proximityRadiusMetersKey = 'proximity_radius_meters';
   static const int defaultProximityRadiusMeters = 150; // Default 150 meters
 
@@ -53,8 +53,8 @@ class SettingsService {
   /// Default POI type order (prioritized by user preference)
   static final List<POIType> defaultPoiOrder = [
     // Attractions
-    POIType.touristAttraction,
     POIType.museum,
+    POIType.touristAttraction,
     POIType.historicSite,
     POIType.monument,
     POIType.viewpoint,
@@ -76,8 +76,8 @@ class SettingsService {
 
   /// Default attraction POI type order
   static final List<POIType> defaultAttractionPoiOrder = [
-    POIType.touristAttraction,
     POIType.museum,
+    POIType.touristAttraction,
     POIType.historicSite,
     POIType.monument,
     POIType.viewpoint,

@@ -367,10 +367,19 @@ class POIProvider extends ChangeNotifier {
       group.sort((a, b) => b.notabilityScore.compareTo(a.notabilityScore));
     }
 
-    // Get user's preferred order (or default) - extract just the types
-    final typeOrder =
-        _settingsProvider?.poiTypeOrder.map((entry) => entry.$1).toList() ??
-            SettingsService.defaultPoiOrder;
+    // Get user's preferred order based on current category
+    List<POIType> typeOrder;
+    if (_currentCategory == POICategory.attraction) {
+      typeOrder = _settingsProvider?.attractionPoiOrder
+              .map((entry) => entry.$1)
+              .toList() ??
+          SettingsService.defaultAttractionPoiOrder;
+    } else {
+      typeOrder = _settingsProvider?.commercialPoiOrder
+              .map((entry) => entry.$1)
+              .toList() ??
+          SettingsService.defaultCommercialPoiOrder;
+    }
 
     // Combine groups according to user's preference order
     final sorted = <POI>[];
