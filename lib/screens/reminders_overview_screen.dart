@@ -552,7 +552,7 @@ class _ReminderCardState extends State<_ReminderCard> {
 }
 
 /// Tile for a single shopping list item
-class _ShoppingItemTile extends StatelessWidget {
+class _ShoppingItemTile extends StatefulWidget {
   final ShoppingItem item;
   final String reminderId;
 
@@ -562,38 +562,80 @@ class _ShoppingItemTile extends StatelessWidget {
   });
 
   @override
+  State<_ShoppingItemTile> createState() => _ShoppingItemTileState();
+}
+
+class _ShoppingItemTileState extends State<_ShoppingItemTile> {
+  bool _isOperationInProgress = false;
+
+  @override
   Widget build(BuildContext context) {
-    return Dismissible(
-      key: Key(item.id),
-      direction: DismissDirection.endToStart,
-      background: Container(
-        alignment: Alignment.centerRight,
-        padding: const EdgeInsets.only(right: 16),
-        color: Colors.red,
-        child: const Icon(Icons.delete, color: Colors.white),
-      ),
-      onDismissed: (_) async {
-        final provider = Provider.of<ReminderProvider>(context, listen: false);
-        await provider.removeItem(reminderId, item.id);
-      },
-      child: CheckboxListTile(
-        value: item.isChecked,
-        onChanged: (checked) async {
-          final provider =
-              Provider.of<ReminderProvider>(context, listen: false);
-          await provider.toggleItem(reminderId, item.id);
-        },
-        title: Text(
-          item.text,
-          style: TextStyle(
-            decoration: item.isChecked ? TextDecoration.lineThrough : null,
-            color: item.isChecked ? Colors.grey : null,
+    return Stack(
+      children: [
+        Dismissible(
+          key: Key(widget.item.id),
+          direction: DismissDirection.endToStart,
+          background: Container(
+            alignment: Alignment.centerRight,
+            padding: const EdgeInsets.only(right: 16),
+            color: Colors.red,
+            child: const Icon(Icons.delete, color: Colors.white),
+          ),
+          onDismissed: (_) async {
+            final provider =
+                Provider.of<ReminderProvider>(context, listen: false);
+            await provider.removeItem(widget.reminderId, widget.item.id);
+          },
+          child: CheckboxListTile(
+            value: widget.item.isChecked,
+            onChanged: _isOperationInProgress
+                ? null
+                : (checked) async {
+                    setState(() {
+                      _isOperationInProgress = true;
+                    });
+
+                    try {
+                      final provider =
+                          Provider.of<ReminderProvider>(context, listen: false);
+                      await provider.toggleItem(
+                          widget.reminderId, widget.item.id);
+                    } finally {
+                      if (mounted) {
+                        setState(() {
+                          _isOperationInProgress = false;
+                        });
+                      }
+                    }
+                  },
+            title: Text(
+              widget.item.text,
+              style: TextStyle(
+                decoration:
+                    widget.item.isChecked ? TextDecoration.lineThrough : null,
+                color: widget.item.isChecked ? Colors.grey : null,
+              ),
+            ),
+            controlAffinity: ListTileControlAffinity.leading,
+            dense: true,
+            contentPadding: EdgeInsets.zero,
           ),
         ),
-        controlAffinity: ListTileControlAffinity.leading,
-        dense: true,
-        contentPadding: EdgeInsets.zero,
-      ),
+        // Loading overlay for this specific item
+        if (_isOperationInProgress)
+          Positioned.fill(
+            child: Container(
+              color: Colors.white70,
+              child: const Center(
+                child: SizedBox(
+                  width: 20,
+                  height: 20,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                ),
+              ),
+            ),
+          ),
+      ],
     );
   }
 }
