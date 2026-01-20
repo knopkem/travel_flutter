@@ -37,6 +37,7 @@ class POIDetailScreen extends StatefulWidget {
 class _POIDetailScreenState extends State<POIDetailScreen> {
   POI? _enrichedPOI; // POI with fetched place details
   bool _isReminderExpanded = false;
+  bool _isOperationInProgress = false;
   final TextEditingController _newItemController = TextEditingController();
 
   @override
@@ -118,32 +119,61 @@ class _POIDetailScreenState extends State<POIDetailScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      body: CustomScrollView(
-        slivers: [
-          _buildAppBar(context),
-          SliverToBoxAdapter(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                _buildHeader(context),
-                if (_currentPOI.rating != null || _currentPOI.isOpenNow != null)
-                  _buildRatingAndStatus(context),
-                _buildActionButtons(context),
-                if (_currentPOI.type.category == POICategory.commercial)
-                  _buildReminderSection(context),
-                const Divider(height: 1),
-                if (_currentPOI.wikipediaTitle != null)
-                  _buildWikipediaContent(context),
-                if (_currentPOI.description != null) _buildDescription(context),
-                _buildMetadata(context),
-                _buildSourceAttribution(context),
-                const SizedBox(height: 32),
-              ],
+    return Stack(
+      children: [
+        Scaffold(
+          body: CustomScrollView(
+            slivers: [
+              _buildAppBar(context),
+              SliverToBoxAdapter(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _buildHeader(context),
+                    if (_currentPOI.rating != null ||
+                        _currentPOI.isOpenNow != null)
+                      _buildRatingAndStatus(context),
+                    _buildActionButtons(context),
+                    if (_currentPOI.type.category == POICategory.commercial)
+                      _buildReminderSection(context),
+                    const Divider(height: 1),
+                    if (_currentPOI.wikipediaTitle != null)
+                      _buildWikipediaContent(context),
+                    if (_currentPOI.description != null)
+                      _buildDescription(context),
+                    _buildMetadata(context),
+                    _buildSourceAttribution(context),
+                    const SizedBox(height: 32),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+        // Loading overlay when performing operations
+        if (_isOperationInProgress)
+          Container(
+            color: Colors.black54,
+            child: const Center(
+              child: Card(
+                child: Padding(
+                  padding: EdgeInsets.all(24.0),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      CircularProgressIndicator(),
+                      SizedBox(height: 16),
+                      Text(
+                        'Updating shopping list...',
+                        style: TextStyle(fontSize: 16),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
             ),
           ),
-        ],
-      ),
+      ],
     );
   }
 
@@ -513,22 +543,34 @@ class _POIDetailScreenState extends State<POIDetailScreen> {
                                   return CheckboxListTile(
                                     value: item.isChecked,
                                     onChanged: (checked) async {
-                                      final scaffoldMessenger =
-                                          ScaffoldMessenger.of(context);
-                                      final success =
-                                          await reminderProvider.toggleItem(
-                                        reminder.id,
-                                        item.id,
-                                      );
-                                      if (success && mounted) {
-                                        // Check if all items are now checked
-                                        if (checked == true &&
-                                            reminder.items.length == 1) {
-                                          PermissionDialogHelper
-                                              .showReminderAutoRemovedMessageWithMessenger(
-                                            scaffoldMessenger,
-                                            brandName,
-                                          );
+                                      setState(() {
+                                        _isOperationInProgress = true;
+                                      });
+
+                                      try {
+                                        final scaffoldMessenger =
+                                            ScaffoldMessenger.of(context);
+                                        final success =
+                                            await reminderProvider.toggleItem(
+                                          reminder.id,
+                                          item.id,
+                                        );
+                                        if (success && mounted) {
+                                          // Check if all items are now checked
+                                          if (checked == true &&
+                                              reminder.items.length == 1) {
+                                            PermissionDialogHelper
+                                                .showReminderAutoRemovedMessageWithMessenger(
+                                              scaffoldMessenger,
+                                              brandName,
+                                            );
+                                          }
+                                        }
+                                      } finally {
+                                        if (mounted) {
+                                          setState(() {
+                                            _isOperationInProgress = false;
+                                          });
                                         }
                                       }
                                     },
@@ -543,11 +585,24 @@ class _POIDetailScreenState extends State<POIDetailScreen> {
                                     secondary: IconButton(
                                       icon: const Icon(Icons.delete_outline,
                                           size: 20),
-                                      onPressed: () =>
-                                          reminderProvider.removeItem(
-                                        reminder.id,
-                                        item.id,
-                                      ),
+                                      onPressed: () async {
+                                        setState(() {
+                                          _isOperationInProgress = true;
+                                        });
+
+                                        try {
+                                          await reminderProvider.removeItem(
+                                            reminder.id,
+                                            item.id,
+                                          );
+                                        } finally {
+                                          if (mounted) {
+                                            setState(() {
+                                              _isOperationInProgress = false;
+                                            });
+                                          }
+                                        }
+                                      },
                                     ),
                                     contentPadding: EdgeInsets.zero,
                                   );
@@ -568,13 +623,25 @@ class _POIDetailScreenState extends State<POIDetailScreen> {
                                           vertical: 8,
                                         ),
                                       ),
-                                      onSubmitted: (text) {
+                                      onSubmitted: (text) async {
                                         if (text.trim().isNotEmpty) {
-                                          reminderProvider.addItem(
-                                            reminder.id,
-                                            text.trim(),
-                                          );
-                                          _newItemController.clear();
+                                          setState(() {
+                                            _isOperationInProgress = true;
+                                          });
+
+                                          try {
+                                            await reminderProvider.addItem(
+                                              reminder.id,
+                                              text.trim(),
+                                            );
+                                            _newItemController.clear();
+                                          } finally {
+                                            if (mounted) {
+                                              setState(() {
+                                                _isOperationInProgress = false;
+                                              });
+                                            }
+                                          }
                                         }
                                       },
                                     ),
@@ -583,15 +650,27 @@ class _POIDetailScreenState extends State<POIDetailScreen> {
                                   IconButton(
                                     icon: const Icon(Icons.add_circle),
                                     color: Colors.blue,
-                                    onPressed: () {
+                                    onPressed: () async {
                                       final text =
                                           _newItemController.text.trim();
                                       if (text.isNotEmpty) {
-                                        reminderProvider.addItem(
-                                          reminder.id,
-                                          text,
-                                        );
-                                        _newItemController.clear();
+                                        setState(() {
+                                          _isOperationInProgress = true;
+                                        });
+
+                                        try {
+                                          await reminderProvider.addItem(
+                                            reminder.id,
+                                            text,
+                                          );
+                                          _newItemController.clear();
+                                        } finally {
+                                          if (mounted) {
+                                            setState(() {
+                                              _isOperationInProgress = false;
+                                            });
+                                          }
+                                        }
                                       }
                                     },
                                   ),
@@ -628,19 +707,31 @@ class _POIDetailScreenState extends State<POIDetailScreen> {
                                     );
 
                                     if (confirm == true && mounted) {
-                                      final success =
-                                          await reminderProvider.removeReminder(
-                                        reminder.id,
-                                      );
-                                      if (success && mounted) {
-                                        PermissionDialogHelper
-                                            .showReminderRemovedMessageWithMessenger(
-                                          scaffoldMessenger,
-                                          brandName,
+                                      setState(() {
+                                        _isOperationInProgress = true;
+                                      });
+
+                                      try {
+                                        final success = await reminderProvider
+                                            .removeReminder(
+                                          reminder.id,
                                         );
-                                        setState(() {
-                                          _isReminderExpanded = false;
-                                        });
+                                        if (success && mounted) {
+                                          PermissionDialogHelper
+                                              .showReminderRemovedMessageWithMessenger(
+                                            scaffoldMessenger,
+                                            brandName,
+                                          );
+                                          setState(() {
+                                            _isReminderExpanded = false;
+                                          });
+                                        }
+                                      } finally {
+                                        if (mounted) {
+                                          setState(() {
+                                            _isOperationInProgress = false;
+                                          });
+                                        }
                                       }
                                     }
                                   },

@@ -17,48 +17,78 @@ class RemindersOverviewScreen extends StatefulWidget {
 }
 
 class _RemindersOverviewScreenState extends State<RemindersOverviewScreen> {
+  bool _isOperationInProgress = false;
+
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Shopping Reminders'),
-        actions: [
-          Consumer<ReminderProvider>(
-            builder: (context, provider, _) {
-              if (provider.reminders.isEmpty) return const SizedBox.shrink();
-              return IconButton(
-                icon: const Icon(Icons.delete_sweep),
-                tooltip: 'Clear all reminders',
-                onPressed: () => _confirmClearAll(context, provider),
+    return Stack(
+      children: [
+        Scaffold(
+          appBar: AppBar(
+            title: const Text('Shopping Reminders'),
+            actions: [
+              Consumer<ReminderProvider>(
+                builder: (context, provider, _) {
+                  if (provider.reminders.isEmpty)
+                    return const SizedBox.shrink();
+                  return IconButton(
+                    icon: const Icon(Icons.delete_sweep),
+                    tooltip: 'Clear all reminders',
+                    onPressed: () => _confirmClearAll(context, provider),
+                  );
+                },
+              ),
+            ],
+          ),
+          body: Consumer<ReminderProvider>(
+            builder: (context, reminderProvider, child) {
+              if (reminderProvider.isLoading) {
+                return const Center(child: CircularProgressIndicator());
+              }
+
+              if (reminderProvider.reminders.isEmpty) {
+                return _buildEmptyState(context);
+              }
+
+              return ListView.builder(
+                padding: const EdgeInsets.symmetric(vertical: 8),
+                itemCount: reminderProvider.reminders.length,
+                itemBuilder: (context, index) {
+                  final reminder = reminderProvider.reminders[index];
+                  return _ReminderCard(
+                    reminder: reminder,
+                    onDelete: () => _confirmDelete(context, reminder),
+                    onShowOnMap: () => _showOnMap(context, reminder),
+                  );
+                },
               );
             },
           ),
-        ],
-      ),
-      body: Consumer<ReminderProvider>(
-        builder: (context, reminderProvider, child) {
-          if (reminderProvider.isLoading) {
-            return const Center(child: CircularProgressIndicator());
-          }
-
-          if (reminderProvider.reminders.isEmpty) {
-            return _buildEmptyState(context);
-          }
-
-          return ListView.builder(
-            padding: const EdgeInsets.symmetric(vertical: 8),
-            itemCount: reminderProvider.reminders.length,
-            itemBuilder: (context, index) {
-              final reminder = reminderProvider.reminders[index];
-              return _ReminderCard(
-                reminder: reminder,
-                onDelete: () => _confirmDelete(context, reminder),
-                onShowOnMap: () => _showOnMap(context, reminder),
-              );
-            },
-          );
-        },
-      ),
+        ),
+        // Loading overlay when performing operations
+        if (_isOperationInProgress)
+          Container(
+            color: Colors.black54,
+            child: const Center(
+              child: Card(
+                child: Padding(
+                  padding: EdgeInsets.all(24.0),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      CircularProgressIndicator(),
+                      SizedBox(height: 16),
+                      Text(
+                        'Updating reminder...',
+                        style: TextStyle(fontSize: 16),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+      ],
     );
   }
 
@@ -130,27 +160,45 @@ class _RemindersOverviewScreenState extends State<RemindersOverviewScreen> {
     );
 
     if (confirm == true && mounted) {
-      // ignore: use_build_context_synchronously
-      final provider = Provider.of<ReminderProvider>(context, listen: false);
-      final success = await provider.removeReminder(reminder.id);
+      setState(() {
+        _isOperationInProgress = true;
+      });
 
-      if (mounted) {
-        if (success) {
-          scaffoldMessenger.showSnackBar(
-            SnackBar(
-              content: Text('Removed reminder for ${reminder.brandName}'),
-              backgroundColor: Colors.green,
-            ),
-          );
-          // Force rebuild to ensure list updates
-          setState(() {});
-        } else {
-          scaffoldMessenger.showSnackBar(
-            const SnackBar(
-              content: Text('Failed to remove reminder'),
-              backgroundColor: Colors.red,
-            ),
-          );
+      try {
+        // ignore: use_build_context_synchronously
+        final provider = Provider.of<ReminderProvider>(context, listen: false);
+        final success = await provider.removeReminder(reminder.id);
+
+        if (mounted) {
+          setState(() {
+            _isOperationInProgress = false;
+          });
+        }
+
+        if (mounted) {
+          if (success) {
+            scaffoldMessenger.showSnackBar(
+              SnackBar(
+                content: Text('Removed reminder for ${reminder.brandName}'),
+                backgroundColor: Colors.green,
+              ),
+            );
+            // Force rebuild to ensure list updates
+            setState(() {});
+          } else {
+            scaffoldMessenger.showSnackBar(
+              const SnackBar(
+                content: Text('Failed to remove reminder'),
+                backgroundColor: Colors.red,
+              ),
+            );
+          }
+        }
+      } finally {
+        if (mounted) {
+          setState(() {
+            _isOperationInProgress = false;
+          });
         }
       }
     }
@@ -187,15 +235,27 @@ class _RemindersOverviewScreenState extends State<RemindersOverviewScreen> {
     );
 
     if (confirm == true && mounted) {
-      // Remove all reminders one by one
-      final reminders = List<Reminder>.from(provider.reminders);
-      for (final reminder in reminders) {
-        await provider.removeReminder(reminder.id);
-      }
-      if (mounted) {
-        scaffoldMessenger.showSnackBar(
-          const SnackBar(content: Text('All reminders cleared')),
-        );
+      setState(() {
+        _isOperationInProgress = true;
+      });
+
+      try {
+        // Remove all reminders one by one
+        final reminders = List<Reminder>.from(provider.reminders);
+        for (final reminder in reminders) {
+          await provider.removeReminder(reminder.id);
+        }
+        if (mounted) {
+          scaffoldMessenger.showSnackBar(
+            const SnackBar(content: Text('All reminders cleared')),
+          );
+        }
+      } finally {
+        if (mounted) {
+          setState(() {
+            _isOperationInProgress = false;
+          });
+        }
       }
     }
   }
@@ -245,6 +305,7 @@ class _ReminderCard extends StatefulWidget {
 
 class _ReminderCardState extends State<_ReminderCard> {
   bool _isExpanded = false;
+  bool _isOperationInProgress = false;
   final TextEditingController _newItemController = TextEditingController();
 
   @override
@@ -259,177 +320,208 @@ class _ReminderCardState extends State<_ReminderCard> {
         widget.reminder.items.where((i) => !i.isChecked).length;
     final totalCount = widget.reminder.items.length;
 
-    return Card(
-      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-      child: Column(
-        children: [
-          // Header
-          ListTile(
-            leading: CircleAvatar(
-              backgroundColor: Colors.green[700],
-              child: const Icon(Icons.shopping_cart, color: Colors.white),
-            ),
-            title: Text(
-              widget.reminder.brandName,
-              style: const TextStyle(fontWeight: FontWeight.bold),
-            ),
-            subtitle: Text(
-              '$uncheckedCount of $totalCount items remaining',
-              style: TextStyle(color: Colors.grey[600]),
-            ),
-            trailing: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                IconButton(
-                  icon: const Icon(Icons.map_outlined, color: Colors.blue),
-                  tooltip: 'Show on map',
-                  onPressed: widget.onShowOnMap,
+    return Stack(
+      children: [
+        Card(
+          margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+          child: Column(
+            children: [
+              // Header
+              ListTile(
+                leading: CircleAvatar(
+                  backgroundColor: Colors.green[700],
+                  child: const Icon(Icons.shopping_cart, color: Colors.white),
                 ),
-                IconButton(
-                  icon: const Icon(Icons.delete_outline, color: Colors.red),
-                  tooltip: 'Delete reminder',
-                  onPressed: widget.onDelete,
+                title: Text(
+                  widget.reminder.brandName,
+                  style: const TextStyle(fontWeight: FontWeight.bold),
                 ),
-                IconButton(
-                  icon: Icon(
-                    _isExpanded ? Icons.expand_less : Icons.expand_more,
-                  ),
-                  tooltip: _isExpanded ? 'Collapse' : 'Expand',
-                  onPressed: () {
-                    setState(() {
-                      _isExpanded = !_isExpanded;
-                    });
-                  },
+                subtitle: Text(
+                  '$uncheckedCount of $totalCount items remaining',
+                  style: TextStyle(color: Colors.grey[600]),
                 ),
-              ],
-            ),
-          ),
-
-          // Expanded content
-          if (_isExpanded) ...[
-            const Divider(height: 1),
-            Padding(
-              padding: const EdgeInsets.all(16.0),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // Original POI info
-                  Container(
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: Colors.grey[100],
-                      borderRadius: BorderRadius.circular(8),
+                trailing: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    IconButton(
+                      icon: const Icon(Icons.map_outlined, color: Colors.blue),
+                      tooltip: 'Show on map',
+                      onPressed: widget.onShowOnMap,
                     ),
-                    child: Row(
-                      children: [
-                        Icon(Icons.store, color: Colors.grey[600], size: 20),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: Text(
-                            'Created from: ${widget.reminder.originalPoiName}',
-                            style: TextStyle(
-                              fontSize: 12,
-                              color: Colors.grey[600],
-                            ),
-                          ),
-                        ),
-                      ],
+                    IconButton(
+                      icon: const Icon(Icons.delete_outline, color: Colors.red),
+                      tooltip: 'Delete reminder',
+                      onPressed: widget.onDelete,
                     ),
-                  ),
-                  const SizedBox(height: 16),
-
-                  // Reminder Settings
-                  Text(
-                    'Reminder Settings',
-                    style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                          fontWeight: FontWeight.bold,
-                        ),
-                  ),
-                  const SizedBox(height: 8),
-                  OutlinedButton.icon(
-                    onPressed: () => _resetCooldown(context),
-                    icon: const Icon(Icons.refresh, size: 18),
-                    label: const Text('Reset Notification Cooldown'),
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: Colors.orange,
+                    IconButton(
+                      icon: Icon(
+                        _isExpanded ? Icons.expand_less : Icons.expand_more,
+                      ),
+                      tooltip: _isExpanded ? 'Collapse' : 'Expand',
+                      onPressed: () {
+                        setState(() {
+                          _isExpanded = !_isExpanded;
+                        });
+                      },
                     ),
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    'The cooldown prevents duplicate notifications within 24 hours. Reset it to allow immediate notifications.',
-                    style: TextStyle(
-                      fontSize: 11,
-                      color: Colors.grey[600],
-                      fontStyle: FontStyle.italic,
-                    ),
-                  ),
-                  const SizedBox(height: 16),
+                  ],
+                ),
+              ),
 
-                  // Shopping list
-                  Text(
-                    'Shopping List',
-                    style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                          fontWeight: FontWeight.bold,
-                        ),
-                  ),
-                  const SizedBox(height: 8),
-                  ListView.builder(
-                    shrinkWrap: true,
-                    physics: const NeverScrollableScrollPhysics(),
-                    itemCount: widget.reminder.items.length,
-                    itemBuilder: (context, index) {
-                      final item = widget.reminder.items[index];
-                      return _ShoppingItemTile(
-                        item: item,
-                        reminderId: widget.reminder.id,
-                      );
-                    },
-                  ),
-
-                  // Add new item
-                  const SizedBox(height: 12),
-                  Row(
+              // Expanded content
+              if (_isExpanded) ...[
+                const Divider(height: 1),
+                Padding(
+                  padding: const EdgeInsets.all(16.0),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Expanded(
-                        child: TextField(
-                          controller: _newItemController,
-                          decoration: InputDecoration(
-                            hintText: 'Add item...',
-                            isDense: true,
-                            contentPadding: const EdgeInsets.symmetric(
-                              horizontal: 12,
-                              vertical: 10,
+                      // Original POI info
+                      Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: Colors.grey[100],
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Row(
+                          children: [
+                            Icon(Icons.store,
+                                color: Colors.grey[600], size: 20),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                'Created from: ${widget.reminder.originalPoiName}',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: Colors.grey[600],
+                                ),
+                              ),
                             ),
-                            border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                          ),
-                          onSubmitted: (_) => _addItem(),
+                          ],
                         ),
                       ),
-                      const SizedBox(width: 8),
-                      IconButton(
-                        icon: const Icon(Icons.add_circle, color: Colors.blue),
-                        onPressed: _addItem,
+                      const SizedBox(height: 16),
+
+                      // Reminder Settings
+                      Text(
+                        'Reminder Settings',
+                        style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                              fontWeight: FontWeight.bold,
+                            ),
+                      ),
+                      const SizedBox(height: 8),
+                      OutlinedButton.icon(
+                        onPressed: () => _resetCooldown(context),
+                        icon: const Icon(Icons.refresh, size: 18),
+                        label: const Text('Reset Notification Cooldown'),
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: Colors.orange,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        'The cooldown prevents duplicate notifications within 24 hours. Reset it to allow immediate notifications.',
+                        style: TextStyle(
+                          fontSize: 11,
+                          color: Colors.grey[600],
+                          fontStyle: FontStyle.italic,
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+
+                      // Shopping list
+                      Text(
+                        'Shopping List',
+                        style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                              fontWeight: FontWeight.bold,
+                            ),
+                      ),
+                      const SizedBox(height: 8),
+                      ListView.builder(
+                        shrinkWrap: true,
+                        physics: const NeverScrollableScrollPhysics(),
+                        itemCount: widget.reminder.items.length,
+                        itemBuilder: (context, index) {
+                          final item = widget.reminder.items[index];
+                          return _ShoppingItemTile(
+                            item: item,
+                            reminderId: widget.reminder.id,
+                          );
+                        },
+                      ),
+
+                      // Add new item
+                      const SizedBox(height: 12),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: TextField(
+                              controller: _newItemController,
+                              decoration: InputDecoration(
+                                hintText: 'Add item...',
+                                isDense: true,
+                                contentPadding: const EdgeInsets.symmetric(
+                                  horizontal: 12,
+                                  vertical: 10,
+                                ),
+                                border: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                              ),
+                              onSubmitted: (_) => _addItem(),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          IconButton(
+                            icon: const Icon(Icons.add_circle,
+                                color: Colors.blue),
+                            onPressed: _addItem,
+                          ),
+                        ],
                       ),
                     ],
                   ),
-                ],
+                ),
+              ],
+            ],
+          ),
+        ),
+        // Loading overlay
+        if (_isOperationInProgress)
+          Positioned.fill(
+            child: Container(
+              decoration: BoxDecoration(
+                color: Colors.black45,
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: const Center(
+                child: CircularProgressIndicator(),
               ),
             ),
-          ],
-        ],
-      ),
+          ),
+      ],
     );
   }
 
-  void _addItem() {
+  void _addItem() async {
     final text = _newItemController.text.trim();
     if (text.isEmpty) return;
 
-    final provider = Provider.of<ReminderProvider>(context, listen: false);
-    provider.addItem(widget.reminder.id, text);
-    _newItemController.clear();
+    setState(() {
+      _isOperationInProgress = true;
+    });
+
+    try {
+      final provider = Provider.of<ReminderProvider>(context, listen: false);
+      await provider.addItem(widget.reminder.id, text);
+      _newItemController.clear();
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isOperationInProgress = false;
+        });
+      }
+    }
   }
 
   Future<void> _resetCooldown(BuildContext context) async {
@@ -480,16 +572,16 @@ class _ShoppingItemTile extends StatelessWidget {
         color: Colors.red,
         child: const Icon(Icons.delete, color: Colors.white),
       ),
-      onDismissed: (_) {
+      onDismissed: (_) async {
         final provider = Provider.of<ReminderProvider>(context, listen: false);
-        provider.removeItem(reminderId, item.id);
+        await provider.removeItem(reminderId, item.id);
       },
       child: CheckboxListTile(
         value: item.isChecked,
-        onChanged: (checked) {
+        onChanged: (checked) async {
           final provider =
               Provider.of<ReminderProvider>(context, listen: false);
-          provider.toggleItem(reminderId, item.id);
+          await provider.toggleItem(reminderId, item.id);
         },
         title: Text(
           item.text,
