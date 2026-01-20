@@ -1,7 +1,7 @@
 name: travel_flutter_app
 description: LocationPal - Your travel companion for discovering places and viewing Wikipedia content
 publish_to: "none"
-version: 1.0.21+21
+version: 1.0.22+22
 
 environment:
   sdk: ">=3.0.0 <4.0.0"
