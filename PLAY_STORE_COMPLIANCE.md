@@ -118,9 +118,9 @@ Shows disclosure screen on first launch before user can access the app.
 
 Before submitting:
 
-- [ ] Privacy Policy URL is live and accessible
-- [ ] Terms of Service URL is live and accessible
-- [ ] Updated URLs in `onboarding_service.dart`
+- [x] Privacy Policy URL is live and accessible
+- [x] Terms of Service URL is live and accessible
+- [x] Updated URLs in `onboarding_service.dart`
 - [ ] Tested first-launch disclosure flow
 - [ ] Tested permission requests (location, notification, background)
 - [ ] Verified Settings > Privacy & Legal links work

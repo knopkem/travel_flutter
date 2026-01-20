@@ -6,9 +6,9 @@ class OnboardingService {
 
   // TODO: Replace these URLs with your actual privacy policy and terms URLs
   // These MUST be hosted and accessible before Play Store submission
-  static const String privacyPolicyUrl = 'https://example.com/privacy-policy';
+  static const String privacyPolicyUrl = 'https://knopkem.github.io/travel_flutter/policy.html';
   static const String termsOfServiceUrl =
-      'https://example.com/terms-of-service';
+      'https://knopkem.github.io/travel_flutter/terms.html';
 
   /// Check if the permissions disclosure has been shown to the user
   static Future<bool> hasShownDisclosure() async {
