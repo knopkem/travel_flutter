@@ -46,11 +46,11 @@
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
 	<key>NSLocationWhenInUseUsageDescription</key>
-	<string>This app needs your location to discover nearby attractions automatically</string>
+	<string>LocationPal uses your location to show nearby points of interest, attractions, restaurants, and stores on the map while you're using the app. Location data is processed locally on your device and is not shared with third parties for advertising or tracking purposes.</string>
 	<key>NSLocationAlwaysUsageDescription</key>
-	<string>This app needs background location access to remind you about your shopping lists when you're near tagged stores</string>
+	<string>LocationPal uses background location to send you shopping reminders when you arrive near stores you've added to your reminder list. This feature is optional and can be disabled anytime in Settings. Location data stays on your device and is not transmitted to servers or shared with third parties for advertising or tracking.</string>
 	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
-	<string>This app needs background location access to remind you about your shopping lists when you're near tagged stores</string>
+	<string>LocationPal uses background location to send you shopping reminders when you arrive near stores you've added to your reminder list. This feature is optional and can be disabled anytime in Settings. Location data stays on your device and is not transmitted to servers or shared with third parties for advertising or tracking.</string>
 	<key>UIBackgroundModes</key>
 	<array>
 		<string>location</string>
