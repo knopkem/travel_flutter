@@ -181,6 +181,19 @@ class SettingsProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Refresh background location setting from storage
+  /// This is useful when the setting might have been changed outside this provider
+  /// (e.g., auto-enabled/disabled by ReminderProvider based on reminder count)
+  Future<void> refreshBackgroundLocationSetting() async {
+    final newValue = await _settingsService.loadBackgroundLocationEnabled();
+    if (newValue != _backgroundLocationEnabled) {
+      debugPrint(
+          'SettingsProvider: Background location setting changed externally from $_backgroundLocationEnabled to $newValue');
+      _backgroundLocationEnabled = newValue;
+      notifyListeners();
+    }
+  }
+
   /// Update POI type order and persist to storage
   Future<void> updatePoiOrder(List<(POIType, bool)> newOrder) async {
     _poiTypeOrder = List.from(newOrder);

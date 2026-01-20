@@ -39,6 +39,17 @@ class _SettingsScreenState extends State<SettingsScreen> {
     _loadVersion();
   }
 
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // Refresh background location setting in case it was changed by ReminderProvider
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final settingsProvider =
+          Provider.of<SettingsProvider>(context, listen: false);
+      settingsProvider.refreshBackgroundLocationSetting();
+    });
+  }
+
   Future<void> _loadVersion() async {
     final packageInfo = await PackageInfo.fromPlatform();
     setState(() {

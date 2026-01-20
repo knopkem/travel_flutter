@@ -202,11 +202,21 @@ class ReminderProvider extends ChangeNotifier {
       if (success) {
         _reminders.add(reminder);
 
-        // Restart monitoring with updated reminders using current strategy
-        // Only if background location is enabled
+        // Auto-enable background location if this is the first reminder
         final backgroundLocationEnabled =
             await _settingsService.loadBackgroundLocationEnabled();
-        if (backgroundLocationEnabled) {
+        if (!backgroundLocationEnabled && _reminders.length == 1) {
+          debugPrint(
+              'ReminderProvider: Auto-enabling background location for first reminder');
+          await _settingsService.saveBackgroundLocationEnabled(true);
+          // Note: We don't update SettingsProvider here to avoid circular dependency
+          // The settings UI will refresh when user navigates back
+        }
+
+        // Start or restart monitoring with updated reminders using current strategy
+        final isBackgroundEnabled =
+            await _settingsService.loadBackgroundLocationEnabled();
+        if (isBackgroundEnabled) {
           if (_strategyManager.isUsingNativeGeofencing) {
             await _locationService.stopMonitoring();
             await _locationService.startMonitoring(_reminders);
@@ -217,7 +227,7 @@ class ReminderProvider extends ChangeNotifier {
           }
         } else {
           debugPrint(
-              'ReminderProvider: Background location disabled, not starting monitoring');
+              'ReminderProvider: Background location still disabled, not starting monitoring');
         }
 
         notifyListeners();
@@ -276,11 +286,21 @@ class ReminderProvider extends ChangeNotifier {
       if (success) {
         _reminders.add(reminder);
 
-        // Restart monitoring with updated reminders using current strategy
-        // Only if background location is enabled
+        // Auto-enable background location if this is the first reminder
         final backgroundLocationEnabled =
             await _settingsService.loadBackgroundLocationEnabled();
-        if (backgroundLocationEnabled) {
+        if (!backgroundLocationEnabled && _reminders.length == 1) {
+          debugPrint(
+              'ReminderProvider: Auto-enabling background location for first test reminder');
+          await _settingsService.saveBackgroundLocationEnabled(true);
+          // Note: We don't update SettingsProvider here to avoid circular dependency
+          // The settings UI will refresh when user navigates back
+        }
+
+        // Start or restart monitoring with updated reminders using current strategy
+        final isBackgroundEnabled =
+            await _settingsService.loadBackgroundLocationEnabled();
+        if (isBackgroundEnabled) {
           if (_strategyManager.isUsingNativeGeofencing) {
             await _locationService.stopMonitoring();
             await _locationService.startMonitoring(_reminders);
@@ -291,7 +311,7 @@ class ReminderProvider extends ChangeNotifier {
           }
         } else {
           debugPrint(
-              'ReminderProvider: Background location disabled, not starting monitoring');
+              'ReminderProvider: Background location still disabled, not starting monitoring');
         }
 
         notifyListeners();
@@ -345,20 +365,33 @@ class ReminderProvider extends ChangeNotifier {
       if (success) {
         _reminders.removeWhere((r) => r.id == id);
 
-        // Restart monitoring or stop if no reminders left using current strategy
-        // Only if background location is enabled
+        // Auto-disable background location if this was the last reminder
+        if (_reminders.isEmpty) {
+          final backgroundLocationEnabled =
+              await _settingsService.loadBackgroundLocationEnabled();
+          if (backgroundLocationEnabled) {
+            debugPrint(
+                'ReminderProvider: Auto-disabling background location - no reminders left');
+            await _settingsService.saveBackgroundLocationEnabled(false);
+            // Note: We don't update SettingsProvider here to avoid circular dependency
+            // The settings UI will refresh when user navigates back
+          }
+        }
+
+        // Stop monitoring or restart with remaining reminders using current strategy
         final backgroundLocationEnabled =
             await _settingsService.loadBackgroundLocationEnabled();
-        if (backgroundLocationEnabled) {
+        if (backgroundLocationEnabled || _reminders.isEmpty) {
+          // Stop in either case: if disabled or no reminders
           if (_strategyManager.isUsingNativeGeofencing) {
             // Notify location service of reminder removal
             await _locationService.onReminderRemoved(id);
             await _locationService.stopMonitoring();
-            if (_reminders.isNotEmpty) {
+            if (_reminders.isNotEmpty && backgroundLocationEnabled) {
               await _locationService.startMonitoring(_reminders);
             }
           } else {
-            if (_reminders.isNotEmpty) {
+            if (_reminders.isNotEmpty && backgroundLocationEnabled) {
               await _backgroundGeofence.updateReminders(_reminders);
             } else {
               await _backgroundGeofence.stopMonitoring();
@@ -502,6 +535,15 @@ class ReminderProvider extends ChangeNotifier {
       await _reminderService.clearAllReminders();
       await _locationService.stopMonitoring();
       _reminders = [];
+
+      // Auto-disable background location when clearing all reminders
+      final backgroundLocationEnabled =
+          await _settingsService.loadBackgroundLocationEnabled();
+      if (backgroundLocationEnabled) {
+        debugPrint(
+            'ReminderProvider: Auto-disabling background location - all reminders cleared');
+        await _settingsService.saveBackgroundLocationEnabled(false);
+      }
 
       notifyListeners();
     } catch (e) {
