@@ -1,3 +1,4 @@
+import 'dart:io' show Platform;
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -870,6 +871,13 @@ class _POIDetailScreenState extends State<POIDetailScreen> {
       if (!mounted) return false;
 
       if (!backgroundGranted) {
+        // On iOS, requestBackgroundPermission opens Settings and returns false
+        // Don't show error - user will return and try again
+        if (Platform.isIOS) {
+          // User was sent to Settings - they'll come back and try again
+          // No error message needed
+          return false;
+        }
         PermissionDialogHelper.showErrorWithMessenger(
           scaffoldMessenger,
           'Background location permission is required for reminders. Please select "Allow all the time" in the permission dialog.',
@@ -881,6 +889,23 @@ class _POIDetailScreenState extends State<POIDetailScreen> {
     // Step 3: Check and request notification permission
     final notificationService = NotificationService();
 
+    // Check if already have permission
+    if (await notificationService.hasPermission()) {
+      return true;
+    }
+
+    // Check if permission was previously denied (need to go to Settings)
+    if (await notificationService.isPermissionPermanentlyDenied()) {
+      if (!mounted) return false;
+      final openSettings = await PermissionDialogHelper
+          .showNotificationPermissionDeniedDialog(context);
+      if (openSettings) {
+        await notificationService.openSettings();
+      }
+      return false;
+    }
+
+    // First time asking - show rationale and request
     final allowedNotif =
         await PermissionDialogHelper.showNotificationRationale(context);
     if (!allowedNotif) return false;

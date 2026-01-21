@@ -102,6 +102,46 @@ class PermissionDialogHelper {
     return result ?? false;
   }
 
+  /// Show dialog when notification permission was previously denied
+  /// Returns true if user wants to open Settings
+  static Future<bool> showNotificationPermissionDeniedDialog(
+      BuildContext context) async {
+    final result = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: Row(
+            children: [
+              Icon(Icons.notifications_off, color: Colors.orange[700]),
+              const SizedBox(width: 8),
+              const Expanded(child: Text('Notifications Disabled')),
+            ],
+          ),
+          content: const Text(
+            'Notification permission was previously denied.\n\n'
+            'To receive shopping reminders when near a store, please enable notifications in your device Settings:\n\n'
+            '1. Tap "Open Settings" below\n'
+            '2. Find "Notifications"\n'
+            '3. Enable "Allow Notifications"',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: const Text('Cancel'),
+            ),
+            ElevatedButton(
+              onPressed: () => Navigator.of(context).pop(true),
+              child: const Text('Open Settings'),
+            ),
+          ],
+        );
+      },
+    );
+
+    return result ?? false;
+  }
+
   /// Show success message after reminder creation
   static void showReminderCreatedMessage(
       BuildContext context, String brandName) {

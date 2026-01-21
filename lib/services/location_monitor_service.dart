@@ -577,6 +577,9 @@ class LocationMonitorService {
   }
 
   /// Request background location permission
+  /// Returns true if granted, false if denied or user was sent to Settings
+  /// On iOS, this will open Settings and return false - caller should not show error
+  /// and should re-check permission when user returns to app
   Future<bool> requestBackgroundPermission() async {
     final serviceEnabled = await Geolocator.isLocationServiceEnabled();
     if (!serviceEnabled) {
@@ -603,11 +606,12 @@ class LocationMonitorService {
 
     if (Platform.isIOS) {
       debugPrint('iOS: Opening settings for Always permission');
+      // On iOS, we must send user to Settings for "Always" permission
+      // Don't show error after this - user will return and try again
       await permission_handler.openAppSettings();
-      await Future.delayed(const Duration(milliseconds: 500));
-      final newPermission = await Geolocator.checkPermission();
-      debugPrint('iOS: Permission after settings: $newPermission');
-      return newPermission == LocationPermission.always;
+      // Return false - but caller should NOT show error for iOS
+      // The hasBackgroundPermission() check at start of flow will succeed after user returns
+      return false;
     }
 
     // Android
