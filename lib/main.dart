@@ -7,6 +7,7 @@ import 'screens/tab_navigation_screen.dart';
 import 'screens/poi_detail_screen.dart';
 import 'screens/reminders_overview_screen.dart';
 import 'screens/permissions_disclosure_screen.dart';
+import 'screens/privacy_agreement_screen.dart';
 import 'services/openai_service.dart';
 import 'services/notification_service.dart';
 import 'services/location_monitor_service.dart';
@@ -248,6 +249,19 @@ class _MyAppState extends State<MyApp> {
   }
 
   Future<void> _checkAndShowDisclosure() async {
+    // First check if privacy policy has been accepted
+    final hasAcceptedPrivacy = await PrivacyAgreementScreen.hasAccepted();
+    if (!hasAcceptedPrivacy && mounted) {
+      // Show privacy agreement screen as a modal (cannot dismiss)
+      await Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (context) => const PrivacyAgreementScreen(),
+          fullscreenDialog: true,
+        ),
+      );
+    }
+
+    // Then check if permission disclosure has been shown
     final hasShown = await OnboardingService.hasShownDisclosure();
     if (!hasShown && mounted) {
       // Show disclosure screen as a modal
