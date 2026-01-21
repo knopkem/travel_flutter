@@ -20,6 +20,8 @@ class SettingsService {
   static const int defaultDwellTimeMinutes = 2; // Default 2 min
   static const String _proximityRadiusMetersKey = 'proximity_radius_meters';
   static const int defaultProximityRadiusMeters = 150; // Default 150 meters
+  static const String _clusterRadiusMetersKey = 'cluster_radius_meters';
+  static const int defaultClusterRadiusMeters = 1500; // Default 1500 meters
 
   // Geofence strategy keys
   static const String _geofenceStrategyKey = 'geofence_strategy';
@@ -88,11 +90,11 @@ class SettingsService {
 
   /// Default commercial POI type order
   static final List<POIType> defaultCommercialPoiOrder = [
+    POIType.supermarket,
+    POIType.hardwareStore,
     POIType.restaurant,
     POIType.cafe,
     POIType.bakery,
-    POIType.supermarket,
-    POIType.hardwareStore,
     POIType.pharmacy,
     POIType.gasStation,
     POIType.hotel,
@@ -705,6 +707,27 @@ class SettingsService {
           defaultProximityRadiusMeters;
     } catch (e) {
       return defaultProximityRadiusMeters;
+    }
+  }
+
+  /// Save cluster radius in meters
+  Future<bool> saveClusterRadiusMeters(int meters) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      return await prefs.setInt(_clusterRadiusMetersKey, meters);
+    } catch (e) {
+      return false;
+    }
+  }
+
+  /// Load cluster radius in meters
+  Future<int> loadClusterRadiusMeters() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      return prefs.getInt(_clusterRadiusMetersKey) ??
+          defaultClusterRadiusMeters;
+    } catch (e) {
+      return defaultClusterRadiusMeters;
     }
   }
 

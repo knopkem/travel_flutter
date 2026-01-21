@@ -24,6 +24,7 @@ class PoiDiscoverySettingsScreen extends StatelessWidget {
           }
 
           return ListView(
+            padding: const EdgeInsets.only(bottom: 100),
             children: [
               _buildProvidersSection(context, settingsProvider),
               const Divider(height: 1),
@@ -36,6 +37,8 @@ class PoiDiscoverySettingsScreen extends StatelessWidget {
               _buildCommercialInterestsSection(context, settingsProvider),
               const Divider(height: 1),
               _buildDistanceSection(context, settingsProvider),
+              const Divider(height: 1),
+              _buildClusterRadiusSection(context, settingsProvider),
             ],
           );
         },
@@ -691,6 +694,78 @@ class PoiDiscoverySettingsScreen extends StatelessWidget {
                 padding: const EdgeInsets.symmetric(vertical: 8),
                 child: Text(
                   'Larger distances may take longer to fetch results',
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: Colors.grey[600],
+                      ),
+                ),
+              ),
+              const SizedBox(height: 8),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildClusterRadiusSection(
+    BuildContext context,
+    SettingsProvider settingsProvider,
+  ) {
+    final radiusMeters = settingsProvider.clusterRadiusMeters.clamp(200, 2000);
+
+    return ExpansionTile(
+      initiallyExpanded: false,
+      leading: const Icon(Icons.workspaces_outlined),
+      title: const Text(
+        'Map Clustering',
+        style: TextStyle(
+          fontSize: 18,
+          fontWeight: FontWeight.bold,
+        ),
+      ),
+      subtitle: Text('Cluster radius: $radiusMeters m'),
+      children: [
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  const Icon(Icons.group_work, size: 20),
+                  const SizedBox(width: 8),
+                  Text(
+                    'Cluster Radius: $radiusMeters meters',
+                    style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                          fontWeight: FontWeight.w600,
+                        ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+              Row(
+                children: [
+                  const Text('200 m'),
+                  Expanded(
+                    child: Slider(
+                      value: radiusMeters.toDouble(),
+                      min: 200,
+                      max: 2000,
+                      divisions: 18,
+                      label: '$radiusMeters m',
+                      onChanged: (value) {
+                        settingsProvider
+                            .updateClusterRadiusMeters(value.round());
+                      },
+                    ),
+                  ),
+                  const Text('2 km'),
+                ],
+              ),
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 8),
+                child: Text(
+                  'POIs of the same type within this distance will be grouped together when zoomed out on the map',
                   style: Theme.of(context).textTheme.bodySmall?.copyWith(
                         color: Colors.grey[600],
                       ),

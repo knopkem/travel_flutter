@@ -32,6 +32,7 @@ class SettingsProvider extends ChangeNotifier {
   bool _notificationsEnabled = true;
   int _dwellTimeMinutes = SettingsService.defaultDwellTimeMinutes;
   int _proximityRadiusMeters = SettingsService.defaultProximityRadiusMeters;
+  int _clusterRadiusMeters = SettingsService.defaultClusterRadiusMeters;
 
   SettingsProvider({
     SettingsService? settingsService,
@@ -155,6 +156,9 @@ class SettingsProvider extends ChangeNotifier {
   /// Proximity radius in meters for geofence detection
   int get proximityRadiusMeters => _proximityRadiusMeters;
 
+  /// Cluster radius in meters for map POI clustering
+  int get clusterRadiusMeters => _clusterRadiusMeters;
+
   /// Whether settings are currently being loaded
   bool get isLoading => _isLoading;
 
@@ -174,6 +178,7 @@ class SettingsProvider extends ChangeNotifier {
         await _settingsService.loadBackgroundLocationEnabled();
     _dwellTimeMinutes = await _settingsService.loadDwellTimeMinutes();
     _proximityRadiusMeters = await _settingsService.loadProximityRadiusMeters();
+    _clusterRadiusMeters = await _settingsService.loadClusterRadiusMeters();
     _notificationsEnabled = await _settingsService.loadNotificationsEnabled();
     _isLoading = true;
     notifyListeners();
@@ -537,5 +542,12 @@ class SettingsProvider extends ChangeNotifier {
         await locationService.onReminderAdded(reminder);
       }
     }
+  }
+
+  /// Update cluster radius in meters for map POI clustering
+  Future<void> updateClusterRadiusMeters(int meters) async {
+    await _settingsService.saveClusterRadiusMeters(meters);
+    _clusterRadiusMeters = meters;
+    notifyListeners();
   }
 }

@@ -14,6 +14,7 @@ import '../providers/map_navigation_provider.dart';
 import '../providers/reminder_provider.dart';
 import '../providers/settings_provider.dart';
 import '../utils/string_utils.dart';
+import '../utils/poi_cluster_manager.dart';
 import '../widgets/geofence_debug_overlay.dart';
 import 'poi_detail_screen.dart';
 import 'settings_screen.dart';
@@ -275,6 +276,65 @@ class _MapScreenState extends State<MapScreen>
                   ),
                 ],
               ),
+      ),
+    );
+  }
+
+  /// Creates a marker for a cluster of POIs (non-clickable)
+  Marker _createClusterMarker(POICluster cluster) {
+    final double iconSize = 30.0;
+    final color = cluster.type.color;
+
+    return Marker(
+      point: cluster.center,
+      width: 90,
+      height: iconSize + 20,
+      child: IgnorePointer(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // Count badge (pill-shaped)
+            Container(
+              padding: const EdgeInsets.symmetric(
+                horizontal: 8,
+                vertical: 3,
+              ),
+              decoration: BoxDecoration(
+                color: color,
+                borderRadius: BorderRadius.circular(12),
+                boxShadow: const [
+                  BoxShadow(
+                    color: Colors.black26,
+                    blurRadius: 3,
+                    offset: Offset(0, 1),
+                  ),
+                ],
+              ),
+              child: Text(
+                '${cluster.count}',
+                style: const TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.white,
+                ),
+              ),
+            ),
+            const SizedBox(height: 4),
+            // POI type icon
+            Icon(
+              cluster.type.icon,
+              color: color,
+              size: iconSize,
+              shadows: const [
+                Shadow(
+                  blurRadius: 3,
+                  color: Colors.black45,
+                  offset: Offset(1, 1),
+                ),
+              ],
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -549,8 +609,20 @@ class _MapScreenState extends State<MapScreen>
                   .toList();
             }
 
-            for (final poi in poisToShow) {
-              markers.add(_createPOIMarker(poi));
+            // Cluster POIs by type based on zoom level
+            final clusters = POIClusterManager.clusterPOIs(
+              poisToShow,
+              _currentZoom,
+              clusterRadiusMeters: settingsProvider.clusterRadiusMeters,
+            );
+            for (final cluster in clusters) {
+              if (cluster.isCluster) {
+                // Multiple POIs clustered together - show cluster marker
+                markers.add(_createClusterMarker(cluster));
+              } else {
+                // Single POI - show regular clickable marker
+                markers.add(_createPOIMarker(cluster.pois.first));
+              }
             }
           }
 
