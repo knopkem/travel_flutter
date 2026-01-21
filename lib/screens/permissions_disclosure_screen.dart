@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../utils/onboarding_service.dart';
+import 'tab_navigation_screen.dart';
 
 /// First-launch permissions disclosure screen required for Play Store compliance
 ///
@@ -14,167 +15,275 @@ class PermissionsDisclosureScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Welcome to LocationPal'),
-        backgroundColor: Theme.of(context).colorScheme.inversePrimary,
-      ),
-      body: SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // App intro
-              Text(
-                'Before we get started',
-                style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                      fontWeight: FontWeight.bold,
+    return PopScope(
+      canPop: false, // Prevent back button from dismissing
+      child: Scaffold(
+        appBar: AppBar(
+          title: const Text('Welcome to LocationPal'),
+          backgroundColor: Theme.of(context).colorScheme.inversePrimary,
+          automaticallyImplyLeading: false, // Remove back button
+        ),
+        body: SafeArea(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // App intro
+                Text(
+                  'Before we get started',
+                  style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                        fontWeight: FontWeight.bold,
+                      ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'LocationPal helps you discover nearby places and get timely reminders when you arrive at stores.',
+                  style: Theme.of(context).textTheme.bodyLarge,
+                ),
+                const SizedBox(height: 24),
+
+                // Permissions section
+                Text(
+                  'Permissions We Need',
+                  style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                        fontWeight: FontWeight.bold,
+                      ),
+                ),
+                const SizedBox(height: 16),
+
+                // Location Permission - Collapsible
+                Card(
+                  child: ExpansionTile(
+                    leading: const Icon(Icons.location_on, color: Colors.blue),
+                    title: const Text(
+                      'Location Access',
+                      style: TextStyle(fontWeight: FontWeight.bold),
                     ),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                'LocationPal helps you discover nearby places and get timely reminders when you arrive at stores.',
-                style: Theme.of(context).textTheme.bodyLarge,
-              ),
-              const SizedBox(height: 24),
-
-              // Permissions section
-              Text(
-                'Permissions We Need',
-                style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                      fontWeight: FontWeight.bold,
+                    subtitle: const Text(
+                      'Show nearby places and location-based reminders',
                     ),
-              ),
-              const SizedBox(height: 16),
-
-              // Location Permission Card
-              _PermissionCard(
-                icon: Icons.location_on,
-                iconColor: Colors.blue,
-                title: 'Location Access',
-                description:
-                    'We use your location to show nearby points of interest and send location-based reminders when you arrive at stores you want to visit.',
-                whyNeeded:
-                    'This feature requires precise location to work accurately. We only collect location when the app is in use or when you have active reminders.',
-                dataUsage: [
-                  'Location data stays on your device',
-                  'Used only to trigger reminders and show nearby places',
-                  'Not shared with third parties for advertising',
-                  'You can disable this anytime in Settings',
-                ],
-              ),
-              const SizedBox(height: 16),
-
-              // Notification Permission Card
-              _PermissionCard(
-                icon: Icons.notifications,
-                iconColor: Colors.orange,
-                title: 'Notifications',
-                description:
-                    'We send notifications to remind you when you arrive near stores you\'ve added to your reminder list.',
-                whyNeeded:
-                    'Timely reminders help you remember shopping tasks when you\'re nearby.',
-                dataUsage: [
-                  'Notifications are generated locally on your device',
-                  'No personal data is sent to servers',
-                  'You can enable or disable notifications in Shopping Reminders settings',
-                ],
-              ),
-              const SizedBox(height: 24),
-
-              // Background Location Notice
-              Card(
-                color: Colors.amber.shade50,
-                child: Padding(
-                  padding: const EdgeInsets.all(16.0),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+                    initiallyExpanded: false,
                     children: [
-                      Row(
-                        children: [
-                          Icon(Icons.info_outline,
-                              color: Colors.amber.shade900),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: Text(
-                              'Background Location',
+                      Padding(
+                        padding: const EdgeInsets.all(16.0),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text(
+                              'Why we need this:',
                               style: TextStyle(
                                 fontWeight: FontWeight.bold,
-                                color: Colors.amber.shade900,
+                                fontSize: 14,
                               ),
                             ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        'To send you reminders when you arrive at stores, we need to access your location even when the app is closed or not in use. This is optional and only needed if you want location-based reminders.',
-                        style: TextStyle(
-                          fontSize: 14,
-                          color: Colors.amber.shade900,
+                            const SizedBox(height: 8),
+                            const Text(
+                              'This feature requires precise location to work accurately. We only collect location when the app is in use or when you have active reminders.',
+                              style: TextStyle(fontSize: 14),
+                            ),
+                            const SizedBox(height: 16),
+                            const Text(
+                              'How we use your data:',
+                              style: TextStyle(
+                                fontWeight: FontWeight.bold,
+                                fontSize: 14,
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                            ...[
+                              'Location data stays on your device',
+                              'Used only to trigger reminders and show nearby places',
+                              'Not shared with third parties for advertising',
+                              'You can disable this anytime in Settings',
+                            ].map((item) => Padding(
+                                  padding: const EdgeInsets.only(bottom: 4),
+                                  child: Row(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      const Text('• ',
+                                          style: TextStyle(fontSize: 14)),
+                                      Expanded(
+                                        child: Text(item,
+                                            style:
+                                                const TextStyle(fontSize: 14)),
+                                      ),
+                                    ],
+                                  ),
+                                )),
+                            const SizedBox(height: 16),
+                            // Background Location Notice
+                            Container(
+                              padding: const EdgeInsets.all(12),
+                              decoration: BoxDecoration(
+                                color: Colors.amber.shade50,
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Row(
+                                    children: [
+                                      Icon(Icons.info_outline,
+                                          color: Colors.amber.shade900,
+                                          size: 20),
+                                      const SizedBox(width: 8),
+                                      Expanded(
+                                        child: Text(
+                                          'Background Location',
+                                          style: TextStyle(
+                                            fontWeight: FontWeight.bold,
+                                            color: Colors.amber.shade900,
+                                            fontSize: 14,
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 8),
+                                  Text(
+                                    'To send you reminders when you arrive at stores, we need to access your location even when the app is closed or not in use. This is optional and only needed if you want location-based reminders.',
+                                    style: TextStyle(
+                                      fontSize: 13,
+                                      color: Colors.amber.shade900,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
                         ),
                       ),
                     ],
                   ),
                 ),
-              ),
-              const SizedBox(height: 24),
+                const SizedBox(height: 12),
 
-              // Privacy & Legal section
-              Text(
-                'Privacy & Legal',
-                style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                      fontWeight: FontWeight.bold,
+                // Notification Permission - Collapsible
+                Card(
+                  child: ExpansionTile(
+                    leading:
+                        const Icon(Icons.notifications, color: Colors.orange),
+                    title: const Text(
+                      'Notifications',
+                      style: TextStyle(fontWeight: FontWeight.bold),
                     ),
-              ),
-              const SizedBox(height: 12),
-              Text(
-                'Your privacy matters to us. Please review:',
-                style: Theme.of(context).textTheme.bodyMedium,
-              ),
-              const SizedBox(height: 12),
-              _LegalLink(
-                label: '📄 Privacy Policy',
-                url: OnboardingService.privacyPolicyUrl,
-                subtitle: 'How we handle your data',
-              ),
-              const SizedBox(height: 8),
-              _LegalLink(
-                label: '📋 Terms of Service',
-                url: OnboardingService.termsOfServiceUrl,
-                subtitle: 'Terms and conditions',
-              ),
-              const SizedBox(height: 32),
-
-              // Consent button
-              SizedBox(
-                width: double.infinity,
-                height: 50,
-                child: ElevatedButton(
-                  onPressed: () => _acceptAndContinue(context),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Theme.of(context).colorScheme.primary,
-                    foregroundColor: Colors.white,
-                  ),
-                  child: const Text(
-                    'Accept & Continue',
-                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                    subtitle: const Text(
+                      'Get reminders when you arrive near stores',
+                    ),
+                    initiallyExpanded: false,
+                    children: [
+                      Padding(
+                        padding: const EdgeInsets.all(16.0),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text(
+                              'Why we need this:',
+                              style: TextStyle(
+                                fontWeight: FontWeight.bold,
+                                fontSize: 14,
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                            const Text(
+                              'Timely reminders help you remember shopping tasks when you\'re nearby.',
+                              style: TextStyle(fontSize: 14),
+                            ),
+                            const SizedBox(height: 16),
+                            const Text(
+                              'How we use your data:',
+                              style: TextStyle(
+                                fontWeight: FontWeight.bold,
+                                fontSize: 14,
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                            ...[
+                              'Notifications are generated locally on your device',
+                              'No personal data is sent to servers',
+                              'You can enable or disable notifications in Shopping Reminders settings',
+                            ].map((item) => Padding(
+                                  padding: const EdgeInsets.only(bottom: 4),
+                                  child: Row(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      const Text('• ',
+                                          style: TextStyle(fontSize: 14)),
+                                      Expanded(
+                                        child: Text(item,
+                                            style:
+                                                const TextStyle(fontSize: 14)),
+                                      ),
+                                    ],
+                                  ),
+                                )),
+                          ],
+                        ),
+                      ),
+                    ],
                   ),
                 ),
-              ),
-              const SizedBox(height: 16),
+                const SizedBox(height: 24),
 
-              // Fine print
-              Text(
-                'By continuing, you acknowledge that you have read and agree to our Privacy Policy and Terms of Service.',
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  fontSize: 12,
-                  color: Colors.grey[600],
+                // Privacy & Legal section
+                Text(
+                  'Privacy & Legal',
+                  style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                        fontWeight: FontWeight.bold,
+                      ),
                 ),
-              ),
-            ],
+                const SizedBox(height: 12),
+                Text(
+                  'Your privacy matters to us. Please review:',
+                  style: Theme.of(context).textTheme.bodyMedium,
+                ),
+                const SizedBox(height: 12),
+                _LegalLink(
+                  label: '📄 Privacy Policy',
+                  url: OnboardingService.privacyPolicyUrl,
+                  subtitle: 'How we handle your data',
+                ),
+                const SizedBox(height: 8),
+                _LegalLink(
+                  label: '📋 Terms of Service',
+                  url: OnboardingService.termsOfServiceUrl,
+                  subtitle: 'Terms and conditions',
+                ),
+                const SizedBox(height: 32),
+
+                // Consent button
+                SizedBox(
+                  width: double.infinity,
+                  height: 50,
+                  child: ElevatedButton(
+                    onPressed: () => _acceptAndContinue(context),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Theme.of(context).colorScheme.primary,
+                      foregroundColor: Colors.white,
+                    ),
+                    child: const Text(
+                      'Accept & Continue',
+                      style:
+                          TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 16),
+
+                // Fine print
+                Text(
+                  'By continuing, you acknowledge that you have read and agree to our Privacy Policy and Terms of Service.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: Colors.grey[600],
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       ),
@@ -185,10 +294,13 @@ class PermissionsDisclosureScreen extends StatelessWidget {
     // Mark disclosure as shown
     await OnboardingService.markDisclosureShown();
 
-    // Close the disclosure screen and return to app
-    // Permissions will be requested contextually when features are used
+    // Navigate to main app
     if (context.mounted) {
-      Navigator.of(context).pop();
+      Navigator.of(context).pushReplacement(
+        MaterialPageRoute(
+          builder: (context) => const TabNavigationScreen(),
+        ),
+      );
     }
   }
 }

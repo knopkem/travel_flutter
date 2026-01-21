@@ -7,7 +7,6 @@ import 'screens/tab_navigation_screen.dart';
 import 'screens/poi_detail_screen.dart';
 import 'screens/reminders_overview_screen.dart';
 import 'screens/permissions_disclosure_screen.dart';
-import 'screens/privacy_agreement_screen.dart';
 import 'services/openai_service.dart';
 import 'services/notification_service.dart';
 import 'services/location_monitor_service.dart';
@@ -50,6 +49,10 @@ void main() async {
       _handleNotificationTap(poiId);
     },
   );
+
+  // Check if disclosure has been shown
+  final hasShownDisclosure = await OnboardingService.hasShownDisclosure();
+  debugPrint('Disclosure shown: $hasShownDisclosure');
 
   runApp(
     MultiProvider(
@@ -124,7 +127,7 @@ void main() async {
           create: (_) => ReminderProvider()..initialize(),
         ),
       ],
-      child: const MyApp(),
+      child: MyApp(hasShownDisclosure: hasShownDisclosure),
     ),
   );
 }
@@ -230,7 +233,9 @@ void _handleNotificationTap(String payload) {
 }
 
 class MyApp extends StatefulWidget {
-  const MyApp({super.key});
+  final bool hasShownDisclosure;
+
+  const MyApp({super.key, required this.hasShownDisclosure});
 
   @override
   State<MyApp> createState() => _MyAppState();
@@ -243,35 +248,7 @@ class _MyAppState extends State<MyApp> {
     // Capture POI provider reference for deep linking
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _poiProviderRef = Provider.of<POIProvider>(context, listen: false);
-      // Check and show disclosure if needed
-      _checkAndShowDisclosure();
     });
-  }
-
-  Future<void> _checkAndShowDisclosure() async {
-    // First check if privacy policy has been accepted
-    final hasAcceptedPrivacy = await PrivacyAgreementScreen.hasAccepted();
-    if (!hasAcceptedPrivacy && mounted) {
-      // Show privacy agreement screen as a modal (cannot dismiss)
-      await Navigator.of(context).push(
-        MaterialPageRoute(
-          builder: (context) => const PrivacyAgreementScreen(),
-          fullscreenDialog: true,
-        ),
-      );
-    }
-
-    // Then check if permission disclosure has been shown
-    final hasShown = await OnboardingService.hasShownDisclosure();
-    if (!hasShown && mounted) {
-      // Show disclosure screen as a modal
-      await Navigator.of(context).push(
-        MaterialPageRoute(
-          builder: (context) => const PermissionsDisclosureScreen(),
-          fullscreenDialog: true,
-        ),
-      );
-    }
   }
 
   @override
@@ -283,7 +260,9 @@ class _MyAppState extends State<MyApp> {
         colorScheme: ColorScheme.fromSeed(seedColor: Colors.blue),
         useMaterial3: true,
       ),
-      home: const TabNavigationScreen(),
+      home: widget.hasShownDisclosure
+          ? const TabNavigationScreen()
+          : const PermissionsDisclosureScreen(),
     );
   }
 }

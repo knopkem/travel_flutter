@@ -4,6 +4,7 @@ import 'package:flutter_map/flutter_map.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:provider/provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../models/location.dart';
 import '../models/poi.dart';
 import '../models/reminder.dart';
@@ -66,8 +67,20 @@ class _MapScreenState extends State<MapScreen>
     // Listen for map navigation requests
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _listenToMapNavigation();
-      _startGpsTracking();
+      // Check if disclosure has been shown before starting GPS tracking
+      _checkDisclosureAndStartGps();
     });
+  }
+
+  /// Check if disclosure was shown before starting GPS tracking
+  Future<void> _checkDisclosureAndStartGps() async {
+    // Import onboarding service if not already imported
+    final prefs = await SharedPreferences.getInstance();
+    final hasShown = prefs.getBool('has_shown_disclosure') ?? false;
+
+    if (hasShown) {
+      _startGpsTracking();
+    }
   }
 
   /// Listen for POI navigation requests and center map
