@@ -28,7 +28,10 @@ class _GeofenceEntry {
 /// Only registers the nearest 95 geofences (buffer below limit)
 class DynamicGeofenceManager {
   static const int _maxGeofences = 95; // Buffer below Android's 100 limit
-  static const double _significantMoveDistanceMeters = 500.0;
+  static const double _significantMoveDistanceMeters =
+      100.0; // Check geofences more frequently
+  static const double _geofenceUpdateDistanceMeters =
+      500.0; // Re-register geofences less frequently
 
   StreamSubscription<Position>? _locationSubscription;
   Position? _lastUpdatePosition;
@@ -106,7 +109,8 @@ class DynamicGeofenceManager {
   /// Start monitoring significant location changes
   void _startLocationMonitoring() {
     final locationSettings = LocationSettings(
-      accuracy: LocationAccuracy.medium,
+      accuracy: LocationAccuracy
+          .high, // Use high accuracy for better geofence detection
       distanceFilter: _significantMoveDistanceMeters.toInt(),
     );
 
@@ -115,7 +119,7 @@ class DynamicGeofenceManager {
     ).listen(
       (Position position) {
         debugPrint(
-            'DynamicGeofenceManager: Significant location change detected');
+            'DynamicGeofenceManager: Location update received (${position.latitude}, ${position.longitude})');
         _onLocationChanged(position);
       },
       onError: (error) {
@@ -124,9 +128,12 @@ class DynamicGeofenceManager {
     );
   }
 
-  /// Handle location changes and update geofences if needed
+  /// Handle location changes - check geofence entry and update geofences if needed
   Future<void> _onLocationChanged(Position position) async {
-    // Check if we've moved significantly since last update
+    // Always check if we're inside any registered geofences (catches GPS corrections)
+    await _checkGeofenceEntry(position);
+
+    // Only update geofence registrations if we've moved a significant distance
     if (_lastUpdatePosition != null) {
       final distance = Geolocator.distanceBetween(
         _lastUpdatePosition!.latitude,
@@ -135,8 +142,8 @@ class DynamicGeofenceManager {
         position.longitude,
       );
 
-      if (distance < _significantMoveDistanceMeters) {
-        return; // Not moved enough to warrant update
+      if (distance < _geofenceUpdateDistanceMeters) {
+        return; // Not moved enough to warrant geofence re-registration
       }
     }
 
@@ -144,6 +151,87 @@ class DynamicGeofenceManager {
     DebugLogService().log('Location changed significantly, updating geofences',
         type: DebugLogType.info);
     await _updateGeofences();
+  }
+
+  /// Check if current position is inside any registered geofences
+  Future<void> _checkGeofenceEntry(Position position) async {
+    if (_allReminders.isEmpty) return;
+
+    final prefs = await SharedPreferences.getInstance();
+    final proximityRadius = prefs.getInt('proximity_radius_meters') ?? 150;
+    final dwellTimeMinutes = prefs.getInt('dwell_time_minutes') ?? 2;
+
+    for (final reminder in _allReminders) {
+      // Check each location for this reminder
+      if (reminder.locations.isNotEmpty) {
+        for (final location in reminder.locations) {
+          final geofenceId = '${reminder.id}_${location.poiId}';
+
+          // Only check registered geofences
+          if (!_registeredGeofenceIds.contains(geofenceId)) continue;
+
+          // Skip if already pending
+          if (_pendingInitialChecks.contains(geofenceId)) continue;
+
+          final distance = Geolocator.distanceBetween(
+            position.latitude,
+            position.longitude,
+            location.latitude,
+            location.longitude,
+          );
+
+          if (distance <= proximityRadius) {
+            debugPrint(
+                'DynamicGeofenceManager: Position update detected inside geofence: ${reminder.brandName} (${distance.toStringAsFixed(0)}m)');
+            DebugLogService().log(
+              'Inside geofence: ${reminder.brandName} (${distance.toStringAsFixed(0)}m)',
+              type: DebugLogType.geofenceEnter,
+            );
+
+            // Create a modified reminder with correct lat/lng for this location
+            final locationReminder = Reminder(
+              id: reminder.id,
+              originalPoiId: location.poiId,
+              originalPoiName: location.poiName,
+              poiType: reminder.poiType,
+              brandName: reminder.brandName,
+              latitude: location.latitude,
+              longitude: location.longitude,
+              items: reminder.items,
+              locations: reminder.locations,
+            );
+
+            _handleInitialGeofenceState(geofenceId, locationReminder,
+                dwellTimeMinutes, proximityRadius);
+          }
+        }
+      } else {
+        // Old format: single location
+        final geofenceId = reminder.id;
+
+        if (!_registeredGeofenceIds.contains(geofenceId)) continue;
+        if (_pendingInitialChecks.contains(geofenceId)) continue;
+
+        final distance = Geolocator.distanceBetween(
+          position.latitude,
+          position.longitude,
+          reminder.latitude,
+          reminder.longitude,
+        );
+
+        if (distance <= proximityRadius) {
+          debugPrint(
+              'DynamicGeofenceManager: Position update detected inside geofence: ${reminder.brandName} (${distance.toStringAsFixed(0)}m)');
+          DebugLogService().log(
+            'Inside geofence: ${reminder.brandName} (${distance.toStringAsFixed(0)}m)',
+            type: DebugLogType.geofenceEnter,
+          );
+
+          _handleInitialGeofenceState(
+              geofenceId, reminder, dwellTimeMinutes, proximityRadius);
+        }
+      }
+    }
   }
 
   /// Re-evaluate and update registered geofences based on current location
