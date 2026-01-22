@@ -35,6 +35,8 @@ class LocationMonitorService {
 
   // Track active dwell timers for iOS (Android handles natively)
   final Map<String, Timer> _activeDwellTimers = {};
+  // Track scheduled notification IDs for iOS (keyed by geofenceId)
+  final Map<String, int> _scheduledNotifications = {};
   // Track reminders that have been notified to prevent duplicates
   final Set<String> _notifiedReminders = {};
   // Track registered iOS geofences for stats
@@ -100,12 +102,12 @@ class LocationMonitorService {
   }
 
   /// Handle entering a geofence
-  Future<void> _handleGeofenceEnter(String reminderId) async {
-    debugPrint('Entered geofence: $reminderId');
+  Future<void> _handleGeofenceEnter(String geofenceId) async {
+    debugPrint('Entered geofence: $geofenceId');
 
     // Check if already notified
-    if (_notifiedReminders.contains(reminderId)) {
-      debugPrint('Already notified for $reminderId, ignoring');
+    if (_notifiedReminders.contains(geofenceId)) {
+      debugPrint('Already notified for $geofenceId, ignoring');
       DebugLogService()
           .log('Already notified, ignoring entry', type: DebugLogType.info);
       return;
@@ -119,12 +121,20 @@ class LocationMonitorService {
 
     // iOS: Manual dwell tracking needed
     // Check if we already have an active timer
-    if (_activeDwellTimers.containsKey(reminderId)) {
-      debugPrint('Timer already active for $reminderId, ignoring duplicate');
+    if (_activeDwellTimers.containsKey(geofenceId)) {
+      debugPrint('Timer already active for $geofenceId, ignoring duplicate');
       DebugLogService()
           .log('iOS: Timer already active, ignoring', type: DebugLogType.info);
       return;
     }
+
+    // Extract the actual reminder ID from geofence ID
+    // Geofence ID format: "reminderID_locationID" or just "reminderID"
+    final uuidRegex = RegExp(
+        r'^([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})',
+        caseSensitive: false);
+    final match = uuidRegex.firstMatch(geofenceId);
+    final reminderId = match?.group(1) ?? geofenceId;
 
     // Get reminder info for logging
     final reminderService = ReminderService();
@@ -133,15 +143,15 @@ class LocationMonitorService {
     final brandName = reminder?.brandName ?? reminderId;
 
     final dwellTracker = DwellTimeTracker();
-    await dwellTracker.recordEntry(reminderId);
+    await dwellTracker.recordEntry(geofenceId);
 
     // Check if we've already dwelled long enough
-    final hasDwelled = await dwellTracker.hasDwelledLongEnough(reminderId);
+    final hasDwelled = await dwellTracker.hasDwelledLongEnough(geofenceId);
     if (hasDwelled) {
-      debugPrint('Already dwelled at $reminderId, sending notification');
+      debugPrint('Already dwelled at $geofenceId, sending notification');
       DebugLogService().log('iOS: Already dwelled at $brandName',
           type: DebugLogType.geofenceDwell);
-      await _sendReminderNotification(reminderId);
+      await _sendReminderNotification(geofenceId);
       return;
     }
 
@@ -154,77 +164,123 @@ class LocationMonitorService {
       type: DebugLogType.info,
     );
 
-    // Start iOS dwell timer
-    _startDwellTimer(reminderId);
+    // Schedule a notification for the future instead of using Timer.periodic
+    // This works even when the app is suspended on iOS
+    if (reminder != null) {
+      await _scheduleIOSDwellNotification(
+          geofenceId, reminder, dwellTimeMinutes);
+    }
   }
 
   /// Handle exiting a geofence
-  Future<void> _handleGeofenceExit(String reminderId) async {
-    debugPrint('Exited geofence: $reminderId');
+  Future<void> _handleGeofenceExit(String geofenceId) async {
+    debugPrint('Exited geofence: $geofenceId');
 
-    // Cancel any active timer (iOS only)
-    _activeDwellTimers[reminderId]?.cancel();
-    _activeDwellTimers.remove(reminderId);
+    // Cancel any active timer (iOS only - legacy, kept for safety)
+    _activeDwellTimers[geofenceId]?.cancel();
+    _activeDwellTimers.remove(geofenceId);
+
+    // Cancel any scheduled notification (iOS)
+    if (_scheduledNotifications.containsKey(geofenceId)) {
+      debugPrint('iOS: Cancelling scheduled notification for $geofenceId');
+      final notificationService = NotificationService();
+      await notificationService.cancelScheduledNotification(geofenceId);
+      _scheduledNotifications.remove(geofenceId);
+      DebugLogService().log(
+        'iOS: Cancelled scheduled notification (user exited before dwell)',
+        type: DebugLogType.info,
+      );
+    }
 
     // Clear notified state so user can be notified again on re-entry
-    _notifiedReminders.remove(reminderId);
+    _notifiedReminders.remove(geofenceId);
 
     // Clear iOS dwell tracking
     if (Platform.isIOS) {
       final dwellTracker = DwellTimeTracker();
-      await dwellTracker.clearEntry(reminderId);
+      await dwellTracker.clearEntry(geofenceId);
     }
   }
 
-  /// Start a timer to check dwell time (iOS only)
-  void _startDwellTimer(String reminderId) {
-    debugPrint('Starting iOS dwell timer for $reminderId');
+  /// Schedule a notification for iOS dwell (works even when app is suspended)
+  Future<void> _scheduleIOSDwellNotification(
+      String geofenceId, Reminder reminder, int dwellTimeMinutes) async {
+    debugPrint(
+        'iOS: Scheduling notification for $geofenceId in ${dwellTimeMinutes} minutes');
 
-    final timer = Timer.periodic(const Duration(seconds: 30), (timer) async {
-      final dwellTracker = DwellTimeTracker();
-      final hasDwelled = await dwellTracker.hasDwelledLongEnough(reminderId);
+    // Check cooldown period first
+    final prefs = await SharedPreferences.getInstance();
+    final lastNotificationKey = 'last_notification_${reminder.id}';
+    final lastNotificationTime = prefs.getInt(lastNotificationKey) ?? 0;
+    final now = DateTime.now().millisecondsSinceEpoch;
 
-      if (hasDwelled) {
-        timer.cancel();
-        _activeDwellTimers.remove(reminderId);
+    const cooldownMs = 24 * 60 * 60 * 1000;
+    if (now - lastNotificationTime < cooldownMs) {
+      debugPrint(
+          'iOS: Skipping scheduled notification for ${reminder.brandName} (cooldown period)');
+      DebugLogService().log(
+        'iOS: Skipped scheduling (cooldown)',
+        type: DebugLogType.info,
+      );
+      return;
+    }
 
-        // Get reminder info for logging
-        final reminderService = ReminderService();
-        final reminders = await reminderService.loadReminders();
-        final reminder = reminders.where((r) => r.id == reminderId).firstOrNull;
-        final brandName = reminder?.brandName ?? reminderId;
+    // Check if notifications are enabled
+    final notificationsEnabled =
+        prefs.getBool('notifications_enabled') ?? true;
+    if (!notificationsEnabled) {
+      debugPrint('iOS: Notifications disabled in settings');
+      return;
+    }
 
-        DebugLogService().log(
-          'iOS: Dwell complete for $brandName (sending notification)',
-          type: DebugLogType.geofenceDwell,
-        );
+    final notificationService = NotificationService();
+    final notificationId = await notificationService.scheduleReminderNotification(
+      geofenceId: geofenceId,
+      poiId: reminder.locations.isNotEmpty
+          ? reminder.locations.first.poiId
+          : reminder.id,
+      poiName: reminder.locations.isNotEmpty
+          ? reminder.locations.first.poiName
+          : reminder.brandName,
+      brandName: reminder.brandName,
+      items: reminder.items.map((item) => item.text).toList(),
+      delay: Duration(minutes: dwellTimeMinutes),
+    );
 
-        await _sendReminderNotification(reminderId);
-        return;
-      }
+    if (notificationId != -1) {
+      _scheduledNotifications[geofenceId] = notificationId;
+      _notifiedReminders.add(geofenceId);
 
-      // Check if we're still in the geofence
-      final entryTime = await dwellTracker.getEntryTime(reminderId);
-      if (entryTime == null) {
-        timer.cancel();
-        _activeDwellTimers.remove(reminderId);
-        debugPrint('User left geofence $reminderId, stopping timer');
-        DebugLogService()
-            .log('iOS: User left during dwell wait', type: DebugLogType.info);
-      }
-    });
+      // Save notification time (for cooldown)
+      await prefs.setInt(lastNotificationKey, now);
 
-    _activeDwellTimers[reminderId] = timer;
+      DebugLogService().log(
+        'iOS: Scheduled notification for ${reminder.brandName} in ${dwellTimeMinutes}min',
+        type: DebugLogType.info,
+      );
+    }
   }
 
-  /// Send notification for a reminder (iOS dwell completion)
-  Future<void> _sendReminderNotification(String reminderId) async {
-    if (_notifiedReminders.contains(reminderId)) {
-      debugPrint('Already notified for $reminderId, skipping');
+  /// Send notification for a reminder (iOS dwell completion - legacy method)
+  Future<void> _sendReminderNotification(String geofenceId) async {
+    if (_notifiedReminders.contains(geofenceId)) {
+      debugPrint('Already notified for $geofenceId, skipping');
       return;
     }
 
     try {
+      // Extract the actual reminder ID from geofence ID
+      // Geofence ID format: "reminderID_locationID" or just "reminderID"
+      // Reminder ID is a UUID like "0b1cebfd-d603-4fa7-ac31-a5a8f36b680d"
+      final uuidRegex = RegExp(
+          r'^([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})',
+          caseSensitive: false);
+      final match = uuidRegex.firstMatch(geofenceId);
+      final reminderId = match?.group(1) ?? geofenceId;
+
+      debugPrint(
+          'iOS: Extracted reminder ID: $reminderId from geofence ID: $geofenceId');
+
       // Check cooldown period (24 hours) - same as Android
       final prefs = await SharedPreferences.getInstance();
       final lastNotificationKey = 'last_notification_$reminderId';
@@ -242,14 +298,15 @@ class LocationMonitorService {
         return;
       }
 
-      _notifiedReminders.add(reminderId);
+      _notifiedReminders.add(geofenceId);
 
       final reminderService = ReminderService();
       final reminders = await reminderService.loadReminders();
       final reminder = reminders.where((r) => r.id == reminderId).firstOrNull;
 
       if (reminder == null) {
-        debugPrint('Reminder not found for id: $reminderId');
+        debugPrint(
+            'Reminder not found for id: $reminderId (geofenceId: $geofenceId)');
         return;
       }
 
@@ -460,10 +517,82 @@ class LocationMonitorService {
       DebugLogService().log(
           'Active geofences: $_iosRegisteredGeofenceCount locations',
           type: DebugLogType.info);
+
+      // Check if user is already inside any geofences
+      await _checkInitialIOSPosition(reminders, proximityRadius);
     } catch (e) {
       debugPrint('Error starting iOS geofencing: $e');
       DebugLogService()
           .log('Error starting iOS geofencing: $e', type: DebugLogType.error);
+    }
+  }
+
+  /// iOS: Check if user is already inside any geofences when monitoring starts
+  Future<void> _checkInitialIOSPosition(
+      List<Reminder> reminders, int proximityRadius) async {
+    try {
+      final position = await Geolocator.getCurrentPosition(
+        locationSettings: const LocationSettings(
+          accuracy: LocationAccuracy.high,
+          timeLimit: Duration(seconds: 10),
+        ),
+      ).timeout(const Duration(seconds: 10));
+
+      debugPrint(
+          'iOS: Checking initial position (${position.latitude}, ${position.longitude})');
+
+      final prefs = await SharedPreferences.getInstance();
+      final dwellTimeMinutes = prefs.getInt('dwell_time_minutes') ?? 1;
+
+      for (final reminder in reminders) {
+        if (reminder.locations.isNotEmpty) {
+          for (final location in reminder.locations) {
+            final distance = Geolocator.distanceBetween(
+              position.latitude,
+              position.longitude,
+              location.latitude,
+              location.longitude,
+            );
+
+            if (distance <= proximityRadius) {
+              final geofenceId = '${reminder.id}_${location.poiId}';
+              debugPrint(
+                  'iOS: Already inside geofence ${location.poiName} (${distance.toStringAsFixed(0)}m)');
+              DebugLogService().log(
+                'iOS: Already inside ${location.poiName} (${distance.toStringAsFixed(0)}m)',
+                type: DebugLogType.geofenceEnter,
+              );
+
+              // Schedule notification for this geofence
+              await _scheduleIOSDwellNotification(
+                  geofenceId, reminder, dwellTimeMinutes);
+            }
+          }
+        } else {
+          // Fallback for old format (single location)
+          final distance = Geolocator.distanceBetween(
+            position.latitude,
+            position.longitude,
+            reminder.latitude,
+            reminder.longitude,
+          );
+
+          if (distance <= proximityRadius) {
+            debugPrint(
+                'iOS: Already inside geofence ${reminder.brandName} (${distance.toStringAsFixed(0)}m)');
+            DebugLogService().log(
+              'iOS: Already inside ${reminder.brandName} (${distance.toStringAsFixed(0)}m)',
+              type: DebugLogType.geofenceEnter,
+            );
+
+            // Schedule notification for this geofence
+            await _scheduleIOSDwellNotification(
+                reminder.id, reminder, dwellTimeMinutes);
+          }
+        }
+      }
+    } catch (e) {
+      debugPrint('iOS: Error checking initial position: $e');
     }
   }
 

@@ -3,6 +3,9 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:permission_handler/permission_handler.dart'
     as permission_handler;
+import 'package:timezone/timezone.dart' as tz;
+import 'package:timezone/data/latest_all.dart' as tz;
+import 'package:flutter_timezone/flutter_timezone.dart';
 
 /// Service for managing local notifications
 class NotificationService {
@@ -14,6 +17,7 @@ class NotificationService {
       FlutterLocalNotificationsPlugin();
 
   bool _initialized = false;
+  bool _timezoneInitialized = false;
   Function(String)? _onNotificationTapped;
 
   /// Initialize the notification service
@@ -57,6 +61,28 @@ class NotificationService {
 
     _initialized = true;
     debugPrint('NotificationService initialization complete');
+
+    // Initialize timezone for scheduled notifications
+    await _initializeTimezone();
+  }
+
+  /// Initialize timezone data for scheduled notifications
+  Future<void> _initializeTimezone() async {
+    if (_timezoneInitialized) return;
+    
+    try {
+      tz.initializeTimeZones();
+      final String timeZoneName = await FlutterTimezone.getLocalTimezone();
+      tz.setLocalLocation(tz.getLocation(timeZoneName));
+      _timezoneInitialized = true;
+      debugPrint('Timezone initialized: $timeZoneName');
+    } catch (e) {
+      debugPrint('Error initializing timezone: $e');
+      // Fallback to UTC
+      tz.initializeTimeZones();
+      tz.setLocalLocation(tz.getLocation('UTC'));
+      _timezoneInitialized = true;
+    }
   }
 
   /// Check if notification permission is permanently denied (user must go to Settings)
@@ -215,6 +241,87 @@ class NotificationService {
   /// Cancel a specific notification
   Future<void> cancelNotification(String poiId) async {
     await _notifications.cancel(poiId.hashCode);
+  }
+
+  /// Schedule a reminder notification for the future (for iOS background dwell)
+  /// Returns the notification ID used for scheduling
+  Future<int> scheduleReminderNotification({
+    required String geofenceId,
+    required String poiId,
+    required String poiName,
+    required String brandName,
+    required List<String> items,
+    required Duration delay,
+  }) async {
+    debugPrint(
+        'NotificationService.scheduleReminderNotification for $brandName in ${delay.inSeconds}s');
+
+    if (!_initialized) {
+      debugPrint('NotificationService not initialized, initializing now...');
+      await initialize();
+    }
+
+    if (!_timezoneInitialized) {
+      await _initializeTimezone();
+    }
+
+    // Build notification content
+    final itemsPreview = items.take(3).join(', ');
+    final moreItems = items.length > 3 ? ' and ${items.length - 3} more' : '';
+
+    const androidDetails = AndroidNotificationDetails(
+      'shopping_reminders',
+      'Shopping Reminders',
+      channelDescription: 'Notifications when you\'re near tagged stores',
+      importance: Importance.high,
+      priority: Priority.high,
+      ticker: 'Shopping Reminder',
+    );
+
+    const iosDetails = DarwinNotificationDetails(
+      presentAlert: true,
+      presentBadge: true,
+      presentSound: true,
+      interruptionLevel: InterruptionLevel.active,
+    );
+
+    const notificationDetails = NotificationDetails(
+      android: androidDetails,
+      iOS: iosDetails,
+    );
+
+    // Use geofenceId hash as notification ID so we can cancel it later
+    final notificationId = geofenceId.hashCode;
+    final scheduledTime = tz.TZDateTime.now(tz.local).add(delay);
+
+    try {
+      debugPrint(
+          'Scheduling notification ID: $notificationId for $brandName at $scheduledTime');
+
+      await _notifications.zonedSchedule(
+        notificationId,
+        'You\'re near $brandName!',
+        'Shopping list: $itemsPreview$moreItems',
+        scheduledTime,
+        notificationDetails,
+        androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
+        payload: poiId,
+      );
+
+      debugPrint('Notification scheduled successfully for $brandName');
+      return notificationId;
+    } catch (e, stackTrace) {
+      debugPrint('Error scheduling notification: $e');
+      debugPrint('Stack trace: $stackTrace');
+      return -1;
+    }
+  }
+
+  /// Cancel a scheduled notification by geofence ID
+  Future<void> cancelScheduledNotification(String geofenceId) async {
+    final notificationId = geofenceId.hashCode;
+    debugPrint('Cancelling scheduled notification ID: $notificationId for geofence: $geofenceId');
+    await _notifications.cancel(notificationId);
   }
 
   /// Cancel all notifications
