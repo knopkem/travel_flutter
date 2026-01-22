@@ -74,12 +74,15 @@ class _MapScreenState extends State<MapScreen>
 
   /// Check if disclosure was shown before starting GPS tracking
   Future<void> _checkDisclosureAndStartGps() async {
-    // Import onboarding service if not already imported
+    // Use the same key as OnboardingService
     final prefs = await SharedPreferences.getInstance();
-    final hasShown = prefs.getBool('has_shown_disclosure') ?? false;
+    final hasShown = prefs.getBool('disclosure_shown') ?? false;
+    debugPrint('MapScreen: disclosure_shown = $hasShown');
 
     if (hasShown) {
       _startGpsTracking();
+    } else {
+      debugPrint('MapScreen: Disclosure not shown yet, skipping GPS tracking');
     }
   }
 
@@ -121,42 +124,56 @@ class _MapScreenState extends State<MapScreen>
 
   /// Start continuous GPS position tracking
   Future<void> _startGpsTracking() async {
+    debugPrint('MapScreen: Starting GPS tracking...');
     try {
       // Check permissions
       final permission = await Geolocator.checkPermission();
+      debugPrint('MapScreen: GPS permission status: $permission');
       if (permission == LocationPermission.denied ||
           permission == LocationPermission.deniedForever) {
+        debugPrint('MapScreen: GPS permission denied');
         setState(() => _gpsAvailable = false);
         return;
       }
 
       // Check if location services are enabled
       final serviceEnabled = await Geolocator.isLocationServiceEnabled();
+      debugPrint('MapScreen: Location services enabled: $serviceEnabled');
       if (!serviceEnabled) {
+        debugPrint('MapScreen: Location services disabled');
         setState(() => _gpsAvailable = false);
         return;
       }
 
       // Get initial position
       try {
+        debugPrint('MapScreen: Getting current position...');
         final position = await Geolocator.getCurrentPosition(
-          desiredAccuracy: LocationAccuracy.medium,
-          timeLimit: const Duration(seconds: 5),
+          locationSettings: const LocationSettings(
+            accuracy: LocationAccuracy.medium,
+            timeLimit: Duration(seconds: 5),
+          ),
         );
+        debugPrint('MapScreen: Got initial position: ${position.latitude}, ${position.longitude}');
         if (mounted) {
           setState(() {
             _currentGpsPosition = position;
             _gpsAvailable = true;
           });
+          debugPrint('MapScreen: GPS available set to true');
         }
       } catch (e) {
+        debugPrint('MapScreen: Failed to get current position: $e');
         // Try last known position
         final lastPosition = await Geolocator.getLastKnownPosition();
         if (lastPosition != null && mounted) {
+          debugPrint('MapScreen: Using last known position: ${lastPosition.latitude}, ${lastPosition.longitude}');
           setState(() {
             _currentGpsPosition = lastPosition;
             _gpsAvailable = true;
           });
+        } else {
+          debugPrint('MapScreen: No last known position available');
         }
       }
 
@@ -354,71 +371,30 @@ class _MapScreenState extends State<MapScreen>
 
   /// Creates a marker for the search center (selected location)
   Marker _createSearchCenterMarker(Location location) {
-    final bool showLabel = _currentZoom >= 11.0;
-
     return Marker(
       point: LatLng(location.latitude, location.longitude),
-      width: showLabel ? 150 : 40,
-      height: showLabel ? 70 : 40,
-      child: showLabel
-          ? Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const Icon(
-                  Icons.my_location,
-                  color: Colors.deepPurple,
-                  size: 36,
-                  shadows: [
-                    Shadow(
-                      blurRadius: 4,
-                      color: Colors.black54,
-                      offset: Offset(1, 1),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 2),
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 8,
-                    vertical: 4,
-                  ),
-                  decoration: BoxDecoration(
-                    color: Colors.deepPurple.withValues(alpha: 0.95),
-                    borderRadius: BorderRadius.circular(4),
-                    boxShadow: const [
-                      BoxShadow(
-                        color: Colors.black26,
-                        blurRadius: 2,
-                        offset: Offset(0, 1),
-                      ),
-                    ],
-                  ),
-                  child: const Text(
-                    'Search Center',
-                    style: TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.white,
-                    ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    textAlign: TextAlign.center,
-                  ),
-                ),
-              ],
-            )
-          : const Icon(
-              Icons.my_location,
-              color: Colors.deepPurple,
-              size: 36,
-              shadows: [
-                Shadow(
-                  blurRadius: 4,
-                  color: Colors.black54,
-                  offset: Offset(1, 1),
-                ),
-              ],
+      width: 40,
+      height: 40,
+      alignment: Alignment.center,
+      child: Container(
+        padding: const EdgeInsets.all(4),
+        decoration: BoxDecoration(
+          color: Colors.deepPurple,
+          shape: BoxShape.circle,
+          boxShadow: const [
+            BoxShadow(
+              blurRadius: 4,
+              color: Colors.black54,
+              offset: Offset(1, 1),
             ),
+          ],
+        ),
+        child: const Icon(
+          Icons.search,
+          color: Colors.white,
+          size: 24,
+        ),
+      ),
     );
   }
 
@@ -852,10 +828,21 @@ class _MapScreenState extends State<MapScreen>
                         Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            Icon(Icons.my_location,
-                                color: Colors.deepPurple, size: 20),
+                            Container(
+                              width: 18,
+                              height: 18,
+                              decoration: const BoxDecoration(
+                                color: Colors.deepPurple,
+                                shape: BoxShape.circle,
+                              ),
+                              child: const Icon(
+                                Icons.search,
+                                color: Colors.white,
+                                size: 12,
+                              ),
+                            ),
                             const SizedBox(width: 8),
-                            const Text('Search Center',
+                            const Text('POI Search Area',
                                 style: TextStyle(fontSize: 12)),
                           ],
                         ),
