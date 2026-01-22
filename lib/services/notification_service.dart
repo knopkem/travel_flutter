@@ -1,7 +1,8 @@
 import 'dart:io' show Platform;
 import 'package:flutter/foundation.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
-import 'package:permission_handler/permission_handler.dart' as permission_handler;
+import 'package:permission_handler/permission_handler.dart'
+    as permission_handler;
 
 /// Service for managing local notifications
 class NotificationService {
@@ -64,7 +65,7 @@ class NotificationService {
   Future<bool> isPermissionPermanentlyDenied() async {
     final status = await permission_handler.Permission.notification.status;
     debugPrint('Notification permission status: $status');
-    
+
     if (Platform.isIOS) {
       // On iOS, isPermanentlyDenied means user actively denied
       // isDenied can mean "not determined" (never asked) OR "denied"
@@ -103,7 +104,7 @@ class NotificationService {
         debugPrint('Android notification permission permanently denied');
         return false;
       }
-      
+
       final granted = await androidPlugin.requestNotificationsPermission();
       debugPrint('Android notification permission result: $granted');
       if (granted != true) return false;
@@ -113,14 +114,15 @@ class NotificationService {
     if (Platform.isIOS) {
       final status = await permission_handler.Permission.notification.status;
       debugPrint('iOS notification status before request: $status');
-      
+
       // Only skip if PERMANENTLY denied (user explicitly denied before)
       // isDenied on iOS can mean "not determined" (never asked yet)
       if (status.isPermanentlyDenied) {
-        debugPrint('iOS notification permission permanently denied, need to open Settings');
+        debugPrint(
+            'iOS notification permission permanently denied, need to open Settings');
         return false;
       }
-      
+
       // Request permission - this will show dialog if never asked,
       // or return current status if already decided
       final iosPlugin = _notifications.resolvePlatformSpecificImplementation<
@@ -177,7 +179,8 @@ class NotificationService {
       presentAlert: true,
       presentBadge: true,
       presentSound: true,
-      interruptionLevel: InterruptionLevel.timeSensitive,
+      // Note: timeSensitive requires entitlement, using active instead
+      interruptionLevel: InterruptionLevel.active,
     );
 
     const notificationDetails = NotificationDetails(
@@ -189,7 +192,9 @@ class NotificationService {
       // Use timestamp-based ID to prevent iOS from deduplicating repeat notifications
       final notificationId = DateTime.now().millisecondsSinceEpoch ~/ 1000;
       debugPrint(
-          'Showing notification with ID: $notificationId for POI: $poiId');
+          'iOS: Showing notification with ID: $notificationId for POI: $poiId');
+      debugPrint('iOS: Title: You\'re near $brandName!');
+      debugPrint('iOS: Body: Shopping list: $itemsPreview$moreItems');
 
       await _notifications.show(
         notificationId,
@@ -199,9 +204,11 @@ class NotificationService {
         payload: poiId,
       );
 
-      debugPrint('Notification shown successfully for $brandName');
-    } catch (e) {
-      debugPrint('Error showing notification: $e');
+      debugPrint(
+          'iOS: Notification.show() completed successfully for $brandName');
+    } catch (e, stackTrace) {
+      debugPrint('iOS: Error showing notification: $e');
+      debugPrint('iOS: Stack trace: $stackTrace');
     }
   }
 

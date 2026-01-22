@@ -259,15 +259,22 @@ class LocationMonitorService {
       // Check if notifications are enabled before showing
       final notificationsEnabled =
           prefs.getBool('notifications_enabled') ?? true;
+      debugPrint('iOS: notifications_enabled setting = $notificationsEnabled');
+
       if (notificationsEnabled) {
         final notificationService = NotificationService();
         await notificationService.initialize();
+
+        debugPrint(
+            'iOS: Calling showReminderNotification for ${reminder.brandName}');
         await notificationService.showReminderNotification(
           poiId: reminder.id,
           poiName: reminder.originalPoiName,
           brandName: reminder.brandName,
           items: reminder.items.map((item) => item.text).toList(),
         );
+        debugPrint(
+            'iOS: showReminderNotification completed for ${reminder.brandName}');
       } else {
         debugPrint(
             'Notifications disabled, skipping notification for ${reminder.brandName}');
