@@ -367,29 +367,43 @@ class LocationProvider extends ChangeNotifier {
 
       // Try to get last known position first (instant on iOS)
       Position? position = await Geolocator.getLastKnownPosition();
+      debugPrint('LocationProvider: Last known position: ${position?.latitude}, ${position?.longitude}');
 
       // If no cached position, get current position with platform-specific settings
       if (position == null) {
+        debugPrint('LocationProvider: No cached position, getting current location...');
+        
         if (isProblematic) {
+          debugPrint('LocationProvider: Using enhanced settings for problematic device');
+          
           // Problematic devices need higher accuracy and longer timeout
-          position = await Geolocator.getCurrentPosition(
-            locationSettings: AndroidSettings(
-              accuracy: LocationAccuracy.high,
-              distanceFilter: 0,
-              forceLocationManager: true,  // Sometimes helps with restrictive ROMs
-              intervalDuration: const Duration(seconds: 5),
-              foregroundNotificationConfig: const ForegroundNotificationConfig(
-                notificationText: "Getting your location...",
-                notificationTitle: "LocationPal",
-                enableWakeLock: true,
+          try {
+            position = await Geolocator.getCurrentPosition(
+              locationSettings: AndroidSettings(
+                accuracy: LocationAccuracy.best,  // Changed from high to best
+                distanceFilter: 0,
+                forceLocationManager: true,  // Critical for MIUI/EMUI
+                intervalDuration: const Duration(seconds: 5),
+                foregroundNotificationConfig: const ForegroundNotificationConfig(
+                  notificationText: "Getting your location...",
+                  notificationTitle: "LocationPal",
+                  enableWakeLock: true,
+                ),
               ),
-            ),
-          ).timeout(
-            const Duration(seconds: 90),
-            onTimeout: () => throw Exception(
-              'Location timeout. Please ensure GPS is enabled and you have a clear view of the sky.'
-            ),
-          );
+            ).timeout(
+              const Duration(seconds: 90),
+              onTimeout: () {
+                debugPrint('LocationProvider: Location request timed out after 90s');
+                throw Exception(
+                  'Location timeout. Please ensure GPS is enabled and you have a clear view of the sky.'
+                );
+              },
+            );
+            debugPrint('LocationProvider: Got position via forceLocationManager: ${position.latitude}, ${position.longitude}');
+          } catch (e) {
+            debugPrint('LocationProvider: Failed to get position: $e');
+            rethrow;
+          }
         } else {
           position = await Geolocator.getCurrentPosition(
             // Use medium accuracy for faster initial fix on iOS
@@ -400,7 +414,7 @@ class LocationProvider extends ChangeNotifier {
         }
       }
 
-      debugPrint('GPS position: ${position.latitude}, ${position.longitude}');
+      debugPrint('GPS position: ${position.latitude}, ${position.longitude}, accuracy: ${position.accuracy}m');
 
       // Attempt reverse geocoding to get location name
       // Always use Nominatim for reverse geocoding since:

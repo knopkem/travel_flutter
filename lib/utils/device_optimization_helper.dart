@@ -2,6 +2,8 @@ import 'package:device_info_plus/device_info_plus.dart';
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:permission_handler/permission_handler.dart';
+import 'package:geolocator/geolocator.dart';
+import 'dart:async';
 
 /// Helper for handling manufacturer-specific battery optimization and permissions
 /// 
@@ -275,5 +277,131 @@ class DeviceOptimizationHelper {
         ),
       ),
     );
+  }
+
+  /// Run comprehensive location diagnostics for troubleshooting
+  /// 
+  /// Returns a map containing:
+  /// - Device information (manufacturer, model, SDK version)
+  /// - Location service status
+  /// - Permission status
+  /// - Results from different location methods
+  /// 
+  /// Useful for debugging location issues on problematic devices
+  static Future<Map<String, dynamic>> runLocationDiagnostics() async {
+    final results = <String, dynamic>{};
+    
+    try {
+      // Device info
+      final deviceInfo = await _getDeviceInfo();
+      results['manufacturer'] = deviceInfo.manufacturer;
+      results['model'] = deviceInfo.model;
+      results['sdk'] = deviceInfo.version.sdkInt;
+      results['release'] = deviceInfo.version.release;
+      
+      // Is problematic device
+      results['isProblematicDevice'] = await isProblematicDevice();
+      
+      // Location service
+      results['locationServiceEnabled'] = await Geolocator.isLocationServiceEnabled();
+      
+      // Permission
+      final permission = await Geolocator.checkPermission();
+      results['geolocatorPermission'] = permission.toString();
+      
+      final permissionHandlerStatus = await Permission.location.status;
+      results['permissionHandlerStatus'] = permissionHandlerStatus.toString();
+      
+      // Try to get location with different methods
+      results['locationTests'] = <String, dynamic>{};
+      
+      // Test 1: Last known position
+      try {
+        final pos = await Geolocator.getLastKnownPosition();
+        if (pos != null) {
+          results['locationTests']['lastKnown'] = {
+            'status': 'success',
+            'lat': pos.latitude,
+            'lng': pos.longitude,
+            'accuracy': pos.accuracy,
+            'timestamp': pos.timestamp.toString(),
+          };
+        } else {
+          results['locationTests']['lastKnown'] = {'status': 'null'};
+        }
+      } catch (e) {
+        results['locationTests']['lastKnown'] = {'status': 'error', 'message': e.toString()};
+      }
+      
+      // Test 2: Standard getCurrentPosition
+      try {
+        final pos = await Geolocator.getCurrentPosition(
+          locationSettings: const LocationSettings(
+            accuracy: LocationAccuracy.high,
+          ),
+        ).timeout(const Duration(seconds: 15));
+        results['locationTests']['standard'] = {
+          'status': 'success',
+          'lat': pos.latitude,
+          'lng': pos.longitude,
+          'accuracy': pos.accuracy,
+          'timestamp': pos.timestamp.toString(),
+        };
+      } on TimeoutException {
+        results['locationTests']['standard'] = {'status': 'timeout'};
+      } catch (e) {
+        results['locationTests']['standard'] = {'status': 'error', 'message': e.toString()};
+      }
+      
+      // Test 3: Force Location Manager (Android only)
+      try {
+        final pos = await Geolocator.getCurrentPosition(
+          locationSettings: AndroidSettings(
+            accuracy: LocationAccuracy.best,
+            forceLocationManager: true,
+          ),
+        ).timeout(const Duration(seconds: 15));
+        results['locationTests']['forceLocationManager'] = {
+          'status': 'success',
+          'lat': pos.latitude,
+          'lng': pos.longitude,
+          'accuracy': pos.accuracy,
+          'timestamp': pos.timestamp.toString(),
+        };
+      } on TimeoutException {
+        results['locationTests']['forceLocationManager'] = {'status': 'timeout'};
+      } catch (e) {
+        results['locationTests']['forceLocationManager'] = {'status': 'error', 'message': e.toString()};
+      }
+      
+      // Test 4: Best accuracy
+      try {
+        final pos = await Geolocator.getCurrentPosition(
+          locationSettings: const LocationSettings(
+            accuracy: LocationAccuracy.best,
+          ),
+        ).timeout(const Duration(seconds: 15));
+        results['locationTests']['bestAccuracy'] = {
+          'status': 'success',
+          'lat': pos.latitude,
+          'lng': pos.longitude,
+          'accuracy': pos.accuracy,
+          'timestamp': pos.timestamp.toString(),
+        };
+      } on TimeoutException {
+        results['locationTests']['bestAccuracy'] = {'status': 'timeout'};
+      } catch (e) {
+        results['locationTests']['bestAccuracy'] = {'status': 'error', 'message': e.toString()};
+      }
+      
+    } catch (e, stackTrace) {
+      results['fatalError'] = e.toString();
+      results['stackTrace'] = stackTrace.toString();
+    }
+    
+    debugPrint('=== Location Diagnostics Results ===');
+    debugPrint(results.toString());
+    
+    return results;
   }
 }

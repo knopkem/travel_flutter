@@ -1,7 +1,10 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../utils/onboarding_service.dart';
+import '../../utils/device_optimization_helper.dart';
 
 /// Settings screen for Privacy, Legal information, and About section
 class PrivacyAboutSettingsScreen extends StatefulWidget {
@@ -15,11 +18,13 @@ class PrivacyAboutSettingsScreen extends StatefulWidget {
 class _PrivacyAboutSettingsScreenState
     extends State<PrivacyAboutSettingsScreen> {
   String _version = 'Loading...';
+  bool _isProblematicDevice = false;
 
   @override
   void initState() {
     super.initState();
     _loadVersion();
+    _checkDevice();
   }
 
   Future<void> _loadVersion() async {
@@ -27,6 +32,15 @@ class _PrivacyAboutSettingsScreenState
     setState(() {
       _version = '${packageInfo.version}+${packageInfo.buildNumber}';
     });
+  }
+
+  Future<void> _checkDevice() async {
+    final isProblematic = await DeviceOptimizationHelper.isProblematicDevice();
+    if (mounted) {
+      setState(() {
+        _isProblematicDevice = isProblematic;
+      });
+    }
   }
 
   @override
@@ -40,6 +54,10 @@ class _PrivacyAboutSettingsScreenState
         children: [
           _buildPrivacySection(context),
           const Divider(height: 1),
+          if (_isProblematicDevice || kDebugMode) ...[
+            _buildDeviceSupportSection(context),
+            const Divider(height: 1),
+          ],
           _buildAboutSection(context),
         ],
       ),
@@ -225,6 +243,56 @@ class _PrivacyAboutSettingsScreenState
     }
   }
 
+  Widget _buildDeviceSupportSection(BuildContext context) {
+    return ExpansionTile(
+      initiallyExpanded: _isProblematicDevice,
+      leading: Icon(
+        _isProblematicDevice ? Icons.warning_amber : Icons.phone_android,
+        color: _isProblematicDevice ? Colors.orange : null,
+      ),
+      title: const Text(
+        'Device Support',
+        style: TextStyle(
+          fontSize: 18,
+          fontWeight: FontWeight.bold,
+        ),
+      ),
+      subtitle: _isProblematicDevice
+          ? const Text('Special setup required for reliable location tracking')
+          : const Text('Device compatibility and diagnostics'),
+      children: [
+        if (_isProblematicDevice)
+          ListTile(
+            leading: const Icon(Icons.settings_suggest, color: Colors.orange),
+            title: const Text('Device Optimization Guide'),
+            subtitle: const Text(
+              'Your device requires special settings for background location',
+            ),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () async {
+              await DeviceOptimizationHelper.showOptimizationGuide(context);
+            },
+          ),
+        if (_isProblematicDevice && kDebugMode) const Divider(),
+        ListTile(
+          leading: Icon(
+            Icons.bug_report,
+            color: kDebugMode ? Colors.orange : Colors.grey,
+          ),
+          title: const Text('Run Location Diagnostics'),
+          subtitle: Text(
+            kDebugMode
+                ? 'Test location methods on this device'
+                : 'Only available in debug builds',
+          ),
+          trailing: kDebugMode ? const Icon(Icons.chevron_right) : null,
+          enabled: kDebugMode,
+          onTap: kDebugMode ? () => _runLocationDiagnostics(context) : null,
+        ),
+      ],
+    );
+  }
+
   Widget _buildAboutSection(BuildContext context) {
     return ExpansionTile(
       initiallyExpanded: true,
@@ -243,6 +311,17 @@ class _PrivacyAboutSettingsScreenState
           title: const Text('LocationPal'),
           subtitle: Text('Version $_version'),
         ),
+        // Debug: Location Diagnostics (only in debug mode)
+        if (kDebugMode) ...[
+          const Divider(),
+          ListTile(
+            leading: const Icon(Icons.bug_report, color: Colors.orange),
+            title: const Text('Run Location Diagnostics'),
+            subtitle: const Text('Debug: Test location on this device'),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () => _runLocationDiagnostics(context),
+          ),
+        ],
         const Divider(),
         ListTile(
           leading: const Icon(Icons.description),
@@ -335,5 +414,71 @@ class _PrivacyAboutSettingsScreenState
         ),
       ],
     );
+  }
+
+  /// Run location diagnostics (debug only)
+  Future<void> _runLocationDiagnostics(BuildContext context) async {
+    // Show loading dialog
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => const AlertDialog(
+        content: Row(
+          children: [
+            CircularProgressIndicator(),
+            SizedBox(width: 16),
+            Expanded(child: Text('Running location diagnostics...\nThis may take up to 45 seconds.')),
+          ],
+        ),
+      ),
+    );
+
+    try {
+      final results = await DeviceOptimizationHelper.runLocationDiagnostics();
+
+      if (context.mounted) {
+        Navigator.pop(context); // Close loading dialog
+
+        // Show results dialog
+        showDialog(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: const Text('Location Diagnostics Results'),
+            content: SizedBox(
+              width: double.maxFinite,
+              child: SingleChildScrollView(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      const JsonEncoder.withIndent('  ').convert(results),
+                      style: const TextStyle(
+                        fontFamily: 'monospace',
+                        fontSize: 11,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('Close'),
+              ),
+            ],
+          ),
+        );
+      }
+    } catch (e) {
+      if (context.mounted) {
+        Navigator.pop(context); // Close loading dialog
+        
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Diagnostics failed: $e')),
+        );
+      }
+    }
   }
 }
