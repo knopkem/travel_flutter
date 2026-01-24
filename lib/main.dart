@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:firebase_core/firebase_core.dart';
+import 'firebase_options.dart';
 import 'providers/providers.dart';
 import 'providers/reminder_provider.dart';
 import 'repositories/repositories.dart';
+import 'repositories/firebase_places_repository.dart';
 import 'screens/tab_navigation_screen.dart';
 import 'screens/poi_detail_screen.dart';
 import 'screens/reminders_overview_screen.dart';
@@ -11,6 +14,7 @@ import 'services/openai_service.dart';
 import 'services/notification_service.dart';
 import 'services/location_monitor_service.dart';
 import 'services/dwell_time_tracker.dart';
+import 'services/firebase_service.dart';
 import 'utils/settings_service.dart';
 import 'utils/onboarding_service.dart';
 
@@ -23,6 +27,21 @@ POIProvider? _poiProviderRef;
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   debugPrint('=== App starting ===');
+
+  // Initialize Firebase
+  try {
+    debugPrint('Initializing Firebase...');
+    await Firebase.initializeApp(
+      options: DefaultFirebaseOptions.currentPlatform,
+    );
+    debugPrint('✓ Firebase initialized');
+
+    // Initialize Firebase Authentication (anonymous)
+    await FirebaseService.initialize();
+  } catch (e) {
+    debugPrint('⚠ Firebase initialization failed: $e');
+    debugPrint('App will continue with fallback providers');
+  }
 
   // Initialize LocationMonitorService early to set up geofence handler
   // This ensures the method call handler is ready before any geofence events
@@ -98,18 +117,22 @@ void main() async {
         ChangeNotifierProxyProvider<SettingsProvider, POIProvider>(
           create: (context) {
             final settings = context.read<SettingsProvider>();
+
+            // Use Firebase Places Repository (with fallback to regular Google Places)
+            final firebaseRepo = FirebasePlacesRepository(
+              apiKey: settings.googlePlacesApiKey,
+              onRequestMade: settings.incrementGooglePlacesRequestCount,
+            );
+
             return POIProvider(
-              googlePlacesRepo: GooglePlacesRepository(
-                apiKey: settings.googlePlacesApiKey,
-                onRequestMade: settings.incrementGooglePlacesRequestCount,
-              ),
+              googlePlacesRepo: firebaseRepo,
             );
           },
           update: (_, settings, poiProvider) {
             poiProvider?.updateSettings(settings);
             return poiProvider ??
                 POIProvider(
-                  googlePlacesRepo: GooglePlacesRepository(
+                  googlePlacesRepo: FirebasePlacesRepository(
                     apiKey: settings.googlePlacesApiKey,
                     onRequestMade: settings.incrementGooglePlacesRequestCount,
                   ),

@@ -10,10 +10,18 @@
     <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION" />
+    <!-- Xiaomi-specific permissions for better location access -->
+    <uses-permission android:name="android.permission.ACCESS_LOCATION_EXTRA_COMMANDS" />
     <application
         android:label="LocationPal"
         android:name="${applicationName}"
-        android:icon="@mipmap/ic_launcher">
+        android:icon="@mipmap/ic_launcher"
+        android:requestLegacyExternalStorage="true"
+        android:usesCleartextTraffic="false">
+        <!-- Xiaomi autostart permission hint -->
+        <meta-data
+            android:name="miui.notification.sound"
+            android:resource="@android:drawable/stat_notify_error" />
         <activity
             android:name=".MainActivity"
             android:exported="true"

@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
+import 'package:device_info_plus/device_info_plus.dart';
+import 'package:permission_handler/permission_handler.dart';
 import '../models/models.dart';
 import '../repositories/repositories.dart';
 
@@ -296,38 +298,71 @@ class LocationProvider extends ChangeNotifier {
     notifyListeners();
 
     try {
+      // Check if running on Xiaomi device
+      final isXiaomi = await _isXiaomiDevice();
+      
       // Check if location services are enabled
-      final serviceEnabled = await Geolocator.isLocationServiceEnabled();
+      bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
       if (!serviceEnabled) {
+        if (isXiaomi && context.mounted) {
+          await _showXiaomiLocationServicesDialog(context);
+        }
         throw Exception(
             'Location services are disabled. Please enable them in settings.');
       }
 
-      // Check permission status
-      LocationPermission permission = await Geolocator.checkPermission();
-
-      // Show explanation dialog if permission was never requested
-      if (permission == LocationPermission.denied) {
-        if (context.mounted) {
-          final userAccepted = await showLocationPermissionDialog(context);
-          if (!userAccepted) {
+      // For Xiaomi devices, use permission_handler for more reliable permission checks
+      if (isXiaomi) {
+        final locationStatus = await Permission.location.status;
+        
+        if (locationStatus.isDenied) {
+          if (context.mounted) {
+            final userAccepted = await showLocationPermissionDialog(context);
+            if (!userAccepted) {
+              throw Exception(
+                  'Location permission is required to use this feature.');
+            }
+          }
+          
+          final result = await Permission.location.request();
+          if (!result.isGranted) {
             throw Exception(
-                'Location permission is required to use this feature.');
+                'Location permission denied. Tap the GPS button to try again.');
+          }
+        }
+        
+        if (locationStatus.isPermanentlyDenied) {
+          throw Exception(
+            'Location permission permanently denied. Please enable it in app settings.',
+          );
+        }
+      } else {
+        // Standard permission check for non-Xiaomi devices
+        LocationPermission permission = await Geolocator.checkPermission();
+
+        // Show explanation dialog if permission was never requested
+        if (permission == LocationPermission.denied) {
+          if (context.mounted) {
+            final userAccepted = await showLocationPermissionDialog(context);
+            if (!userAccepted) {
+              throw Exception(
+                  'Location permission is required to use this feature.');
+            }
+          }
+
+          // Request permission
+          permission = await Geolocator.requestPermission();
+          if (permission == LocationPermission.denied) {
+            throw Exception(
+                'Location permission denied. Tap the GPS button to try again.');
           }
         }
 
-        // Request permission
-        permission = await Geolocator.requestPermission();
-        if (permission == LocationPermission.denied) {
+        if (permission == LocationPermission.deniedForever) {
           throw Exception(
-              'Location permission denied. Tap the GPS button to try again.');
+            'Location permission permanently denied. Please enable it in app settings.',
+          );
         }
-      }
-
-      if (permission == LocationPermission.deniedForever) {
-        throw Exception(
-          'Location permission permanently denied. Please enable it in app settings.',
-        );
       }
 
       // Try to get last known position first (instant on iOS)
@@ -335,12 +370,34 @@ class LocationProvider extends ChangeNotifier {
 
       // If no cached position, get current position with platform-specific settings
       if (position == null) {
-        position = await Geolocator.getCurrentPosition(
-          // Use medium accuracy for faster initial fix on iOS
-          desiredAccuracy: LocationAccuracy.medium,
-          // iOS can take longer for initial GPS fix, especially in cold start
-          timeLimit: const Duration(seconds: 60),
-        );
+        if (isXiaomi) {
+          // Xiaomi devices need higher accuracy and longer timeout
+          position = await Geolocator.getCurrentPosition(
+            locationSettings: AndroidSettings(
+              accuracy: LocationAccuracy.high,
+              distanceFilter: 0,
+              forceLocationManager: true,  // Sometimes helps with Xiaomi
+              intervalDuration: const Duration(seconds: 5),
+              foregroundNotificationConfig: const ForegroundNotificationConfig(
+                notificationText: "Getting your location...",
+                notificationTitle: "LocationPal",
+                enableWakeLock: true,
+              ),
+            ),
+          ).timeout(
+            const Duration(seconds: 90),
+            onTimeout: () => throw Exception(
+              'Location timeout. Please ensure GPS is enabled and you have a clear view of the sky.'
+            ),
+          );
+        } else {
+          position = await Geolocator.getCurrentPosition(
+            // Use medium accuracy for faster initial fix on iOS
+            desiredAccuracy: LocationAccuracy.medium,
+            // iOS can take longer for initial GPS fix, especially in cold start
+            timeLimit: const Duration(seconds: 60),
+          );
+        }
       }
 
       debugPrint('GPS position: ${position.latitude}, ${position.longitude}');
@@ -397,6 +454,61 @@ class LocationProvider extends ChangeNotifier {
       _isLoading = false;
       notifyListeners();
     }
+  }
+
+  /// Detects if the device is a Xiaomi device
+  Future<bool> _isXiaomiDevice() async {
+    try {
+      final deviceInfo = DeviceInfoPlugin();
+      final androidInfo = await deviceInfo.androidInfo;
+      final manufacturer = androidInfo.manufacturer.toLowerCase();
+      return manufacturer.contains('xiaomi') || 
+             manufacturer.contains('redmi') || 
+             manufacturer.contains('poco');
+    } catch (e) {
+      return false;
+    }
+  }
+
+  /// Shows Xiaomi-specific dialog about location services
+  Future<void> _showXiaomiLocationServicesDialog(BuildContext context) async {
+    return showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: const Text('Enable Location Services'),
+          content: const SingleChildScrollView(
+            child: Text(
+              'For Xiaomi devices:\n\n'
+              '1. Open Settings\n'
+              '2. Go to Location\n'
+              '3. Enable Location Services\n'
+              '4. Set location mode to "High accuracy"\n\n'
+              'Also ensure:\n'
+              '• Battery Saver is disabled\n'
+              '• LocationPal has autostart permission\n'
+              '• GPS is enabled',
+            ),
+          ),
+          actions: <Widget>[
+            TextButton(
+              child: const Text('Open Settings'),
+              onPressed: () {
+                Geolocator.openLocationSettings();
+                Navigator.of(context).pop();
+              },
+            ),
+            TextButton(
+              child: const Text('OK'),
+              onPressed: () {
+                Navigator.of(context).pop();
+              },
+            ),
+          ],
+        );
+      },
+    );
   }
 
   /// Sets the location from map center coordinates.
