@@ -11,6 +11,7 @@ import '../utils/country_language_map.dart';
 import '../utils/format_utils.dart';
 import '../utils/permission_dialog_helper.dart';
 import '../utils/battery_optimization_helper.dart';
+import '../utils/device_optimization_helper.dart';
 import '../services/location_monitor_service.dart';
 import '../services/notification_service.dart';
 import 'settings_screen.dart';
@@ -778,6 +779,11 @@ class _POIDetailScreenState extends State<POIDetailScreen> {
     if (isFirstReminder) {
       final permissionsGranted = await _requestAllPermissions();
       if (!permissionsGranted) return;
+      
+      // Check device optimization settings (Xiaomi, Huawei, OnePlus, etc.)
+      if (!mounted) return;
+      final shouldContinue = await DeviceOptimizationHelper.checkOptimizationBeforeReminder(context);
+      if (!shouldContinue) return;
     }
 
     // Show dialog to add initial shopping items

@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
-import 'package:device_info_plus/device_info_plus.dart';
 import 'package:permission_handler/permission_handler.dart';
 import '../models/models.dart';
 import '../repositories/repositories.dart';
+import '../utils/device_optimization_helper.dart';
 
 /// Manages location search state and single active city selection.
 ///
@@ -298,21 +298,21 @@ class LocationProvider extends ChangeNotifier {
     notifyListeners();
 
     try {
-      // Check if running on Xiaomi device
-      final isXiaomi = await _isXiaomiDevice();
+      // Check if device needs special handling (Xiaomi, Huawei, etc.)
+      final isProblematic = await DeviceOptimizationHelper.isProblematicDevice();
       
       // Check if location services are enabled
       bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
       if (!serviceEnabled) {
-        if (isXiaomi && context.mounted) {
-          await _showXiaomiLocationServicesDialog(context);
+        if (isProblematic && context.mounted) {
+          await DeviceOptimizationHelper.showOptimizationGuide(context);
         }
         throw Exception(
             'Location services are disabled. Please enable them in settings.');
       }
 
-      // For Xiaomi devices, use permission_handler for more reliable permission checks
-      if (isXiaomi) {
+      // For problematic devices, use permission_handler for more reliable permission checks
+      if (isProblematic) {
         final locationStatus = await Permission.location.status;
         
         if (locationStatus.isDenied) {
@@ -337,7 +337,7 @@ class LocationProvider extends ChangeNotifier {
           );
         }
       } else {
-        // Standard permission check for non-Xiaomi devices
+        // Standard permission check for well-behaved devices
         LocationPermission permission = await Geolocator.checkPermission();
 
         // Show explanation dialog if permission was never requested
@@ -370,13 +370,13 @@ class LocationProvider extends ChangeNotifier {
 
       // If no cached position, get current position with platform-specific settings
       if (position == null) {
-        if (isXiaomi) {
-          // Xiaomi devices need higher accuracy and longer timeout
+        if (isProblematic) {
+          // Problematic devices need higher accuracy and longer timeout
           position = await Geolocator.getCurrentPosition(
             locationSettings: AndroidSettings(
               accuracy: LocationAccuracy.high,
               distanceFilter: 0,
-              forceLocationManager: true,  // Sometimes helps with Xiaomi
+              forceLocationManager: true,  // Sometimes helps with restrictive ROMs
               intervalDuration: const Duration(seconds: 5),
               foregroundNotificationConfig: const ForegroundNotificationConfig(
                 notificationText: "Getting your location...",
@@ -454,61 +454,6 @@ class LocationProvider extends ChangeNotifier {
       _isLoading = false;
       notifyListeners();
     }
-  }
-
-  /// Detects if the device is a Xiaomi device
-  Future<bool> _isXiaomiDevice() async {
-    try {
-      final deviceInfo = DeviceInfoPlugin();
-      final androidInfo = await deviceInfo.androidInfo;
-      final manufacturer = androidInfo.manufacturer.toLowerCase();
-      return manufacturer.contains('xiaomi') || 
-             manufacturer.contains('redmi') || 
-             manufacturer.contains('poco');
-    } catch (e) {
-      return false;
-    }
-  }
-
-  /// Shows Xiaomi-specific dialog about location services
-  Future<void> _showXiaomiLocationServicesDialog(BuildContext context) async {
-    return showDialog<void>(
-      context: context,
-      barrierDismissible: false,
-      builder: (BuildContext context) {
-        return AlertDialog(
-          title: const Text('Enable Location Services'),
-          content: const SingleChildScrollView(
-            child: Text(
-              'For Xiaomi devices:\n\n'
-              '1. Open Settings\n'
-              '2. Go to Location\n'
-              '3. Enable Location Services\n'
-              '4. Set location mode to "High accuracy"\n\n'
-              'Also ensure:\n'
-              '• Battery Saver is disabled\n'
-              '• LocationPal has autostart permission\n'
-              '• GPS is enabled',
-            ),
-          ),
-          actions: <Widget>[
-            TextButton(
-              child: const Text('Open Settings'),
-              onPressed: () {
-                Geolocator.openLocationSettings();
-                Navigator.of(context).pop();
-              },
-            ),
-            TextButton(
-              child: const Text('OK'),
-              onPressed: () {
-                Navigator.of(context).pop();
-              },
-            ),
-          ],
-        );
-      },
-    );
   }
 
   /// Sets the location from map center coordinates.
